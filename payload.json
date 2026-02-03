@@ -1,0 +1,9 @@
+{
+  "model": "moonshotai/kimi-k2.5",
+  "messages": [{"role":"user","content":""}],
+  "max_tokens": 16384,
+  "temperature": 1.00,
+  "top_p": 1.00,
+  "stream": true,
+  "chat_template_kwargs": {"thinking":true}
+}
