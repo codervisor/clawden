@@ -1,13 +1,14 @@
 {
-  "mcpServers": {
-    "lean-spec": {
-      "args": [
-        "-y",
-        "@leanspec/mcp",
-        "--project",
-        "/home/marvin/projects/codervisor/clawlab"
-      ],
-      "command": "npx"
-    }
-  }
+	"servers": {
+		"leanspec": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@leanspec/mcp"
+			],
+			"env": {},
+			"type": "stdio"
+		}
+	},
+	"inputs": []
 }
