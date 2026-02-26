@@ -13,7 +13,8 @@
     "build:rust:release": "cargo build --workspace --release",
     "build:dashboard": "pnpm --filter @clawden/dashboard build",
     "build:sdk": "pnpm --filter @clawden/sdk build",
-    "dev": "pnpm --filter @clawden/dashboard dev",
+    "dev": "concurrently -n server,dashboard -c blue,green \"cargo run -p clawden-server\" \"pnpm --filter @clawden/dashboard dev\"",
+    "dev:dashboard": "pnpm --filter @clawden/dashboard dev",
     "dev:server": "cargo run -p clawden-server",
     "test": "cargo test --workspace && pnpm --filter '@clawden/*' run test",
     "test:rust": "cargo test --workspace",
@@ -32,6 +33,7 @@
     "sync-versions": "tsx scripts/sync-versions.ts"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "tsx": "^4.8.1"
   }
 }
