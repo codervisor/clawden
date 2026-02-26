@@ -6,6 +6,7 @@ tags:
 - infra
 - setup
 - monorepo
+parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.576100007Z
 updated_at: 2026-02-26T02:08:29.576100007Z
 ---

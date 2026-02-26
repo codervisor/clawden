@@ -6,8 +6,7 @@ tags:
 - core
 - adapter
 - cri
-depends_on:
-- 009-orchestration-platform
+parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.575446436Z
 updated_at: 2026-02-26T02:08:40.054769542Z
 ---

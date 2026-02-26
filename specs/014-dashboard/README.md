@@ -6,6 +6,7 @@ tags:
 - ui
 - dashboard
 - monitoring
+parent: 009-orchestration-platform
 depends_on:
 - 011-control-plane
 - 012-fleet-orchestration

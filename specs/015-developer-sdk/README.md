@@ -7,6 +7,7 @@ tags:
 - cli
 - developer
 - skills
+parent: 009-orchestration-platform
 depends_on:
 - 010-claw-runtime-interface
 created_at: 2026-02-26T02:08:29.576054643Z
