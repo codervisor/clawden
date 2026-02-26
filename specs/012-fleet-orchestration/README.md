@@ -16,7 +16,6 @@ transitions:
 - status: in-progress
   at: 2026-02-26T03:26:22.415306720Z
 ---
-
 # Fleet Discovery & Task Routing
 
 ## Overview
@@ -61,11 +60,11 @@ interface AgentRegistration {
 - [ ] Add load balancing and cost-aware routing
 - [ ] Implement agent discovery (network scan, manual, DNS-SD)
 - [ ] Design swarm coordination protocol
-- [x] Create REST/WebSocket APIs for fleet management
+- [ ] Create REST/WebSocket APIs for fleet management
 
 ## Test
 
-- [ ] Agents can register and be discovered
+- [x] Agents can register and be discovered
 - [ ] Task router selects correct agent based on capabilities
 - [ ] Load balancer distributes tasks evenly
 - [ ] Swarm can coordinate a multi-step task across runtimes

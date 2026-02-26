@@ -80,7 +80,7 @@ export default defineSkill({
 
 ## Test
 
-- [ ] CLI commands execute correctly against running ClawLab
+- [x] CLI commands execute correctly against running ClawLab
 - [ ] Skill SDK produces valid skill packages
 - [ ] Test harness runs skills against multiple runtimes
 - [ ] Published skills can be installed and executed
