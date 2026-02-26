@@ -1,15 +1,19 @@
 ---
-status: planned
-created: '2026-02-03'
-tags:
-  - core
-  - cli
-  - interface
+status: archived
+created: 2026-02-03
 priority: medium
-parent: 001-clawlab-mvp
+tags:
+- core
+- cli
+- interface
 depends_on:
-  - 003-vision-agent
-created_at: '2026-02-03T07:37:55.355319483+00:00'
+- 003-vision-agent
+created_at: 2026-02-03T07:37:55.355319483Z
+updated_at: 2026-02-26T02:06:31.993704939Z
+transitions:
+- status: archived
+  at: 2026-02-26T02:06:31.993704939Z
+parent: 001-clawlab-mvp
 ---
 
 # Command Line Interface

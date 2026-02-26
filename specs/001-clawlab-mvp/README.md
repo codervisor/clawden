@@ -1,11 +1,15 @@
 ---
-status: planned
-created: '2026-02-03'
-tags:
-  - umbrella
-  - mvp
+status: archived
+created: 2026-02-03
 priority: high
-created_at: '2026-02-03T07:37:17.371020680+00:00'
+tags:
+- umbrella
+- mvp
+created_at: 2026-02-03T07:37:17.371020680Z
+updated_at: 2026-02-26T02:06:31.992117036Z
+transitions:
+- status: archived
+  at: 2026-02-26T02:06:31.992117036Z
 ---
 
 # ClawLab MVP

@@ -1,8 +1,7 @@
 ---
-status: planned
+status: archived
 created: 2026-02-03
 priority: high
-parent: 001-clawlab-mvp
 tags:
 - architecture
 - interfaces
@@ -10,7 +9,11 @@ tags:
 depends_on:
 - 002-project-setup
 created_at: 2026-02-03T08:59:22.366459391Z
-updated_at: 2026-02-03T08:59:37.497051002Z
+updated_at: 2026-02-26T02:06:31.993838276Z
+transitions:
+- status: archived
+  at: 2026-02-26T02:06:31.993838276Z
+parent: 001-clawlab-mvp
 ---
 
 # Module Interfaces & Contracts

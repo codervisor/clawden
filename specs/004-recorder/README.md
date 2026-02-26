@@ -1,15 +1,19 @@
 ---
-status: planned
-created: '2026-02-03'
-tags:
-  - core
-  - recorder
-  - capture
+status: archived
+created: 2026-02-03
 priority: medium
-parent: 001-clawlab-mvp
+tags:
+- core
+- recorder
+- capture
 depends_on:
-  - 002-project-setup
-created_at: '2026-02-03T07:37:43.628949379+00:00'
+- 002-project-setup
+created_at: 2026-02-03T07:37:43.628949379Z
+updated_at: 2026-02-26T02:06:31.993357715Z
+transitions:
+- status: archived
+  at: 2026-02-26T02:06:31.993357715Z
+parent: 001-clawlab-mvp
 ---
 
 # Session Recorder Module

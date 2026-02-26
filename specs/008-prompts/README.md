@@ -1,8 +1,7 @@
 ---
-status: planned
+status: archived
 created: 2026-02-03
 priority: high
-parent: 001-clawlab-mvp
 tags:
 - ai
 - prompts
@@ -10,7 +9,11 @@ tags:
 depends_on:
 - 003-vision-agent
 created_at: 2026-02-03T08:59:22.375298506Z
-updated_at: 2026-02-03T08:59:37.505695550Z
+updated_at: 2026-02-26T02:06:31.994044588Z
+transitions:
+- status: archived
+  at: 2026-02-26T02:06:31.994044588Z
+parent: 001-clawlab-mvp
 ---
 
 # Vision LLM Prompt Engineering

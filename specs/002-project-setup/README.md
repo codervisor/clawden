@@ -1,12 +1,16 @@
 ---
-status: planned
-created: '2026-02-03'
-tags:
-  - setup
-  - infrastructure
+status: archived
+created: 2026-02-03
 priority: high
+tags:
+- setup
+- infrastructure
+created_at: 2026-02-03T07:37:33.141032008Z
+updated_at: 2026-02-26T02:06:31.992795213Z
+transitions:
+- status: archived
+  at: 2026-02-26T02:06:31.992795213Z
 parent: 001-clawlab-mvp
-created_at: '2026-02-03T07:37:33.141032008+00:00'
 ---
 
 # Project Setup & Dependencies

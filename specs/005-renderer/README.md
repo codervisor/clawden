@@ -1,16 +1,20 @@
 ---
-status: planned
-created: '2026-02-03'
-tags:
-  - core
-  - renderer
-  - remotion
+status: archived
+created: 2026-02-03
 priority: medium
-parent: 001-clawlab-mvp
+tags:
+- core
+- renderer
+- remotion
 depends_on:
-  - 002-project-setup
-  - 004-recorder
-created_at: '2026-02-03T07:37:49.020299365+00:00'
+- 002-project-setup
+- 004-recorder
+created_at: 2026-02-03T07:37:49.020299365Z
+updated_at: 2026-02-26T02:06:31.993491052Z
+transitions:
+- status: archived
+  at: 2026-02-26T02:06:31.993491052Z
+parent: 001-clawlab-mvp
 ---
 
 # Video Renderer Module

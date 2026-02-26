@@ -1,15 +1,19 @@
 ---
-status: planned
-created: '2026-02-03'
-tags:
-  - core
-  - agent
-  - ai
+status: archived
+created: 2026-02-03
 priority: high
-parent: 001-clawlab-mvp
+tags:
+- core
+- agent
+- ai
 depends_on:
-  - 002-project-setup
-created_at: '2026-02-03T07:37:38.319807090+00:00'
+- 002-project-setup
+created_at: 2026-02-03T07:37:38.319807090Z
+updated_at: 2026-02-26T02:06:31.993060955Z
+transitions:
+- status: archived
+  at: 2026-02-26T02:06:31.993060955Z
+parent: 001-clawlab-mvp
 ---
 
 # Vision Agent Module
