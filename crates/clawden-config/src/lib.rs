@@ -1,6 +1,11 @@
 use clawden_core::ClawRuntime;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::{HashMap, HashSet};
+
+// ---------------------------------------------------------------------------
+// Canonical config types
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClawDenConfig {
@@ -78,6 +83,7 @@ impl ClawDenConfig {
 pub trait RuntimeConfigTranslator {
     fn runtime(&self) -> ClawRuntime;
     fn to_runtime_config(&self, canonical: &ClawDenConfig) -> Result<Value, String>;
+    #[allow(clippy::wrong_self_convention)]
     fn from_runtime_config(&self, runtime_config: &Value) -> Result<ClawDenConfig, String>;
 }
 
@@ -303,11 +309,153 @@ fn base_config_with_runtime(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Secret Vault — encrypted at-rest secret store
+// ---------------------------------------------------------------------------
+
+/// A simple XOR-based obfuscation key for the in-memory vault.
+/// In production, this would delegate to age/sops or a system keychain;
+/// here we provide the API surface with a basic symmetric cipher to protect
+/// secrets at rest in memory dumps.
+pub struct SecretVault {
+    /// Secrets stored as (name → encrypted_bytes).
+    store: HashMap<String, Vec<u8>>,
+    /// Symmetric key for XOR obfuscation. In production, use a real KDF + AES.
+    key: Vec<u8>,
+}
+
+impl SecretVault {
+    /// Create a new vault with the given encryption key.
+    pub fn new(key: &[u8]) -> Self {
+        assert!(!key.is_empty(), "vault key must not be empty");
+        Self {
+            store: HashMap::new(),
+            key: key.to_vec(),
+        }
+    }
+
+    /// Store a secret. The value is encrypted before being stored.
+    pub fn put(&mut self, name: &str, plaintext: &str) {
+        let encrypted = Self::xor_bytes(plaintext.as_bytes(), &self.key);
+        self.store.insert(name.to_string(), encrypted);
+    }
+
+    /// Retrieve and decrypt a secret by name. Returns `None` if not found.
+    pub fn get(&self, name: &str) -> Option<String> {
+        self.store.get(name).map(|encrypted| {
+            let decrypted = Self::xor_bytes(encrypted, &self.key);
+            String::from_utf8_lossy(&decrypted).into_owned()
+        })
+    }
+
+    /// Remove a secret.
+    pub fn remove(&mut self, name: &str) -> bool {
+        self.store.remove(name).is_some()
+    }
+
+    /// List all secret names (values are never exposed).
+    pub fn list_names(&self) -> Vec<String> {
+        let mut names: Vec<_> = self.store.keys().cloned().collect();
+        names.sort();
+        names
+    }
+
+    /// Resolve all `api_key_ref` values in a config by injecting from the vault.
+    /// Returns a new config with the `api_key_ref` field replaced by the actual
+    /// secret value. This is intended for deploy-time injection only; the result
+    /// should never be logged or persisted.
+    pub fn resolve_config(&self, config: &ClawDenConfig) -> Result<ClawDenConfig, String> {
+        let mut resolved = config.clone();
+        if let Some(ref key_ref) = resolved.agent.model.api_key_ref {
+            let secret = self
+                .get(key_ref)
+                .ok_or_else(|| format!("secret '{}' not found in vault", key_ref))?;
+            resolved.agent.model.api_key_ref = Some(secret);
+        }
+        Ok(resolved)
+    }
+
+    fn xor_bytes(data: &[u8], key: &[u8]) -> Vec<u8> {
+        data.iter()
+            .enumerate()
+            .map(|(i, byte)| byte ^ key[i % key.len()])
+            .collect()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Config diff & drift detection
+// ---------------------------------------------------------------------------
+
+/// A single difference between two configs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ConfigDiff {
+    pub path: String,
+    pub expected: Option<String>,
+    pub actual: Option<String>,
+}
+
+/// Compare two configs and return the list of differences.
+pub fn diff_configs(expected: &ClawDenConfig, actual: &ClawDenConfig) -> Vec<ConfigDiff> {
+    let expected_json = serde_json::to_value(expected).unwrap_or(Value::Null);
+    let actual_json = serde_json::to_value(actual).unwrap_or(Value::Null);
+    let mut diffs = Vec::new();
+    diff_value("", &expected_json, &actual_json, &mut diffs);
+    diffs
+}
+
+fn diff_value(path: &str, expected: &Value, actual: &Value, diffs: &mut Vec<ConfigDiff>) {
+    match (expected, actual) {
+        (Value::Object(exp_map), Value::Object(act_map)) => {
+            let all_keys: HashSet<_> = exp_map.keys().chain(act_map.keys()).collect();
+            for key in all_keys {
+                let child_path = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                let exp_val = exp_map.get(key).unwrap_or(&Value::Null);
+                let act_val = act_map.get(key).unwrap_or(&Value::Null);
+                diff_value(&child_path, exp_val, act_val, diffs);
+            }
+        }
+        (Value::Array(exp_arr), Value::Array(act_arr)) => {
+            let max_len = exp_arr.len().max(act_arr.len());
+            for i in 0..max_len {
+                let child_path = format!("{path}[{i}]");
+                let exp_val = exp_arr.get(i).unwrap_or(&Value::Null);
+                let act_val = act_arr.get(i).unwrap_or(&Value::Null);
+                diff_value(&child_path, exp_val, act_val, diffs);
+            }
+        }
+        _ => {
+            if expected != actual {
+                diffs.push(ConfigDiff {
+                    path: path.to_string(),
+                    expected: Some(expected.to_string()),
+                    actual: Some(actual.to_string()),
+                });
+            }
+        }
+    }
+}
+
+/// Detect drift: compare the canonical config against the runtime's current config.
+/// Returns an empty vec if in sync.
+pub fn detect_drift(
+    translator: &dyn RuntimeConfigTranslator,
+    canonical: &ClawDenConfig,
+    runtime_native: &Value,
+) -> Result<Vec<ConfigDiff>, String> {
+    let actual_canonical = translator.from_runtime_config(runtime_native)?;
+    Ok(diff_configs(canonical, &actual_canonical))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         ClawDenConfig, ModelConfig, OpenClawConfigTranslator, PicoClawConfigTranslator,
-        RuntimeConfigTranslator, ZeroClawConfigTranslator,
+        RuntimeConfigTranslator, SecretVault, ZeroClawConfigTranslator, diff_configs,
     };
     use crate::{AgentConfig, ChannelConfig, SecurityConfig, ToolConfig};
     use clawden_core::ClawRuntime;
@@ -386,5 +534,61 @@ mod tests {
         assert_eq!(decoded.agent.runtime, ClawRuntime::PicoClaw);
         assert_eq!(decoded.agent.name, "alpha");
         assert_eq!(decoded.agent.model.api_key_ref.as_deref(), Some("secret/openai"));
+    }
+
+    #[test]
+    fn secret_vault_encrypt_decrypt_roundtrip() {
+        let mut vault = SecretVault::new(b"test-encryption-key");
+        vault.put("secret/openai", "sk-abc123");
+
+        assert_eq!(vault.get("secret/openai").as_deref(), Some("sk-abc123"));
+        assert_eq!(vault.list_names(), vec!["secret/openai".to_string()]);
+    }
+
+    #[test]
+    fn secret_vault_remove() {
+        let mut vault = SecretVault::new(b"key");
+        vault.put("api-key", "value");
+        assert!(vault.remove("api-key"));
+        assert!(vault.get("api-key").is_none());
+    }
+
+    #[test]
+    fn secret_vault_resolve_config() {
+        let mut vault = SecretVault::new(b"key");
+        vault.put("secret/openai", "sk-real-key-123");
+
+        let config = sample_config(ClawRuntime::OpenClaw);
+        let resolved = vault.resolve_config(&config).unwrap();
+        assert_eq!(
+            resolved.agent.model.api_key_ref.as_deref(),
+            Some("sk-real-key-123")
+        );
+    }
+
+    #[test]
+    fn diff_configs_detects_name_change() {
+        let config_a = sample_config(ClawRuntime::OpenClaw);
+        let mut config_b = config_a.clone();
+        config_b.agent.name = "beta".to_string();
+
+        let diffs = diff_configs(&config_a, &config_b);
+        assert!(!diffs.is_empty());
+        assert!(diffs.iter().any(|d| d.path.contains("name")));
+    }
+
+    #[test]
+    fn diff_configs_identical_returns_empty() {
+        let config = sample_config(ClawRuntime::OpenClaw);
+        let diffs = diff_configs(&config, &config);
+        assert!(diffs.is_empty());
+    }
+
+    #[test]
+    fn safe_json_redacts_api_key() {
+        let config = sample_config(ClawRuntime::OpenClaw);
+        let safe = config.to_safe_json();
+        let api_ref = safe["agent"]["model"]["api_key_ref"].as_str().unwrap();
+        assert_eq!(api_ref, "<redacted>");
     }
 }

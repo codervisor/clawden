@@ -230,6 +230,7 @@ dependencies = [
  "async-trait",
  "clawden-core",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

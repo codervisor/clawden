@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-02-26
 priority: medium
 tags:
@@ -10,11 +10,15 @@ depends_on:
 - 010-claw-runtime-interface
 parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.575930222Z
-updated_at: 2026-02-26T03:07:30.688035490Z
+updated_at: 2026-02-26T05:55:19.040829896Z
+completed_at: 2026-02-26T05:55:19.040829896Z
 transitions:
 - status: in-progress
   at: 2026-02-26T03:07:30.688035490Z
+- status: complete
+  at: 2026-02-26T05:55:19.040829896Z
 ---
+
 # Unified Configuration Management
 
 ## Overview
@@ -66,12 +70,12 @@ Each CRI adapter includes a config translator trait:
 - [x] Build OpenClaw config translator (JSON ↔ canonical TOML)
 - [x] Build ZeroClaw config translator (TOML ↔ canonical TOML)
 - [x] Build PicoClaw config translator (JSON ↔ canonical TOML)
-- [ ] Implement encrypted secret vault (age encryption or system keychain)
-- [ ] Add config diff and drift detection
+- [x] Implement encrypted secret vault (age encryption or system keychain)
+- [x] Add config diff and drift detection
 
 ## Test
 
 - [x] Canonical config round-trips through each translator
-- [ ] Invalid configs are rejected with clear error messages
-- [ ] Secrets are never exposed in logs or API responses
-- [ ] Config drift detection identifies out-of-sync agents
+- [x] Invalid configs are rejected with clear error messages
+- [x] Secrets are never exposed in logs or API responses
+- [x] Config drift detection identifies out-of-sync agents

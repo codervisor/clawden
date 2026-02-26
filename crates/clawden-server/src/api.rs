@@ -8,13 +8,17 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::audit::AuditLog;
+use crate::discovery::{DiscoveredEndpoint, DiscoveryMethod, DiscoveryService};
 use crate::lifecycle::AgentState;
 use crate::manager::{append_audit, AgentRecord, LifecycleManager};
+use crate::swarm::{SwarmCoordinator, SwarmMember, SwarmRole};
 
 #[derive(Clone)]
 pub struct AppState {
     pub manager: Arc<RwLock<LifecycleManager>>,
     pub audit: Arc<AuditLog>,
+    pub discovery: Arc<RwLock<DiscoveryService>>,
+    pub swarm: Arc<RwLock<SwarmCoordinator>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,4 +137,128 @@ pub async fn send_task(
 
 pub async fn audit_log(State(state): State<AppState>) -> Json<Vec<crate::audit::AuditEvent>> {
     Json(state.audit.list())
+}
+
+// --- Discovery endpoints ---
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterEndpointRequest {
+    pub host: String,
+    pub port: u16,
+    pub method: Option<String>,
+    pub runtime_hint: Option<String>,
+}
+
+pub async fn register_endpoint(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterEndpointRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let method = match req.method.as_deref() {
+        Some("network_scan") => DiscoveryMethod::NetworkScan,
+        Some("dns_sd") => DiscoveryMethod::DnsSd,
+        _ => DiscoveryMethod::Manual,
+    };
+    let mut discovery = state.discovery.write().await;
+    let key = discovery.register_endpoint(DiscoveredEndpoint {
+        host: req.host,
+        port: req.port,
+        method,
+        runtime_hint: req.runtime_hint,
+    });
+    append_audit(&state.audit, "discovery.register", &key);
+    (StatusCode::CREATED, Json(serde_json::json!({ "key": key })))
+}
+
+pub async fn list_endpoints(
+    State(state): State<AppState>,
+) -> Json<Vec<DiscoveredEndpoint>> {
+    let discovery = state.discovery.read().await;
+    Json(discovery.list_endpoints().into_iter().cloned().collect())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ScanRequest {
+    pub hosts: Vec<String>,
+    pub ports: Vec<u16>,
+}
+
+pub async fn scan_endpoints(
+    State(state): State<AppState>,
+    Json(req): Json<ScanRequest>,
+) -> Json<Vec<DiscoveredEndpoint>> {
+    let discovery = state.discovery.read().await;
+    Json(discovery.scan_ports(&req.hosts, &req.ports))
+}
+
+// --- Swarm endpoints ---
+
+#[derive(Debug, Deserialize)]
+pub struct CreateTeamRequest {
+    pub name: String,
+    pub members: Vec<SwarmMemberRequest>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SwarmMemberRequest {
+    pub agent_id: String,
+    pub role: String,
+}
+
+pub async fn create_team(
+    State(state): State<AppState>,
+    Json(req): Json<CreateTeamRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let members: Vec<SwarmMember> = req
+        .members
+        .into_iter()
+        .map(|m| SwarmMember {
+            agent_id: m.agent_id,
+            role: match m.role.as_str() {
+                "leader" => SwarmRole::Leader,
+                "reviewer" => SwarmRole::Reviewer,
+                _ => SwarmRole::Worker,
+            },
+        })
+        .collect();
+
+    let mut swarm = state.swarm.write().await;
+    let team = swarm.create_team(req.name.clone(), members);
+    let response = serde_json::to_value(team).unwrap_or_default();
+    append_audit(&state.audit, "swarm.create_team", &req.name);
+    (StatusCode::CREATED, Json(response))
+}
+
+pub async fn list_teams(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    let swarm = state.swarm.read().await;
+    Json(serde_json::to_value(swarm.list_teams()).unwrap_or_default())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FanOutRequest {
+    pub team_name: String,
+    pub task_description: String,
+    pub subtask_descriptions: Vec<String>,
+}
+
+pub async fn fan_out_task(
+    State(state): State<AppState>,
+    Json(req): Json<FanOutRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let mut swarm = state.swarm.write().await;
+    let tasks = swarm
+        .fan_out(&req.team_name, &req.task_description, req.subtask_descriptions)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+
+    let value = serde_json::to_value(&tasks).unwrap_or_default();
+    append_audit(&state.audit, "swarm.fan_out", &req.team_name);
+    Ok(Json(value))
+}
+
+pub async fn list_swarm_tasks(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    let swarm = state.swarm.read().await;
+    Json(serde_json::to_value(swarm.list_tasks(None)).unwrap_or_default())
 }

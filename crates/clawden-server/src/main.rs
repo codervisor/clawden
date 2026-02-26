@@ -1,15 +1,20 @@
 mod api;
 mod audit;
+mod discovery;
 mod lifecycle;
 mod manager;
+mod swarm;
 
 use crate::api::{
-    audit_log, fleet_status, health_summary, list_agents, register_agent, send_task, start_agent,
-    stop_agent, AppState,
+    audit_log, create_team, fan_out_task, fleet_status, health_summary, list_agents,
+    list_endpoints, list_swarm_tasks, list_teams, register_agent, register_endpoint,
+    scan_endpoints, send_task, start_agent, stop_agent, AppState,
 };
 use crate::audit::{AuditEvent, AuditLog};
+use crate::discovery::DiscoveryService;
 use crate::lifecycle::AgentState;
 use crate::manager::{append_audit, LifecycleManager};
+use crate::swarm::SwarmCoordinator;
 use axum::{routing::get, Json, Router};
 use serde::Serialize;
 use std::net::SocketAddr;
@@ -45,6 +50,8 @@ async fn main() {
     let shared_state = AppState {
         manager: Arc::new(RwLock::new(manager)),
         audit: audit_store.clone(),
+        discovery: Arc::new(RwLock::new(DiscoveryService::new())),
+        swarm: Arc::new(RwLock::new(SwarmCoordinator::new())),
     };
 
     let health_interval_ms = std::env::var("CLAWDEN_HEALTH_INTERVAL_MS")
@@ -89,6 +96,18 @@ async fn main() {
         .route("/fleet/status", get(fleet_status))
         .route("/task/send", axum::routing::post(send_task))
         .route("/audit", get(audit_log))
+        // Discovery endpoints
+        .route("/discovery/endpoints", get(list_endpoints))
+        .route(
+            "/discovery/endpoints/register",
+            axum::routing::post(register_endpoint),
+        )
+        .route("/discovery/scan", axum::routing::post(scan_endpoints))
+        // Swarm endpoints
+        .route("/swarm/teams", get(list_teams))
+        .route("/swarm/teams/create", axum::routing::post(create_team))
+        .route("/swarm/fan-out", axum::routing::post(fan_out_task))
+        .route("/swarm/tasks", get(list_swarm_tasks))
         .with_state(shared_state);
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 

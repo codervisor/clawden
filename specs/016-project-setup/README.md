@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-02-26
 priority: critical
 tags:
@@ -8,11 +8,15 @@ tags:
 - monorepo
 parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.576100007Z
-updated_at: 2026-02-26T03:07:30.691898682Z
+updated_at: 2026-02-26T05:55:53.949433979Z
+completed_at: 2026-02-26T05:55:53.949433979Z
 transitions:
 - status: in-progress
   at: 2026-02-26T03:07:30.691898682Z
+- status: complete
+  at: 2026-02-26T05:55:53.949433979Z
 ---
+
 # Project Setup & Monorepo Scaffolding
 
 ## Overview
@@ -61,7 +65,7 @@ clawden/
 - [x] Set up `clawden-core` crate with placeholder trait
 - [x] Set up `clawden-server` crate with Axum hello-world
 - [x] Set up `clawden-cli` crate with clap skeleton
-- [ ] Scaffold React dashboard with Vite + Tailwind + shadcn/ui
+- [x] Scaffold React dashboard with Vite + Tailwind + shadcn/ui
 - [x] Scaffold TypeScript SDK with tsup + Vitest
 - [x] Configure GitHub Actions CI (cargo test + cargo clippy + pnpm test)
 - [x] Add Makefile/justfile for common dev commands
@@ -72,4 +76,4 @@ clawden/
 - [x] `cargo test` passes for all crates
 - [x] `cargo clippy` reports no warnings
 - [x] Dashboard `pnpm dev` starts dev server
-- [ ] CI pipeline passes on clean checkout
+- [x] CI pipeline passes on clean checkout

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-02-26
 priority: medium
 tags:
@@ -11,11 +11,15 @@ depends_on:
 - 010-claw-runtime-interface
 parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.576054643Z
-updated_at: 2026-02-26T03:07:30.691255720Z
+updated_at: 2026-02-26T05:55:44.435001131Z
+completed_at: 2026-02-26T05:55:44.435001131Z
 transitions:
 - status: in-progress
   at: 2026-02-26T03:07:30.691255720Z
+- status: complete
+  at: 2026-02-26T05:55:44.435001131Z
 ---
+
 # Cross-Claw Developer SDK & CLI
 
 ## Overview
@@ -75,12 +79,12 @@ export default defineSkill({
 - [x] Implement fleet status commands
 - [x] Define TypeScript Skill SDK with `defineSkill` API (`sdk/` directory)
 - [x] Build skill scaffolding (`clawden skill create` → generates TS template)
-- [ ] Create cross-runtime skill test harness
-- [ ] Design marketplace registry protocol
+- [x] Create cross-runtime skill test harness
+- [x] Design marketplace registry protocol
 
 ## Test
 
 - [x] CLI commands execute correctly against running ClawDen
-- [ ] Skill SDK produces valid skill packages
-- [ ] Test harness runs skills against multiple runtimes
-- [ ] Published skills can be installed and executed
+- [x] Skill SDK produces valid skill packages
+- [x] Test harness runs skills against multiple runtimes
+- [x] Published skills can be installed and executed
