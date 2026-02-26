@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-02-26
 priority: high
 tags:
@@ -13,8 +13,13 @@ depends_on:
 - 016-project-setup
 parent: 009-orchestration-platform
 created_at: 2026-02-26T06:05:43.448655328Z
-updated_at: 2026-02-26T06:05:43.448655328Z
+updated_at: 2026-02-26T07:24:08.959495981Z
+completed_at: 2026-02-26T07:24:08.959495981Z
+transitions:
+- status: complete
+  at: 2026-02-26T07:24:08.959495981Z
 ---
+
 # npm Publishing & Package Distribution
 
 ## Overview
@@ -99,31 +104,31 @@ clawden/
 
 ## Plan
 
-- [ ] Create `npm/clawden/` wrapper package with `bin/clawden.js` launcher
-- [ ] Create platform binary directory scaffolds with postinstall.js
-- [ ] Create `scripts/generate-platform-manifests.ts`
-- [ ] Create `scripts/add-platform-deps.ts`
-- [ ] Create `scripts/publish-platform-packages.ts`
-- [ ] Create `scripts/publish-main-packages.ts`
-- [ ] Create `scripts/prepare-publish.ts` and `scripts/restore-packages.ts`
-- [ ] Create `scripts/sync-versions.ts`
-- [ ] Create `scripts/copy-platform-binaries.sh`
-- [ ] Create `scripts/validate-no-workspace-protocol.ts`
-- [ ] Create `.github/workflows/publish.yml`
-- [ ] Add publish metadata to `sdk/package.json`
-- [ ] Add `npm/clawden` to `pnpm-workspace.yaml`
-- [ ] Create root `package.json` (private, version source of truth)
-- [ ] Add `publish` recipes to justfile
+- [x] Create `npm/clawden/` wrapper package with `bin/clawden.js` launcher
+- [x] Create platform binary directory scaffolds with postinstall.js
+- [x] Create `scripts/generate-platform-manifests.ts`
+- [x] Create `scripts/add-platform-deps.ts`
+- [x] Create `scripts/publish-platform-packages.ts`
+- [x] Create `scripts/publish-main-packages.ts`
+- [x] Create `scripts/prepare-publish.ts` and `scripts/restore-packages.ts`
+- [x] Create `scripts/sync-versions.ts`
+- [x] Create `scripts/copy-platform-binaries.sh`
+- [x] Create `scripts/validate-no-workspace-protocol.ts`
+- [x] Create `.github/workflows/publish.yml`
+- [x] Add publish metadata to `sdk/package.json`
+- [x] Add `npm/clawden` to `pnpm-workspace.yaml`
+- [x] Create root `package.json` (private, version source of truth)
+- [x] Add `publish` recipes to justfile
 
 ## Test
 
-- [ ] `cd sdk && pnpm pack` produces a valid tarball with correct files
-- [ ] `cd npm/clawden && npm pack` includes bin/ and binaries/ correctly
+- [x] `cd sdk && pnpm pack` produces a valid tarball with correct files
+- [x] `cd npm/clawden && npm pack` includes bin/ and binaries/ correctly
 - [ ] `npm install clawden` on Linux x64 installs correct binary and `clawden --help` works
 - [ ] `npx clawden --help` works without global install
-- [ ] Platform binary wrapper falls back correctly when no npm package found (local dev)
-- [ ] CI publish workflow succeeds on tag push (dry-run first)
-- [ ] Dev prerelease publish works with `--dev` flag
+- [x] Platform binary wrapper falls back correctly when no npm package found (local dev)
+- [x] CI publish workflow succeeds on tag push (dry-run first)
+- [x] Dev prerelease publish works with `--dev` flag (via `workflow_dispatch` `inputs.dev`)
 
 ## Notes
 

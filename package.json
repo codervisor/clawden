@@ -2,12 +2,15 @@
   "name": "clawden-workspace",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.5.2",
+  "packageManager": "pnpm@10.30.2",
   "scripts": {
     "publish:platforms": "tsx scripts/publish-platform-packages.ts",
     "publish:main": "tsx scripts/publish-main-packages.ts",
     "prepare-publish": "tsx scripts/prepare-publish.ts",
     "restore-packages": "tsx scripts/restore-packages.ts",
     "sync-versions": "tsx scripts/sync-versions.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.8.1"
   }
 }
