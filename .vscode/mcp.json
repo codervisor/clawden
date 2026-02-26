@@ -4,7 +4,7 @@
 			"command": "npx",
 			"args": [
 				"-y",
-				"@leanspec/mcp"
+				"@leanspec/mcp@latest"
 			],
 			"env": {},
 			"type": "stdio"
