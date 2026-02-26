@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-02-26
 priority: high
 tags:

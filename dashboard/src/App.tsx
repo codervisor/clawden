@@ -1,4 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { Layout } from './components/layout/Layout';
+import { Badge } from './components/ui/badge';
+import { Button } from './components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
+import { Skeleton } from './components/ui/skeleton';
+import { Separator } from './components/ui/separator';
+import { AlertDialog } from './components/ui/alert-dialog';
+import { ArrowLeft, Server, AlertTriangle } from 'lucide-react';
+import { useTheme } from './hooks/useTheme';
+import { cn } from './lib/utils';
 
 // --- Types ---
 
@@ -33,42 +44,6 @@ type View = 'fleet' | 'agent-detail' | 'tasks' | 'config' | 'audit';
 
 const POLL_MS = 2_000;
 
-// --- SVGs ---
-
-const Icons = {
-  Fleet: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-    </svg>
-  ),
-  Task: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-    </svg>
-  ),
-  Config: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
-  Audit: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  Back: () => (
-    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-    </svg>
-  ),
-  Check: () => (
-    <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  ),
-};
-
 // --- App Component ---
 
 export function App() {
@@ -83,22 +58,31 @@ export function App() {
   const [view, setView] = useState<View>('fleet');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // --- WebSocket & Polling ---
+  // Initialize theme on mount
+  useTheme();
+
+  // --- WebSocket ---
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // WebSocket
-    // Note: We use /api/ws because Vite proxies /api -> backend, but standard WS might need explicit proxy config or direct URL.
-    // If backend is on same host/port in prod, relative path works.
-    // For dev, verify if Vite proxies WS correctly.
     const wsUrl = `${protocol}//${window.location.host}/api/ws`;
     let ws: WebSocket | null = null;
+    let wasConnected = false;
 
     try {
       ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => setWsConnected(false);
+      ws.onopen = () => {
+        setWsConnected(true);
+        if (wasConnected === false) wasConnected = true;
+      };
+      ws.onclose = () => {
+        if (wasConnected) {
+          toast.warning('WebSocket disconnected, switching to polling mode');
+        }
+        setWsConnected(false);
+      };
       ws.onerror = () => setWsConnected(false);
 
       ws.onmessage = (event) => {
@@ -118,6 +102,7 @@ export function App() {
     return () => ws?.close();
   }, []);
 
+  // --- Polling ---
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
@@ -138,8 +123,13 @@ export function App() {
         setStatus(nextStatus);
         setAgents(nextAgents);
         setError(null);
+        setLoading(false);
       } catch (err) {
-        if (alive) setError(err instanceof Error ? err.message : 'Unknown error');
+        if (alive) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          setError(msg);
+          setLoading(false);
+        }
       }
     };
 
@@ -151,6 +141,7 @@ export function App() {
     };
   }, []);
 
+  // --- Audit polling ---
   useEffect(() => {
     if (view !== 'audit') return;
     let alive = true;
@@ -183,328 +174,326 @@ export function App() {
     setView('agent-detail');
   }, []);
 
-  // --- Render ---
-
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col border-r border-slate-800">
-        <div className="p-6">
-          <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            <div className="w-8 h-8 rounded bg-blue-600 flex items-center justify-center font-black">C</div>
-            ClawDen
-          </h1>
-          <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-             <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-slate-500'}`} />
-             {wsConnected ? 'Live Connection' : 'Polling Mode'}
+    <Layout view={view} onNavigate={setView} wsConnected={wsConnected}>
+      {error && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {view === 'fleet' && (
+        <FleetOverview
+          status={status}
+          agents={agents}
+          healthyAgents={healthyAgents}
+          onSelectAgent={openAgentDetail}
+          loading={loading}
+        />
+      )}
+
+      {view === 'agent-detail' && (
+        <AgentDetail agent={selectedAgent} onBack={() => setView('fleet')} />
+      )}
+
+      {view === 'tasks' && <TaskMonitor agents={agents} loading={loading} />}
+
+      {view === 'config' && <ConfigEditor />}
+
+      {view === 'audit' && <AuditLogViewer events={auditEvents} />}
+    </Layout>
+  );
+}
+
+// --- Fleet Overview ---
+
+function FleetOverview({
+  status,
+  agents,
+  healthyAgents,
+  onSelectAgent,
+  loading,
+}: {
+  status: FleetStatus;
+  agents: AgentRecord[];
+  healthyAgents: number;
+  onSelectAgent: (id: string) => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))
+        ) : (
+          <>
+            <MetricCard label="Total Agents" value={status.total_agents} subtext="Registered in fleet" />
+            <MetricCard label="Running" value={status.running_agents} subtext="Active instances" variant="success" />
+            <MetricCard label="Degraded" value={status.degraded_agents} subtext="Requiring attention" variant="warning" />
+            <MetricCard label="Healthy" value={healthyAgents} subtext="Passing health checks" variant="success" />
+          </>
+        )}
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Active Agents</CardTitle>
+            <Badge variant="secondary">{agents.length} total</Badge>
           </div>
-        </div>
-
-        <nav className="flex-1 px-4 py-4 space-y-1">
-          <NavButton 
-            active={view === 'fleet' || view === 'agent-detail'} 
-            onClick={() => setView('fleet')} 
-            icon={<Icons.Fleet />} 
-            label="Fleet Overview" 
-          />
-          <NavButton 
-            active={view === 'tasks'} 
-            onClick={() => setView('tasks')} 
-            icon={<Icons.Task />} 
-            label="Task Monitor" 
-          />
-          <NavButton 
-            active={view === 'config'} 
-            onClick={() => setView('config')} 
-            icon={<Icons.Config />} 
-            label="Config Editor" 
-          />
-          <NavButton 
-            active={view === 'audit'} 
-            onClick={() => setView('audit')} 
-            icon={<Icons.Audit />} 
-            label="Audit Log" 
-          />
-        </nav>
-
-        <div className="p-4 border-t border-slate-800">
-          <div className="text-xs text-slate-500">v0.1.0 • @codervisor</div>
-          <div className="text-xs text-slate-600 mt-1">ClawDen Runtime</div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between sticky top-0 z-10">
-          <h2 className="text-2xl font-semibold text-slate-800">
-            {view === 'fleet' && 'Fleet Overview'}
-            {view === 'agent-detail' && 'Agent Details'}
-            {view === 'tasks' && 'Task Monitor'}
-            {view === 'config' && 'Configuration'}
-            {view === 'audit' && 'System Audit Log'}
-          </h2>
-          {error && (
-            <div className="bg-red-50 text-red-700 px-4 py-2 rounded-md text-sm border border-red-200 flex items-center animate-pulse">
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              {error}
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="space-y-2 p-6">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : agents.length === 0 ? (
+            <EmptyState
+              icon={<Server className="h-10 w-10" />}
+              title="No agents connected"
+              description="Waiting for runtime registration..."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-6 py-3 text-left">Name</th>
+                    <th className="px-6 py-3 text-left">Runtime</th>
+                    <th className="px-6 py-3 text-left">State</th>
+                    <th className="px-6 py-3 text-left">Health</th>
+                    <th className="px-6 py-3 text-right">Tasks</th>
+                    <th className="px-6 py-3 text-left">Capabilities</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {agents.map((agent) => (
+                    <tr key={agent.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-6 py-4 font-medium">{agent.name}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{agent.runtime}</td>
+                      <td className="px-6 py-4"><StateBadge state={agent.state} /></td>
+                      <td className="px-6 py-4"><HealthBadge status={agent.health} /></td>
+                      <td className="px-6 py-4 text-right font-mono">{agent.task_count}</td>
+                      <td className="px-6 py-4 max-w-[200px] truncate text-muted-foreground text-xs">{agent.capabilities.join(', ') || '—'}</td>
+                      <td className="px-6 py-4 text-right">
+                        <Button variant="outline" size="sm" onClick={() => onSelectAgent(agent.id)}>
+                          Details
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </header>
-
-        <div className="p-8 max-w-7xl mx-auto space-y-6">
-          {view === 'fleet' && (
-            <FleetOverview
-              status={status}
-              agents={agents}
-              healthyAgents={healthyAgents}
-              onSelectAgent={openAgentDetail}
-            />
-          )}
-
-          {view === 'agent-detail' && (
-            <AgentDetail agent={selectedAgent} onBack={() => setView('fleet')} />
-          )}
-
-          {view === 'tasks' && <TaskMonitor agents={agents} />}
-
-          {view === 'config' && <ConfigEditor />}
-
-          {view === 'audit' && <AuditLogViewer events={auditEvents} />}
-        </div>
-      </main>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// --- Subcomponents ---
-
-function NavButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-        active 
-          ? 'bg-blue-600 text-white shadow-md' 
-          : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-      }`}
-    >
-      <span className="mr-3 opacity-90">{icon}</span>
-      {label}
-    </button>
-  );
-}
-
-function FleetOverview({ status, agents, healthyAgents, onSelectAgent }: { status: FleetStatus; agents: AgentRecord[]; healthyAgents: number; onSelectAgent: (id: string) => void }) {
-  const getBadgeColor = (agent: AgentRecord) => {
-    switch (agent.state) {
-      case 'running': return 'bg-green-100 text-green-800';
-      case 'degraded': return 'bg-yellow-100 text-yellow-800';
-      case 'stopped': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-blue-100 text-blue-800';
-    }
-  };
-
-  const getHealthColor = (health: string) => {
-    switch (health) {
-      case 'healthy': return 'text-green-600';
-      case 'degraded': return 'text-yellow-600';
-      case 'unhealthy': return 'text-red-600';
-      default: return 'text-gray-400';
-    }
-  };
-
-  return (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard label="Total Agents" value={status.total_agents} subtext="Registered in fleet" color="blue" />
-        <MetricCard label="Running" value={status.running_agents} subtext="Active instances" color="green" />
-        <MetricCard label="Degraded" value={status.degraded_agents} subtext="Requiring attention" color="yellow" />
-        <MetricCard label="Healthy" value={healthyAgents} subtext="Passing checks" color="emerald" />
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="font-semibold text-slate-800">Active Agents</h3>
-          <span className="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-1 rounded">Total: {agents.length}</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-xs font-semibold">
-              <tr>
-                <th className="px-6 py-3">Name</th>
-                <th className="px-6 py-3">Runtime</th>
-                <th className="px-6 py-3">State</th>
-                <th className="px-6 py-3">Health</th>
-                <th className="px-6 py-3 text-right">Tasks</th>
-                <th className="px-6 py-3">Capabilities</th>
-                <th className="px-6 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {agents.map((agent) => (
-                <tr key={agent.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900">{agent.name}</td>
-                  <td className="px-6 py-4 text-slate-600 font-mono text-xs">{agent.runtime}</td>
-                  <td className="px-6 py-4"><StateBadge state={agent.state} /></td>
-                  <td className="px-6 py-4"><HealthBadge status={agent.health} /></td>
-                  <td className="px-6 py-4 text-right font-mono text-slate-600">{agent.task_count}</td>
-                  <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{agent.capabilities.join(', ') || '—'}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => onSelectAgent(agent.id)}
-                      className="text-blue-600 hover:text-blue-800 font-medium text-xs border border-blue-200 hover:border-blue-400 px-3 py-1 rounded transition-colors"
-                    >
-                      Details
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {agents.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
-                    No agents connected. Waiting for runtime registration...
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  );
-}
+// --- Agent Detail ---
 
 function AgentDetail({ agent, onBack }: { agent: AgentRecord | null; onBack: () => void }) {
+  const [confirmDialog, setConfirmDialog] = useState<{ action: string; label: string } | null>(null);
+
+  const handleAction = (action: string, label: string) => {
+    setConfirmDialog({ action, label });
+  };
+
+  const confirmAction = () => {
+    if (!confirmDialog || !agent) return;
+    toast.success(`${confirmDialog.label} sent to ${agent.name}`);
+    setConfirmDialog(null);
+  };
+
   if (!agent) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-        <h3 className="text-lg font-medium text-slate-900">Agent not found</h3>
-        <button onClick={onBack} className="mt-4 text-blue-600 hover:text-blue-800 inline-flex items-center">
-          <Icons.Back /> Return to Fleet
-        </button>
-      </div>
+      <Card className="p-12 text-center">
+        <h3 className="text-lg font-medium">Agent not found</h3>
+        <Button variant="link" onClick={onBack} className="mt-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Return to Fleet
+        </Button>
+      </Card>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <button onClick={onBack} className="mb-6 text-slate-500 hover:text-slate-900 inline-flex items-center text-sm font-medium transition-colors">
-        <Icons.Back /> Back to fleet
-      </button>
+    <div className="max-w-3xl mx-auto space-y-6">
+      <Button variant="ghost" onClick={onBack} className="gap-1 text-muted-foreground">
+        <ArrowLeft className="h-4 w-4" />
+        Back to fleet
+      </Button>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{agent.name}</h1>
-            <p className="text-slate-500 font-mono text-sm mt-1">{agent.id}</p>
+      <Card>
+        <CardHeader className="bg-muted/30">
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="text-2xl">{agent.name}</CardTitle>
+              <p className="mt-1 font-mono text-sm text-muted-foreground">{agent.id}</p>
+            </div>
+            <div className="flex gap-2">
+              <StateBadge state={agent.state} />
+              <HealthBadge status={agent.health} />
+            </div>
           </div>
-          <div className="flex gap-2">
-            <StateBadge state={agent.state} />
-            <HealthBadge status={agent.health} />
-          </div>
-        </div>
-
-        <div className="px-8 py-6 space-y-6">
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
           <DetailRow label="Runtime" value={agent.runtime} mono />
-          <DetailRow 
-            label="Last Health Check" 
-            value={agent.last_health_check_unix_ms 
-              ? new Date(agent.last_health_check_unix_ms).toLocaleString() 
-              : 'Never'} 
+          <DetailRow
+            label="Last Health Check"
+            value={agent.last_health_check_unix_ms
+              ? new Date(agent.last_health_check_unix_ms).toLocaleString()
+              : 'Never'}
           />
           <DetailRow label="Consecutive Failures" value={agent.consecutive_health_failures.toString()} />
-          <div className="border-t border-slate-100 my-4" />
-          
+
+          <Separator />
+
           <div>
-            <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-3">Metrics</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Metrics</h4>
             <div className="grid grid-cols-2 gap-4">
-               <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                  <div className="text-slate-500 text-xs uppercase">Tasks Completed</div>
-                  <div className="text-2xl font-bold text-slate-800 mt-1">{agent.task_count}</div>
-               </div>
-               {/* Placeholders for future metrics */}
-               <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 opacity-50">
-                  <div className="text-slate-500 text-xs uppercase">Uptime</div>
-                  <div className="text-2xl font-bold text-slate-800 mt-1">—</div>
-               </div>
+              <Card className="bg-muted/30">
+                <CardContent className="p-4">
+                  <div className="text-xs uppercase text-muted-foreground">Tasks Completed</div>
+                  <div className="text-2xl font-bold mt-1">{agent.task_count}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-muted/30 opacity-50">
+                <CardContent className="p-4">
+                  <div className="text-xs uppercase text-muted-foreground">Uptime</div>
+                  <div className="text-2xl font-bold mt-1">—</div>
+                </CardContent>
+              </Card>
             </div>
           </div>
 
-          <div className="border-t border-slate-100 my-4" />
-          
+          <Separator />
+
           <div>
-             <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-3">Capabilities</h4>
-             <div className="flex flex-wrap gap-2">
-                {agent.capabilities.length > 0 ? (
-                  agent.capabilities.map((cap) => (
-                    <span key={cap} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm border border-blue-100">
-                      {cap}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-slate-400 italic">No capabilities advertised</span>
-                )}
-             </div>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Capabilities</h4>
+            <div className="flex flex-wrap gap-2">
+              {agent.capabilities.length > 0 ? (
+                agent.capabilities.map((cap) => (
+                  <Badge key={cap} variant="secondary">{cap}</Badge>
+                ))
+              ) : (
+                <span className="text-muted-foreground italic text-sm">No capabilities advertised</span>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+
+          <Separator />
+
+          <div>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Actions</h4>
+            <div className="flex gap-3">
+              <Button variant="outline" size="sm" onClick={() => handleAction('restart', 'Restart')}>
+                Restart Agent
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => handleAction('stop', 'Stop')}>
+                Stop Agent
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <AlertDialog
+        open={!!confirmDialog}
+        title={`Confirm: ${confirmDialog?.label} Agent`}
+        description={`Are you sure you want to ${confirmDialog?.action} agent "${agent.name}"? This action may interrupt active tasks.`}
+        confirmLabel={confirmDialog?.label}
+        cancelLabel="Cancel"
+        onConfirm={confirmAction}
+        onCancel={() => setConfirmDialog(null)}
+        destructive={confirmDialog?.action === 'stop'}
+      />
     </div>
   );
 }
 
-function TaskMonitor({ agents }: { agents: AgentRecord[] }) {
+// --- Task Monitor ---
+
+function TaskMonitor({ agents, loading }: { agents: AgentRecord[]; loading: boolean }) {
   const totalTasks = agents.reduce((sum, a) => sum + a.task_count, 0);
   const busiest = [...agents].sort((a, b) => b.task_count - a.task_count);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-           <h3 className="text-sm font-medium text-slate-500 uppercase">Total Tasks Routed</h3>
-           <div className="mt-2 text-4xl font-bold text-slate-900">{totalTasks}</div>
-        </div>
+        {loading ? (
+          <Skeleton className="h-28 rounded-xl" />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase">Total Tasks Routed</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold">{totalTasks}</div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">Load Distribution</h3>
-        </div>
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-xs font-semibold">
-            <tr>
-              <th className="px-6 py-3">Agent</th>
-              <th className="px-6 py-3">Runtime</th>
-              <th className="px-6 py-3 text-right">Tasks</th>
-              <th className="px-6 py-3 w-1/3">Load Share</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {busiest.map((agent) => (
-              <tr key={agent.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 font-medium text-slate-900">{agent.name}</td>
-                <td className="px-6 py-4 text-slate-500 font-mono text-xs">{agent.runtime}</td>
-                <td className="px-6 py-4 text-right font-mono text-slate-700">{agent.task_count}</td>
-                <td className="px-6 py-4">
-                  <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                    <div 
-                      className="bg-blue-600 h-2.5 rounded-full" 
-                      style={{ width: `${totalTasks > 0 ? (agent.task_count / totalTasks) * 100 : 0}%` }}
-                    />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Load Distribution</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="space-y-2 p-6">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-6 py-3 text-left">Agent</th>
+                    <th className="px-6 py-3 text-left">Runtime</th>
+                    <th className="px-6 py-3 text-right">Tasks</th>
+                    <th className="px-6 py-3 w-1/3">Load Share</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {busiest.map((agent) => (
+                    <tr key={agent.id} className="hover:bg-muted/30">
+                      <td className="px-6 py-4 font-medium">{agent.name}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{agent.runtime}</td>
+                      <td className="px-6 py-4 text-right font-mono">{agent.task_count}</td>
+                      <td className="px-6 py-4">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-2 rounded-full bg-primary"
+                            style={{ width: `${totalTasks > 0 ? (agent.task_count / totalTasks) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
+// --- Config Editor ---
+
 function ConfigEditor() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [configText, setConfigText] = useState<string>(
     JSON.stringify(
       {
@@ -522,35 +511,50 @@ function ConfigEditor() {
     ),
   );
   const [parseError, setParseError] = useState<string | null>(null);
-  const [deployed, setDeployed] = useState(false);
+  const [confirmDeploy, setConfirmDeploy] = useState(false);
 
   const handleValidate = () => {
     try {
       const parsed = JSON.parse(configText);
       if (!parsed.agent?.name) throw new Error('agent.name is required');
-      if (!parsed.agent?.model?.provider || !parsed.agent?.model?.name) throw new Error('agent.model.provider and agent.model.name are required');
+      if (!parsed.agent?.model?.provider || !parsed.agent?.model?.name)
+        throw new Error('agent.model.provider and agent.model.name are required');
       setParseError(null);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setParseError(e.message || 'Invalid JSON');
+      toast.success('Configuration is valid');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Invalid JSON';
+      setParseError(msg);
+      toast.error(`Validation failed: ${msg}`);
     }
   };
 
   const handleDeploy = () => {
-    handleValidate();
-    if (!parseError) {
-      setDeployed(true);
-      setTimeout(() => setDeployed(false), 2000);
+    try {
+      const parsed = JSON.parse(configText);
+      if (!parsed.agent?.name) throw new Error('agent.name is required');
+      if (!parsed.agent?.model?.provider || !parsed.agent?.model?.name)
+        throw new Error('agent.model.provider and agent.model.name are required');
+      setParseError(null);
+      setConfirmDeploy(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Invalid JSON';
+      setParseError(msg);
+      toast.error(`Validation failed: ${msg}`);
     }
+  };
+
+  const confirmDeployAction = () => {
+    setConfirmDeploy(false);
+    toast.success('Configuration deployed successfully');
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2 space-y-4">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
-          <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
-             <span className="text-xs font-mono text-slate-500">config.json</span>
-             <span className="text-xs text-slate-400">JSON</span>
+        <Card className="overflow-hidden flex flex-col h-[600px]">
+          <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-2">
+            <span className="font-mono text-xs text-muted-foreground">config.json</span>
+            <Badge variant="outline">JSON</Badge>
           </div>
           <textarea
             value={configText}
@@ -558,52 +562,63 @@ function ConfigEditor() {
               setConfigText(e.target.value);
               setParseError(null);
             }}
-            className={`flex-1 w-full p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-              parseError ? 'bg-red-50 text-red-900' : 'bg-slate-50 text-slate-800'
-            }`}
+            className={cn(
+              'flex-1 w-full p-4 font-mono text-sm resize-none focus:outline-none',
+              parseError ? 'bg-destructive/10 text-destructive' : 'bg-background',
+            )}
             spellCheck={false}
+            aria-label="Configuration editor"
           />
-        </div>
+        </Card>
       </div>
 
       <div className="space-y-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="font-semibold text-slate-900 mb-4">Actions</h3>
-          <div className="space-y-3">
-             <button onClick={handleValidate} className="w-full py-2 px-4 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors">
-               Validate Syntax
-             </button>
-             <button onClick={handleDeploy} className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
-               Deploy Configuration
-             </button>
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button variant="outline" className="w-full" onClick={handleValidate}>
+              Validate Syntax
+            </Button>
+            <Button className="w-full" onClick={handleDeploy}>
+              Deploy Configuration
+            </Button>
 
-          {parseError && (
-            <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded-lg">
-               <div className="text-red-800 text-sm font-semibold mb-1">Validation Error</div>
-               <p className="text-red-600 text-xs font-mono">{parseError}</p>
-            </div>
-          )}
+            {parseError && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                <div className="text-sm font-semibold text-destructive mb-1">Validation Error</div>
+                <p className="font-mono text-xs text-destructive">{parseError}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-          {deployed && (
-            <div className="mt-6 p-4 bg-green-50 border border-green-100 rounded-lg flex items-center">
-               <Icons.Check />
-               <span className="ml-2 text-green-700 text-sm font-medium">Deployed successfully</span>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-           <h4 className="text-blue-900 font-medium mb-2 text-sm">Help</h4>
-           <p className="text-blue-800 text-sm leading-relaxed">
-             Edit the canonical ClawDen configuration. This defines agent behaviors, capabilities, and runtime parameters.
-             Changes are validated before propagation.
-           </p>
-        </div>
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-6">
+            <h4 className="text-sm font-medium text-primary mb-2">Help</h4>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Edit the canonical ClawDen configuration. This defines agent behaviors, capabilities,
+              and runtime parameters. Changes are validated before propagation.
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      <AlertDialog
+        open={confirmDeploy}
+        title="Deploy Configuration"
+        description="This will update the active agent configuration. Running agents may be affected. Are you sure?"
+        confirmLabel="Deploy"
+        cancelLabel="Cancel"
+        onConfirm={confirmDeployAction}
+        onCancel={() => setConfirmDeploy(false)}
+      />
     </div>
   );
 }
+
+// --- Audit Log ---
 
 function AuditLogViewer({ events }: { events: AuditEvent[] }) {
   const sorted = useMemo(
@@ -612,118 +627,137 @@ function AuditLogViewer({ events }: { events: AuditEvent[] }) {
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-        <h3 className="font-semibold text-slate-800">System Activity</h3>
-        <span className="text-xs text-slate-500">{sorted.length} events logged</span>
-      </div>
-      <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-xs font-semibold">
-          <tr>
-            <th className="px-6 py-3">Time</th>
-            <th className="px-6 py-3">Actor</th>
-            <th className="px-6 py-3">Action</th>
-            <th className="px-6 py-3">Target</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {sorted.slice(0, 200).map((event, i) => (
-            <tr key={i} className="hover:bg-slate-50">
-              <td className="px-6 py-4 whitespace-nowrap text-slate-500 text-xs">
-                {new Date(event.timestamp_unix_ms).toLocaleString()}
-              </td>
-              <td className="px-6 py-4 font-medium text-slate-900">{event.actor}</td>
-              <td className="px-6 py-4">
-                <span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded text-slate-700 border border-slate-200">
-                  {event.action}
-                </span>
-              </td>
-              <td className="px-6 py-4 text-slate-600">{event.target}</td>
-            </tr>
-          ))}
-          {sorted.length === 0 && (
-            <tr>
-              <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">
-                No audit events recorded yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">System Activity</CardTitle>
+          <Badge variant="secondary">{sorted.length} events</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {sorted.length === 0 ? (
+          <EmptyState
+            icon={<span className="text-4xl">📋</span>}
+            title="No audit events"
+            description="No audit events recorded yet."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th className="px-6 py-3 text-left">Time</th>
+                  <th className="px-6 py-3 text-left">Actor</th>
+                  <th className="px-6 py-3 text-left">Action</th>
+                  <th className="px-6 py-3 text-left">Target</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {sorted.slice(0, 200).map((event, i) => (
+                  <tr key={i} className="hover:bg-muted/30">
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-muted-foreground">
+                      {new Date(event.timestamp_unix_ms).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 font-medium">{event.actor}</td>
+                    <td className="px-6 py-4">
+                      <Badge variant="outline" className="font-mono text-xs">{event.action}</Badge>
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">{event.target}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 // --- Helpers ---
 
-function MetricCard({ label, value, subtext, color = "blue" }: { label: string; value: number; subtext?: string; color?: "blue"|"green"|"yellow"|"emerald" }) {
-  const colorStyles = {
-    blue: "text-blue-600 bg-blue-50 border-blue-100",
-    green: "text-green-600 bg-green-50 border-green-100",
-    emerald: "text-emerald-600 bg-emerald-50 border-emerald-100",
-    yellow: "text-amber-600 bg-amber-50 border-amber-100"
-  };
-
-  const style = colorStyles[color];
-
+function MetricCard({
+  label,
+  value,
+  subtext,
+  variant = 'default',
+}: {
+  label: string;
+  value: number;
+  subtext?: string;
+  variant?: 'default' | 'success' | 'warning';
+}) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-      <div className="text-slate-500 font-medium text-sm mb-1">{label}</div>
-      <div className="flex items-end justify-between">
-         <div className="text-3xl font-bold text-slate-900">{value}</div>
-         <div className={`px-2 py-1 rounded text-xs font-medium ${style}`}>
-            {color === 'green' || color === 'emerald' ? '▲' : '•'} Live
-         </div>
-      </div>
-      {subtext && <div className="text-xs text-slate-400 mt-2">{subtext}</div>}
-    </div>
+    <Card>
+      <CardContent className="p-6">
+        <div className="text-sm font-medium text-muted-foreground">{label}</div>
+        <div className="mt-2 text-3xl font-bold">{value}</div>
+        {subtext && <div className="mt-1 text-xs text-muted-foreground">{subtext}</div>}
+      </CardContent>
+    </Card>
   );
 }
 
 function StateBadge({ state }: { state: AgentState }) {
-   const styles = {
-     registered: "bg-slate-100 text-slate-600 border-slate-200",
-     installed: "bg-blue-50 text-blue-700 border-blue-200",
-     running: "bg-green-50 text-green-700 border-green-200",
-     stopped: "bg-slate-100 text-slate-500 border-slate-200",
-     degraded: "bg-orange-50 text-orange-700 border-orange-200"
-   };
+  const variantMap: Record<AgentState, 'success' | 'warning' | 'secondary' | 'outline' | 'destructive'> = {
+    running: 'success',
+    degraded: 'warning',
+    stopped: 'secondary',
+    registered: 'outline',
+    installed: 'secondary',
+  };
 
-   return (
-     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[state] || styles.registered} capitalize`}>
-       {state}
-     </span>
-   );
+  return <Badge variant={variantMap[state] ?? 'secondary'} className="capitalize">{state}</Badge>;
 }
 
 function HealthBadge({ status }: { status: AgentRecord['health'] }) {
-  const styles = {
-    healthy: "text-green-600 bg-green-50 border-green-200 dot-green",
-    degraded: "text-amber-600 bg-amber-50 border-amber-200 dot-amber",
-    unhealthy: "text-red-600 bg-red-50 border-red-200 dot-red",
-    unknown: "text-slate-500 bg-slate-50 border-slate-200 dot-slate",
-  };
-  
   const dotColor = {
-    healthy: "bg-green-500",
-    degraded: "bg-amber-500",
-    unhealthy: "bg-red-500",
-    unknown: "bg-slate-400",
+    healthy: 'bg-green-500',
+    degraded: 'bg-amber-500',
+    unhealthy: 'bg-red-500',
+    unknown: 'bg-slate-400',
+  };
+
+  const variantMap: Record<AgentRecord['health'], 'success' | 'warning' | 'destructive' | 'secondary'> = {
+    healthy: 'success',
+    degraded: 'warning',
+    unhealthy: 'destructive',
+    unknown: 'secondary',
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[status]}`}>
-      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${dotColor[status]}`} />
+    <Badge variant={variantMap[status]} className="gap-1">
+      <span className={cn('h-1.5 w-1.5 rounded-full', dotColor[status])} />
       {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
+    </Badge>
   );
 }
 
 function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-   return (
-      <div className="flex flex-col sm:flex-row sm:justify-between py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 px-2 -mx-2 rounded">
-         <span className="text-sm font-medium text-slate-500">{label}</span>
-         <span className={`text-sm text-slate-900 mt-1 sm:mt-0 ${mono ? 'font-mono' : ''}`}>{value}</span>
+  return (
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between py-2 border-b last:border-0">
+      <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      <span className={cn('text-sm', mono && 'font-mono')}>{value}</span>
+    </div>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-muted-foreground">
+      {icon}
+      <div>
+        <p className="font-medium text-foreground">{title}</p>
+        <p className="text-sm mt-1">{description}</p>
       </div>
-   );
+    </div>
+  );
 }
