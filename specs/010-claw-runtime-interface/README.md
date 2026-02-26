@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-02-26
 priority: critical
 tags:
@@ -8,7 +8,10 @@ tags:
 - cri
 parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.575446436Z
-updated_at: 2026-02-26T02:08:40.054769542Z
+updated_at: 2026-02-26T03:07:30.671507020Z
+transitions:
+- status: in-progress
+  at: 2026-02-26T03:07:30.671507020Z
 ---
 
 # Claw Runtime Interface (CRI) / Adapter Layer
@@ -68,7 +71,7 @@ Adapters are registered via Rust feature flags (compile-time) or dynamic loading
 
 ## Plan
 
-- [ ] Define `ClawAdapter` Rust trait and core types in `crates/clawlab-core`
+- [x] Define `ClawAdapter` Rust trait and core types in `crates/clawlab-core`
 - [ ] Implement `OpenClawAdapter` (HTTP REST client, most mature ecosystem)
 - [ ] Implement `ZeroClawAdapter` (native Rust, most natural integration)
 - [ ] Implement `PicoClawAdapter` (HTTP + subprocess for Go binary)

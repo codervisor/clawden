@@ -1,16 +1,19 @@
 ---
-status: planned
+status: in-progress
 created: 2026-02-26
 priority: high
 tags:
 - core
 - control-plane
 - lifecycle
-parent: 009-orchestration-platform
 depends_on:
 - 010-claw-runtime-interface
+parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.575722036Z
-updated_at: 2026-02-26T02:08:40.055194960Z
+updated_at: 2026-02-26T03:07:30.687377780Z
+transitions:
+- status: in-progress
+  at: 2026-02-26T03:07:30.687377780Z
 ---
 
 # Control Plane & Agent Lifecycle Management
@@ -56,11 +59,11 @@ The control plane manages the full lifecycle of claw agents across the fleet. It
 
 ## Plan
 
-- [ ] Define agent state machine and transitions
+- [x] Define agent state machine and transitions
 - [ ] Implement LifecycleManager service
 - [ ] Implement HealthMonitor with configurable intervals
 - [ ] Implement RecoveryEngine with exponential backoff
-- [ ] Add audit logging for all lifecycle events
+- [x] Add audit logging for all lifecycle events
 - [ ] Create REST API endpoints for lifecycle operations
 
 ## Test

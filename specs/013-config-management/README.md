@@ -1,16 +1,19 @@
 ---
-status: planned
+status: in-progress
 created: 2026-02-26
 priority: medium
 tags:
 - core
 - config
 - secrets
-parent: 009-orchestration-platform
 depends_on:
 - 010-claw-runtime-interface
+parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.575930222Z
-updated_at: 2026-02-26T02:08:40.055694095Z
+updated_at: 2026-02-26T03:07:30.688035490Z
+transitions:
+- status: in-progress
+  at: 2026-02-26T03:07:30.688035490Z
 ---
 
 # Unified Configuration Management
@@ -59,7 +62,7 @@ Each CRI adapter includes a config translator trait:
 
 ## Plan
 
-- [ ] Define canonical config schema with serde + validation
+- [x] Define canonical config schema with serde + validation
 - [ ] Implement config translator trait in CRI
 - [ ] Build OpenClaw config translator (JSON ↔ canonical TOML)
 - [ ] Build ZeroClaw config translator (TOML ↔ canonical TOML)

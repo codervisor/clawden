@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-02-26
 priority: medium
 tags:
@@ -7,11 +7,14 @@ tags:
 - cli
 - developer
 - skills
-parent: 009-orchestration-platform
 depends_on:
 - 010-claw-runtime-interface
+parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.576054643Z
-updated_at: 2026-02-26T02:08:40.056135402Z
+updated_at: 2026-02-26T03:07:30.691255720Z
+transitions:
+- status: in-progress
+  at: 2026-02-26T03:07:30.691255720Z
 ---
 
 # Cross-Claw Developer SDK & CLI
@@ -68,10 +71,10 @@ export default defineSkill({
 
 ## Plan
 
-- [ ] Build CLI subcommands in `clawlab-cli` crate (clap derive)
+- [x] Build CLI subcommands in `clawlab-cli` crate (clap derive)
 - [ ] Implement agent management commands (list, start, stop, health)
 - [ ] Implement fleet status commands
-- [ ] Define TypeScript Skill SDK with `defineSkill` API (`sdk/` directory)
+- [x] Define TypeScript Skill SDK with `defineSkill` API (`sdk/` directory)
 - [ ] Build skill scaffolding (`clawlab skill create` → generates TS template)
 - [ ] Create cross-runtime skill test harness
 - [ ] Design marketplace registry protocol
