@@ -15,7 +15,6 @@ transitions:
 - status: in-progress
   at: 2026-02-26T03:07:30.688035490Z
 ---
-
 # Unified Configuration Management
 
 ## Overview
@@ -63,16 +62,16 @@ Each CRI adapter includes a config translator trait:
 ## Plan
 
 - [x] Define canonical config schema with serde + validation
-- [ ] Implement config translator trait in CRI
-- [ ] Build OpenClaw config translator (JSON ↔ canonical TOML)
-- [ ] Build ZeroClaw config translator (TOML ↔ canonical TOML)
-- [ ] Build PicoClaw config translator (JSON ↔ canonical TOML)
+- [x] Implement config translator trait in CRI
+- [x] Build OpenClaw config translator (JSON ↔ canonical TOML)
+- [x] Build ZeroClaw config translator (TOML ↔ canonical TOML)
+- [x] Build PicoClaw config translator (JSON ↔ canonical TOML)
 - [ ] Implement encrypted secret vault (age encryption or system keychain)
 - [ ] Add config diff and drift detection
 
 ## Test
 
-- [ ] Canonical config round-trips through each translator
+- [x] Canonical config round-trips through each translator
 - [ ] Invalid configs are rejected with clear error messages
 - [ ] Secrets are never exposed in logs or API responses
 - [ ] Config drift detection identifies out-of-sync agents

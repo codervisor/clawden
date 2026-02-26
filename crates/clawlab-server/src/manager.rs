@@ -20,6 +20,9 @@ pub struct AgentRecord {
     pub state: AgentState,
     pub task_count: u64,
     pub health: HealthStatus,
+    pub consecutive_health_failures: u32,
+    pub last_health_check_unix_ms: Option<u64>,
+    pub next_recovery_attempt_unix_ms: Option<u64>,
 }
 
 pub struct LifecycleManager {
@@ -51,6 +54,9 @@ impl LifecycleManager {
             state: AgentState::Registered,
             task_count: 0,
             health: HealthStatus::Unknown,
+            consecutive_health_failures: 0,
+            last_health_check_unix_ms: None,
+            next_recovery_attempt_unix_ms: None,
         };
         self.agents.insert(id, record.clone());
         record
@@ -126,11 +132,20 @@ impl LifecycleManager {
     }
 
     pub async fn refresh_health(&mut self) -> Vec<AgentRecord> {
+        self.refresh_health_with_base_backoff_ms(1_000).await
+    }
+
+    pub async fn refresh_health_with_base_backoff_ms(
+        &mut self,
+        base_backoff_ms: u64,
+    ) -> Vec<AgentRecord> {
+        let now = current_unix_ms();
         let ids: Vec<String> = self.agents.keys().cloned().collect();
         for id in ids {
             let Some(record) = self.agents.get_mut(&id) else {
                 continue;
             };
+            record.last_health_check_unix_ms = Some(now);
             let Some(handle) = self.handles.get(&id) else {
                 record.health = HealthStatus::Unknown;
                 continue;
@@ -140,11 +155,84 @@ impl LifecycleManager {
                 continue;
             };
             match adapter.health(handle).await {
-                Ok(health) => record.health = health,
+                Ok(health) => {
+                    record.health = health;
+                    record.consecutive_health_failures = 0;
+                    record.next_recovery_attempt_unix_ms = None;
+                }
                 Err(_) => {
                     record.health = HealthStatus::Degraded;
+                    record.consecutive_health_failures =
+                        record.consecutive_health_failures.saturating_add(1);
+                    record.next_recovery_attempt_unix_ms =
+                        Some(now + backoff_ms(base_backoff_ms, record.consecutive_health_failures));
                     if record.state.can_transition_to(AgentState::Degraded) {
                         record.state = AgentState::Degraded;
+                    }
+                }
+            }
+        }
+
+        self.list_agents()
+    }
+
+    pub async fn recover_degraded(&mut self) -> Vec<AgentRecord> {
+        let now = current_unix_ms();
+        let due_ids: Vec<String> = self
+            .agents
+            .iter()
+            .filter_map(|(id, record)| {
+                if record.state != AgentState::Degraded {
+                    return None;
+                }
+                let due = record
+                    .next_recovery_attempt_unix_ms
+                    .map(|at| now >= at)
+                    .unwrap_or(true);
+                due.then(|| id.clone())
+            })
+            .collect();
+
+        for id in due_ids {
+            let (runtime, name) = match self.agents.get(&id) {
+                Some(record) => (record.runtime.clone(), record.name.clone()),
+                None => continue,
+            };
+
+            let Some(adapter) = self.adapters.get(&runtime) else {
+                continue;
+            };
+
+            let restart_result = if let Some(handle) = self.handles.get(&id) {
+                adapter.restart(handle).await
+            } else {
+                let config = AgentConfig {
+                    name,
+                    runtime: runtime.clone(),
+                    model: None,
+                };
+
+                match adapter.start(&config).await {
+                    Ok(handle) => {
+                        self.handles.insert(id.clone(), handle);
+                        Ok(())
+                    }
+                    Err(err) => Err(err),
+                }
+            };
+
+            if let Some(record) = self.agents.get_mut(&id) {
+                match restart_result {
+                    Ok(()) => {
+                        if record.state.can_transition_to(AgentState::Running) {
+                            record.state = AgentState::Running;
+                        }
+                        record.health = HealthStatus::Unknown;
+                        record.consecutive_health_failures = 0;
+                        record.next_recovery_attempt_unix_ms = None;
+                    }
+                    Err(_) => {
+                        record.health = HealthStatus::Degraded;
                     }
                 }
             }
@@ -212,9 +300,46 @@ impl LifecycleManager {
             return Err("no running agent matches required capabilities".to_string());
         }
 
-        let idx = self.round_robin_index % eligible.len();
+        let mut ranked: Vec<&AgentRecord> = eligible;
+        ranked.sort_by_key(|agent| (agent.task_count, runtime_cost_tier(&agent.runtime), agent.id.clone()));
+
+        let best_score = (
+            ranked[0].task_count,
+            runtime_cost_tier(&ranked[0].runtime),
+        );
+        let best_group: Vec<&AgentRecord> = ranked
+            .iter()
+            .copied()
+            .filter(|agent| {
+                (agent.task_count, runtime_cost_tier(&agent.runtime)) == best_score
+            })
+            .collect();
+
+        let idx = self.round_robin_index % best_group.len();
         self.round_robin_index = self.round_robin_index.wrapping_add(1);
-        Ok(eligible[idx].id.clone())
+        Ok(best_group[idx].id.clone())
+    }
+}
+
+fn current_unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock before UNIX_EPOCH")
+        .as_millis() as u64
+}
+
+fn backoff_ms(base_ms: u64, failures: u32) -> u64 {
+    let exponent = failures.saturating_sub(1).min(6);
+    let multiplier = 1_u64 << exponent;
+    let capped = base_ms.saturating_mul(multiplier);
+    capped.min(300_000)
+}
+
+fn runtime_cost_tier(runtime: &ClawRuntime) -> u8 {
+    match runtime {
+        ClawRuntime::NullClaw | ClawRuntime::PicoClaw | ClawRuntime::MicroClaw => 1,
+        ClawRuntime::ZeroClaw | ClawRuntime::NanoClaw | ClawRuntime::MimiClaw => 2,
+        ClawRuntime::OpenClaw | ClawRuntime::IronClaw => 3,
     }
 }
 

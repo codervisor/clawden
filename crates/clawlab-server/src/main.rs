@@ -15,6 +15,7 @@ use serde::Serialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::info;
 
@@ -45,6 +46,38 @@ async fn main() {
         manager: Arc::new(RwLock::new(manager)),
         audit: audit_store.clone(),
     };
+
+    let health_interval_ms = std::env::var("CLAWLAB_HEALTH_INTERVAL_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(5_000);
+    let recovery_base_backoff_ms = std::env::var("CLAWLAB_RECOVERY_BASE_BACKOFF_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(1_000);
+
+    let monitor_manager = shared_state.manager.clone();
+    let monitor_audit = shared_state.audit.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(health_interval_ms));
+        loop {
+            interval.tick().await;
+            let mut manager = monitor_manager.write().await;
+            manager
+                .refresh_health_with_base_backoff_ms(recovery_base_backoff_ms)
+                .await;
+            let recovered = manager.recover_degraded().await;
+            drop(manager);
+
+            append_audit(&monitor_audit, "health.tick", "fleet");
+            info!(
+                checked_agents = recovered.len(),
+                interval_ms = health_interval_ms,
+                recovery_base_backoff_ms,
+                "health monitor tick"
+            );
+        }
+    });
 
     let app = Router::new()
         .route("/health", get(health))

@@ -47,7 +47,7 @@ A web-based dashboard providing real-time visibility into the claw agent fleet. 
 ## Plan
 
 - [ ] Scaffold React app with Tailwind + shadcn/ui
-- [ ] Build fleet overview grid with status indicators
+- [x] Build fleet overview grid with status indicators
 - [ ] Implement agent detail page with health metrics
 - [ ] Add real-time WebSocket status updates
 - [ ] Build config editor with diff preview
@@ -56,7 +56,7 @@ A web-based dashboard providing real-time visibility into the claw agent fleet. 
 
 ## Test
 
-- [ ] Dashboard loads and displays fleet status
+- [x] Dashboard loads and displays fleet status
 - [ ] Real-time updates reflect agent state changes within 2s
 - [ ] Config editor validates before deploying
 - [ ] All views are responsive (desktop + tablet)

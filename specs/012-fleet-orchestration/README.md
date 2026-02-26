@@ -57,7 +57,7 @@ interface AgentRegistration {
 
 - [x] Implement agent registry with registration/deregistration
 - [x] Build capability-based task router
-- [ ] Add load balancing and cost-aware routing
+- [x] Add load balancing and cost-aware routing
 - [ ] Implement agent discovery (network scan, manual, DNS-SD)
 - [ ] Design swarm coordination protocol
 - [ ] Create REST/WebSocket APIs for fleet management
@@ -65,6 +65,6 @@ interface AgentRegistration {
 ## Test
 
 - [x] Agents can register and be discovered
-- [ ] Task router selects correct agent based on capabilities
+- [x] Task router selects correct agent based on capabilities
 - [ ] Load balancer distributes tasks evenly
 - [ ] Swarm can coordinate a multi-step task across runtimes

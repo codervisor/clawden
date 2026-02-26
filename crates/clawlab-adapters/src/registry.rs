@@ -22,6 +22,27 @@ impl AdapterRegistry {
     }
 
     pub fn list(&self) -> Vec<ClawRuntime> {
-        self.adapters.keys().cloned().collect()
+        let mut runtimes: Vec<_> = self.adapters.keys().cloned().collect();
+        runtimes.sort_by_key(|runtime| format!("{runtime:?}"));
+        runtimes
+    }
+
+    pub fn has(&self, runtime: &ClawRuntime) -> bool {
+        self.adapters.contains_key(runtime)
+    }
+
+    pub fn detect_runtime_for_capability(&self, capability: &str) -> Option<ClawRuntime> {
+        self.adapters.iter().find_map(|(runtime, adapter)| {
+            let supports = adapter
+                .metadata()
+                .capabilities
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(capability));
+            if supports {
+                Some(runtime.clone())
+            } else {
+                None
+            }
+        })
     }
 }

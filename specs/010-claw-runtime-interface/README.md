@@ -13,7 +13,6 @@ transitions:
 - status: in-progress
   at: 2026-02-26T03:07:30.671507020Z
 ---
-
 # Claw Runtime Interface (CRI) / Adapter Layer
 
 ## Overview
@@ -72,12 +71,12 @@ Adapters are registered via Rust feature flags (compile-time) or dynamic loading
 ## Plan
 
 - [x] Define `ClawAdapter` Rust trait and core types in `crates/clawlab-core`
-- [ ] Implement `OpenClawAdapter` (HTTP REST client, most mature ecosystem)
-- [ ] Implement `ZeroClawAdapter` (native Rust, most natural integration)
-- [ ] Implement `PicoClawAdapter` (HTTP + subprocess for Go binary)
-- [ ] Implement `NanoClawAdapter` (HTTP + subprocess for Node.js)
+- [x] Implement `OpenClawAdapter` (HTTP REST client, most mature ecosystem)
+- [x] Implement `ZeroClawAdapter` (native Rust, most natural integration)
+- [x] Implement `PicoClawAdapter` (HTTP + subprocess for Go binary)
+- [x] Implement `NanoClawAdapter` (HTTP + subprocess for Node.js)
 - [ ] Create adapter registry with feature-flag and dynamic loading
-- [ ] Add adapter discovery and auto-detection
+- [x] Add adapter discovery and auto-detection
 
 ## Test
 

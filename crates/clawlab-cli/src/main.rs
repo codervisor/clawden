@@ -2,6 +2,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
 
 #[derive(Debug, Parser)]
 #[command(name = "clawlab", version, about = "ClawLab orchestration CLI")]
@@ -228,9 +230,77 @@ fn main() -> Result<()> {
                 println!("{}", response.text()?);
             }
         },
-        Commands::Skill { command } => println!("skill command: {command:?}"),
+                Commands::Skill { command } => match command {
+                        SkillCommand::Create { name } => {
+                                scaffold_skill_template(&name)?;
+                                println!("created skill scaffold: {name}");
+                        }
+                        SkillCommand::Test { name } => println!("skill test not implemented yet: {name}"),
+                        SkillCommand::Publish { name } => println!("skill publish not implemented yet: {name}"),
+                },
         Commands::Config { command } => println!("config command: {command:?}"),
     }
 
     Ok(())
+}
+
+fn scaffold_skill_template(name: &str) -> Result<()> {
+        let skill_dir = Path::new(name);
+        if skill_dir.exists() {
+                anyhow::bail!("destination already exists: {}", skill_dir.display());
+        }
+
+        fs::create_dir_all(skill_dir.join("src"))?;
+
+        let package_json = format!(
+                r#"{{
+    "name": "@clawlab-skill/{name}",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {{
+        "build": "tsc -p tsconfig.json"
+    }},
+    "dependencies": {{
+        "@clawlab/sdk": "^0.1.0"
+    }},
+    "devDependencies": {{
+        "typescript": "^5.7.3"
+    }}
+}}
+"#
+        );
+
+        let tsconfig = r#"{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "strict": true,
+        "declaration": true,
+        "outDir": "dist"
+    },
+    "include": ["src"]
+}
+"#;
+
+        let source = format!(
+                r#"import {{ defineSkill }} from '@clawlab/sdk';
+
+export default defineSkill({{
+    name: '{name}',
+    version: '0.1.0',
+    runtimes: ['openclaw', 'zeroclaw'],
+    tools: [],
+    async execute(context) {{
+        return `echo: ${{context.input}}`;
+    }},
+}});
+"#
+        );
+
+        fs::write(skill_dir.join("package.json"), package_json)?;
+        fs::write(skill_dir.join("tsconfig.json"), tsconfig)?;
+        fs::write(skill_dir.join("src").join("index.ts"), source)?;
+        Ok(())
 }

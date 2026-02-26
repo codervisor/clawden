@@ -74,7 +74,7 @@ export default defineSkill({
 - [x] Implement agent management commands (list, start, stop, health)
 - [x] Implement fleet status commands
 - [x] Define TypeScript Skill SDK with `defineSkill` API (`sdk/` directory)
-- [ ] Build skill scaffolding (`clawlab skill create` → generates TS template)
+- [x] Build skill scaffolding (`clawlab skill create` → generates TS template)
 - [ ] Create cross-runtime skill test harness
 - [ ] Design marketplace registry protocol
 

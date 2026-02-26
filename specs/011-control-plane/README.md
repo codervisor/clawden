@@ -60,8 +60,8 @@ The control plane manages the full lifecycle of claw agents across the fleet. It
 
 - [x] Define agent state machine and transitions
 - [x] Implement LifecycleManager service
-- [ ] Implement HealthMonitor with configurable intervals
-- [ ] Implement RecoveryEngine with exponential backoff
+- [x] Implement HealthMonitor with configurable intervals
+- [x] Implement RecoveryEngine with exponential backoff
 - [x] Add audit logging for all lifecycle events
 - [x] Create REST API endpoints for lifecycle operations
 
