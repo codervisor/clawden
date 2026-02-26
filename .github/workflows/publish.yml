@@ -1,0 +1,322 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Skip npm publish steps (build/validate only)'
+        required: false
+        default: false
+        type: boolean
+      dev:
+        description: 'Publish a dev prerelease version (-dev.<run_id>, dev dist-tag)'
+        required: false
+        default: false
+        type: boolean
+  release:
+    types: [published]
+
+jobs:
+  # Stage 1: Build Rust CLI for all platforms
+  rust-binaries:
+    name: Build CLI (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            platform: darwin-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform: darwin-arm64
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows-x64
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js (for version sync)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compute effective version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_version=$(node -p "require('./package.json').version.replace(/-dev\\..*$/, '')")
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dev }}" = "true" ]; then
+            echo "version=${base_version}-dev.${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync Rust workspace version
+        shell: bash
+        env:
+          CLAWDEN_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const version = process.env.CLAWDEN_VERSION;
+          const cargoTomlPath = 'Cargo.toml';
+          let content = fs.readFileSync(cargoTomlPath, 'utf8');
+          const re = /(\[workspace\.package\][\s\S]*?\nversion = \")([^\"]+)(\")/m;
+          if (!re.test(content)) {
+            console.error('Unable to locate [workspace.package] version in Cargo.toml');
+            process.exit(1);
+          }
+          content = content.replace(re, `$1${version}$3`);
+          fs.writeFileSync(cargoTomlPath, content);
+          console.log(`✓ Set rust workspace version to ${version}`);
+          NODE
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build CLI binary
+        run: cargo build --release --target ${{ matrix.target }} --package clawden-cli
+
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p dist/${{ matrix.platform }}
+
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp target/${{ matrix.target }}/release/clawden-cli.exe dist/${{ matrix.platform }}/
+          else
+            cp target/${{ matrix.target }}/release/clawden-cli dist/${{ matrix.platform }}/
+          fi
+
+          echo "=== Prepared artifacts ==="
+          ls -la dist/${{ matrix.platform }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.platform }}
+          path: dist/${{ matrix.platform }}
+          retention-days: 30
+
+  # Stage 2: Publish platform-specific packages (MUST happen before main packages)
+  publish-platform:
+    needs: rust-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download all platform binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Copy binaries to platform packages
+        run: ./scripts/copy-platform-binaries.sh artifacts/
+
+      - name: Generate platform package manifests
+        run: pnpm tsx scripts/generate-platform-manifests.ts
+
+      - name: Add platform dependencies to CLI package
+        run: pnpm tsx scripts/add-platform-deps.ts
+
+      - name: Auto-bump dev version
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dev }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
+            const base = pkg.version.replace(/-dev\..*$/, '');
+            pkg.version = base + '-dev.${{ github.run_id }}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            console.log('Version:', pkg.version);
+          "
+          pnpm tsx scripts/sync-versions.ts
+
+      - name: Sync versions (stable release)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dev }}
+        run: pnpm tsx scripts/sync-versions.ts
+
+      - name: Publish platform packages
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: |
+          TAG_ARG=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dev }}" = "true" ]; then
+            TAG_ARG="--tag dev"
+          fi
+          pnpm tsx scripts/publish-platform-packages.ts $TAG_ARG
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Stage 3: Publish main packages (AFTER platform packages are available)
+  publish-main:
+    needs: publish-platform
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download all platform binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Copy binaries for validation
+        run: ./scripts/copy-platform-binaries.sh artifacts/
+
+      - name: Generate platform package manifests
+        run: pnpm tsx scripts/generate-platform-manifests.ts
+
+      - name: Add platform dependencies to CLI package
+        run: pnpm tsx scripts/add-platform-deps.ts
+
+      - name: Auto-bump dev version
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dev }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
+            const base = pkg.version.replace(/-dev\..*$/, '');
+            pkg.version = base + '-dev.${{ github.run_id }}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          pnpm tsx scripts/sync-versions.ts
+
+      - name: Sync versions (stable release)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dev }}
+        run: pnpm tsx scripts/sync-versions.ts
+
+      - name: Wait for platform packages to propagate
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="latest"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dev }}" = "true" ]; then
+            TAG="dev"
+          fi
+
+          packages=(
+            "@clawden/cli-darwin-arm64"
+            "@clawden/cli-linux-x64"
+          )
+
+          echo "Waiting 30 seconds for packages to propagate..."
+          sleep 30
+
+          wait_times=(5 5 10 10 15 15 20 20 30 30 30 30 40 40 40 40 50 50 60 60)
+
+          for attempt in {1..20}; do
+            wait_time=${wait_times[$((attempt-1))]}
+            echo ""
+            echo "Attempt ${attempt}/20: checking npm registry..."
+            missing=0
+            missing_packages=()
+
+            for pkg in "${packages[@]}"; do
+              if npm view "$pkg@$TAG" version >/dev/null 2>&1; then
+                echo "  ✓ $pkg@$TAG available"
+              else
+                echo "  ✗ $pkg@$TAG not available"
+                missing=1
+                missing_packages+=("$pkg")
+              fi
+            done
+
+            if [ "$missing" -eq 0 ]; then
+              echo ""
+              echo "✅ All platform packages available!"
+              exit 0
+            fi
+
+            echo ""
+            echo "Missing ${#missing_packages[@]} package(s): ${missing_packages[*]}"
+            echo "Waiting ${wait_time}s for npm registry propagation..."
+            sleep "$wait_time"
+          done
+
+          echo ""
+          echo "❌ Platform packages not visible after 20 attempts."
+          exit 1
+
+      - name: Build SDK
+        run: pnpm --filter @clawden/sdk build
+
+      - name: Prepare packages for npm publish
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: pnpm tsx scripts/prepare-publish.ts
+
+      - name: Verify no workspace:* protocol
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: pnpm tsx scripts/validate-no-workspace-protocol.ts
+
+      - name: Publish main packages
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: |
+          TAG_ARG=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dev }}" = "true" ]; then
+            TAG_ARG="--tag dev"
+          fi
+          pnpm tsx scripts/publish-main-packages.ts $TAG_ARG
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Restore packages after publish
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.dry_run }}
+        run: pnpm tsx scripts/restore-packages.ts
+
+      - name: Summary
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "✅ Dry run completed successfully"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dev }}" = "true" ]; then
+            echo "✅ Dev version published"
+            echo "Test: npm install -g clawden@dev"
+            exit 0
+          fi
+
+          echo "✅ Published successfully"
+          echo ""
+          echo "  npm install -g clawden"
+          echo "  npm install @clawden/sdk"

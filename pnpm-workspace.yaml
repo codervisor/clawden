@@ -1,3 +1,6 @@
 packages:
   - dashboard
   - sdk
+  - npm/clawden
+  # NOTE: npm/clawden/binaries/* are NOT workspace packages
+  # They are published independently via npm publish in CI

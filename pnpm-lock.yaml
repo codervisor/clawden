@@ -6,6 +6,8 @@ settings:
 
 importers:
 
+  .: {}
+
   dashboard:
     dependencies:
       react:
@@ -36,6 +38,8 @@ importers:
       vitest:
         specifier: ^3.0.7
         version: 3.2.4(jiti@2.6.1)(lightningcss@1.31.1)
+
+  npm/clawden: {}
 
   sdk:
     devDependencies:

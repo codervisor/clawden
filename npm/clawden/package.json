@@ -1,0 +1,43 @@
+{
+  "name": "clawden",
+  "version": "0.1.0",
+  "description": "Unified orchestration platform for the xxxclaw ecosystem",
+  "type": "module",
+  "bin": {
+    "clawden": "./bin/clawden.js"
+  },
+  "scripts": {
+    "postinstall": "node postinstall.js || true"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "orchestration",
+    "claw",
+    "openclaw",
+    "zeroclaw",
+    "picoclaw",
+    "nanoclaw",
+    "cli"
+  ],
+  "author": "Marvin Zhang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codervisor/clawden.git"
+  },
+  "homepage": "https://github.com/codervisor/clawden",
+  "bugs": {
+    "url": "https://github.com/codervisor/clawden/issues"
+  },
+  "files": [
+    "bin/",
+    "binaries/",
+    "postinstall.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

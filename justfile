@@ -17,3 +17,11 @@ run-server:
 
 run-cli:
     cargo run -p clawden-cli -- --help
+
+# Publishing
+sync-versions:
+    tsx scripts/sync-versions.ts
+
+publish-dry-run:
+    tsx scripts/publish-platform-packages.ts --dry-run --allow-local
+    tsx scripts/publish-main-packages.ts --dry-run --allow-local

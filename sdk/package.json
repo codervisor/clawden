@@ -1,12 +1,45 @@
 {
   "name": "@clawden/sdk",
   "version": "0.1.0",
+  "description": "TypeScript SDK for building cross-claw skills and plugins",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts",
+    "prepublishOnly": "pnpm build",
     "test": "vitest run"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "orchestration",
+    "claw",
+    "sdk",
+    "skills",
+    "plugins"
+  ],
+  "author": "Marvin Zhang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codervisor/clawden.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/codervisor/clawden",
+  "bugs": {
+    "url": "https://github.com/codervisor/clawden/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
   },
   "devDependencies": {
     "tsup": "^8.4.0",
