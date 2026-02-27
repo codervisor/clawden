@@ -1,7 +1,7 @@
 ---
 status: planned
 created: 2026-02-26
-priority: medium
+priority: high
 tags:
 - channels
 - messaging
@@ -9,19 +9,21 @@ tags:
 - telegram
 - discord
 - whatsapp
-parent: 009-orchestration-platform
 depends_on:
 - 010-claw-runtime-interface
+parent: 009-orchestration-platform
 created_at: 2026-02-26T02:50:41.154596674Z
-updated_at: 2026-02-26T02:50:41.154596674Z
+updated_at: 2026-02-27T12:58:54.851774Z
 ---
 # Chat Channel Support Matrix & Unified Channel Layer
 
 ## Overview
 
-Every claw runtime has independently built its own messaging integrations — Telegram bots, Discord adapters, WhatsApp bridges, etc. The result is fragmented: OpenClaw supports 10+ channels, OpenFang supports 40, Nanobot supports 10, but each uses different libraries, auth flows, and configuration patterns. ClawDen needs a unified channel layer so operators can configure messaging channels once and route them to any runtime in the fleet.
+Every claw runtime has independently built its own messaging integrations — Telegram bots, Discord adapters, WhatsApp bridges, etc. The result is fragmented: each uses different libraries, auth flows, and configuration patterns.
 
-This spec documents which channels each runtime supports (the compatibility matrix) and designs ClawDen's channel abstraction for cross-runtime message routing.
+ClawDen makes this invisible to users. You list your channels in `clawden.yaml`, assign them to runtimes, and ClawDen handles the rest — credential injection and proxying for unsupported combos.
+
+**Phase 1 scope**: OpenClaw (highest priority — most popular runtime), ZeroClaw, NanoClaw, and PicoClaw. IronClaw, NullClaw, and MicroClaw are deferred to Phase 2.
 
 **Canonical runtime list**: Per [ClawCharts.com](https://clawcharts.com/) (February 2026): OpenClaw, Nanobot, PicoClaw, ZeroClaw, NanoClaw, IronClaw, TinyClaw, OpenFang.
 
@@ -31,153 +33,331 @@ Data sourced from official GitHub repos (February 2026). Runtime list per [ClawC
 
 ### By Runtime
 
-| Channel | OpenClaw | Nanobot | PicoClaw | ZeroClaw | NanoClaw | IronClaw | TinyClaw | OpenFang |
-|---------|:--------:|:-------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|
-| **Telegram** | ✅ | ✅ | ✅ | ✅ | ✅ (skill) | ✅ (WASM) | ✅ | ✅ |
-| **Discord** | ✅ | ✅ | ✅ | ✅ | ✅ (skill) | ✅ (WASM) | ✅ | ✅ |
-| **Slack** | ✅ | ✅ | ✅ | ✅ | ✅ (skill) | ✅ (WASM) | — | ✅ |
-| **WhatsApp** | ✅ (Baileys) | ✅ (bridge) | ✅ | ✅ (Meta API) | ✅ (default) | — | ✅ (QR) | ✅ (Cloud API) |
-| **Signal** | ✅ (signal-cli) | — | — | ✅ | — | ✅ (built-in) | — | ✅ |
-| **Matrix** | — | ✅ | — | ✅ | — | — | — | ✅ |
-| **Email** | — | ✅ | — | ✅ | — | — | — | ✅ |
-| **Feishu/Lark** | ✅ | ✅ | ✅ | ✅ | — | — | — | ✅ |
-| **DingTalk** | — | ✅ | ✅ | — | — | — | — | ✅ |
-| **Mattermost** | ✅ | — | — | ✅ | — | — | — | ✅ |
-| **IRC** | ✅ | — | — | ✅ | — | — | — | ✅ |
-| **MS Teams** | ✅ | — | — | — | — | — | — | ✅ |
-| **iMessage** | ✅ | — | — | ✅ | — | — | — | — |
-| **Google Chat** | ✅ | — | — | — | — | — | — | ✅ |
-| **QQ** | — | ✅ | ✅ | — | — | — | — | — |
-| **LINE** | — | — | ✅ | — | — | — | — | ✅ |
-| **Nostr** | ✅ | — | — | ✅ | — | — | — | ✅ |
-| **Mochat** | — | ✅ | — | — | — | — | — | — |
-| **WeChat/WeCom** | — | — | ✅ | — | — | — | — | — |
-| **Viber** | — | — | — | — | — | — | — | ✅ |
-| **Messenger** | — | — | — | — | — | — | — | ✅ |
-| **Mastodon** | — | — | — | — | — | — | — | ✅ |
-| **Bluesky** | — | — | — | — | — | — | — | ✅ |
-| **Reddit** | — | — | — | — | — | — | — | ✅ |
-| **Twitch** | — | — | — | — | — | — | — | ✅ |
-| **Webex** | — | — | — | — | — | — | — | ✅ |
-| **Threema** | — | — | — | — | — | — | — | ✅ |
-| **Keybase** | — | — | — | — | — | — | — | ✅ |
-| **Total** | **10+** | **10** | **~10** | **16+** | **4** | **5** | **3** | **40** |
+| Channel         |    OpenClaw    |  Nanobot   | PicoClaw |   ZeroClaw   |  NanoClaw   |   IronClaw   | TinyClaw |   OpenFang    |
+| --------------- | :------------: | :--------: | :------: | :----------: | :---------: | :----------: | :------: | :-----------: |
+| **Telegram**    |       ✅        |     ✅      |    ✅     |      ✅       |  ✅ (skill)  |   ✅ (WASM)   |    ✅     |       ✅       |
+| **Discord**     |       ✅        |     ✅      |    ✅     |      ✅       |  ✅ (skill)  |   ✅ (WASM)   |    ✅     |       ✅       |
+| **Slack**       |       ✅        |     ✅      |    ✅     |      ✅       |  ✅ (skill)  |   ✅ (WASM)   |    —     |       ✅       |
+| **WhatsApp**    |  ✅ (Baileys)   | ✅ (bridge) |    ✅     | ✅ (Meta API) | ✅ (default) |      —       |  ✅ (QR)  | ✅ (Cloud API) |
+| **Signal**      | ✅ (signal-cli) |     —      |    —     |      ✅       |      —      | ✅ (built-in) |    —     |       ✅       |
+| **Matrix**      |       —        |     ✅      |    —     |      ✅       |      —      |      —       |    —     |       ✅       |
+| **Email**       |       —        |     ✅      |    —     |      ✅       |      —      |      —       |    —     |       ✅       |
+| **Feishu/Lark** |       ✅        |     ✅      |    ✅     |      ✅       |      —      |      —       |    —     |       ✅       |
+| **DingTalk**    |       —        |     ✅      |    ✅     |      —       |      —      |      —       |    —     |       ✅       |
+| **Mattermost**  |       ✅        |     —      |    —     |      ✅       |      —      |      —       |    —     |       ✅       |
+| **IRC**         |       ✅        |     —      |    —     |      ✅       |      —      |      —       |    —     |       ✅       |
+| **MS Teams**    |       ✅        |     —      |    —     |      —       |      —      |      —       |    —     |       ✅       |
+| **iMessage**    |       ✅        |     —      |    —     |      ✅       |      —      |      —       |    —     |       —       |
+| **Google Chat** |       ✅        |     —      |    —     |      —       |      —      |      —       |    —     |       ✅       |
+| **QQ**          |       —        |     ✅      |    ✅     |      —       |      —      |      —       |    —     |       —       |
+| **LINE**        |       —        |     —      |    ✅     |      —       |      —      |      —       |    —     |       ✅       |
+| **Nostr**       |       ✅        |     —      |    —     |      ✅       |      —      |      —       |    —     |       ✅       |
+| **Total**       |    **10+**     |   **10**   | **~10**  |   **16+**    |    **4**    |    **5**     |  **3**   |    **40**     |
 
-### By Channel (Coverage Across Runtimes)
+### Phase 1 Runtimes — Channel Coverage
 
-| Channel | Runtimes Supporting It | Notes |
-|---------|----------------------|-------|
-| Telegram | 8/8 (all) | Universal — every runtime supports it. Best candidate for "default" channel |
-| Discord | 7/8 | All except TinyClaw (DM routing only, no guild support) — update: TinyClaw does support it |
-| Slack | 6/8 | Missing: TinyClaw, but well-supported otherwise |
-| WhatsApp | 7/8 | Three approaches: Baileys (OpenClaw, NanoClaw, TinyClaw), Meta Cloud API (ZeroClaw, OpenFang), Node bridge (Nanobot) |
-| Signal | 4/8 | Requires `signal-cli` daemon or built-in (IronClaw) |
-| Feishu/Lark | 5/8 | Important for APAC enterprise deployment |
+These are the priority runtimes for initial channel support:
 
-### Architecture Patterns by Runtime
+| Channel         |    OpenClaw    |   ZeroClaw   |  NanoClaw   | PicoClaw |
+| --------------- | :------------: | :----------: | :---------: | :------: |
+| **Telegram**    |       ✅        |      ✅       |  ✅ (skill)  |    ✅     |
+| **Discord**     |       ✅        |      ✅       |  ✅ (skill)  |    ✅     |
+| **Slack**       |       ✅        |      ✅       |  ✅ (skill)  |    ✅     |
+| **WhatsApp**    |  ✅ (Baileys)   | ✅ (Meta API) | ✅ (default) |    ✅     |
+| **Signal**      | ✅ (signal-cli) |      ✅       |      —      |    —     |
+| **Feishu/Lark** |       ✅        |      ✅       |      —      |    ✅     |
 
-| Runtime | Lang | Channel Abstraction | Config Format | Secrets Pattern |
-|---------|------|---------------------|---------------|-----------------|
-| **OpenClaw** | TS | `ChannelPlugin` extension registry | JSON5 | `channels.<provider>.botToken` + env fallback |
-| **Nanobot** | Python | `BaseChannel` ABC + `MessageBus` + `ChannelManager` | JSON | `channels.<provider>.token` (Pydantic) |
-| **PicoClaw** | Go | `Channel` interface + `BaseChannel` embed | JSON | Struct tags with env var binding |
-| **ZeroClaw** | Rust | `Channel` trait (listen/send/health/name) | TOML | CLI: `zeroclaw channel add` |
-| **NanoClaw** | TS | `Channel` interface + skills pattern | `.env` | `TELEGRAM_BOT_TOKEN`, etc. |
-| **IronClaw** | Rust | WASM components (`wasm32-wasip2`), `Guest` trait | Capabilities JSON + secrets store | `ironclaw secret set <name> <value>`, host-injected |
-| **TinyClaw** | TS | Standalone client scripts + SQLite queue | JSON | `.env` file |
-| **OpenFang** | Rust | `ChannelAdapter` trait → `Stream<ChannelMessage>` + `BridgeManager` | TOML | `bot_token_env` → `.env`, `Zeroizing<String>` |
+Telegram, Discord, Slack, and WhatsApp have full coverage across Phase 1 runtimes. For channels a runtime doesn't support, ClawDen's proxy bridges the gap.
 
 ### Implementation Libraries by Runtime
 
-| Runtime | Telegram | Discord | WhatsApp | Slack |
-|---------|----------|---------|----------|-------|
-| OpenClaw | grammY | discord.js | Baileys | Bolt |
-| Nanobot | python-telegram-bot | Gateway WebSocket | Node.js bridge | Socket Mode SDK |
-| PicoClaw | native Go | native Go | — | native Go |
-| ZeroClaw | native Rust | native Rust | Meta Cloud API | — |
-| NanoClaw | (via skills) | (via skills) | Baileys | (via skills) |
-| IronClaw | WASM channel | WASM channel | — | WASM tool |
-| TinyClaw | node-telegram-bot-api | discord.js | whatsapp-web.js | — |
-| OpenFang | native Rust | native Rust | Cloud API (Rust) | Socket Mode (Rust) |
+| Runtime  | Telegram     | Discord      | WhatsApp         | Slack              |
+| -------- | ------------ | ------------ | ---------------- | ------------------ |
+| OpenClaw | grammY (JS)  | discord.js   | Baileys          | Bolt (JS)          |
+| ZeroClaw | native Rust  | native Rust  | Meta Cloud API   | —                  |
+| NanoClaw | skill-based  | skill-based  | default          | skill-based        |
+| PicoClaw | native Go    | native Go    | —                | native Go          |
+| IronClaw | WASM channel | WASM channel | —                | WASM tool          |
+| OpenFang | native Rust  | native Rust  | Cloud API (Rust) | Socket Mode (Rust) |
 
 ## Design
 
-### ClawDen Channel Architecture
+### User-Facing: Channels in `clawden.yaml`
 
-ClawDen doesn't replace each runtime's native channel implementation. Instead, it provides:
+Channel config lives in `clawden.yaml` (see spec 017). Users define **named channel instances**, each with its own credentials, then assign them to runtimes by name. Each channel instance maps to exactly one runtime — a 1:1 relationship.
 
-1. **Channel Registry** — Tracks which channels each agent supports and their current state
-2. **Channel Proxy** (optional) — For runtimes that lack a specific channel, ClawDen can act as a proxy: receive on the channel, translate to the runtime's API, relay the response back
-3. **Unified Config** — Single place to configure channel credentials (bot tokens, API keys), mapped to each runtime's native config format via the config translator (spec 013)
+#### Channel Instance Naming
+
+Channel keys are **instance names**, not channel types. The `type` field declares the platform:
+
+```yaml
+channels:
+  support-tg:
+    type: telegram
+    token: $SUPPORT_TG_TOKEN
+  creative-tg:
+    type: telegram
+    token: $CREATIVE_TG_TOKEN
+  team-discord:
+    type: discord
+    token: $DISCORD_BOT_TOKEN
+
+runtimes:
+  - name: zeroclaw
+    channels: [support-tg, team-discord]
+    tools: [git]
+
+  - name: picoclaw
+    channels: [creative-tg]
+    tools: [git]
+```
+
+Two separate Telegram bots, each wired to a different runtime. No conflicts.
+
+**Shorthand**: When the instance name matches a known channel type and there's only one instance of that type, the `type` field can be omitted:
+
+```yaml
+channels:
+  telegram:                     # name "telegram" → type inferred as telegram
+    token: $TELEGRAM_BOT_TOKEN
+  discord:                      # name "discord" → type inferred as discord
+    token: $DISCORD_BOT_TOKEN
+```
+
+This keeps the simple case simple while supporting the multi-agent case cleanly.
+
+#### Minimal Example
+
+```yaml
+runtime: zeroclaw
+channels:
+  telegram:
+    token: $TELEGRAM_BOT_TOKEN
+```
+
+Three lines. Running agent on Telegram.
+
+#### Common Fields (All Channel Instances)
+
+| Field  | Required | Description                                                                                                                                                          |
+| ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type` | No*      | Channel platform. Inferred from instance name if it matches a known type. Required when instance name differs from type (e.g., `support-tg` needs `type: telegram`). |
+
+*Known types: `telegram`, `discord`, `slack`, `whatsapp`, `signal`, `matrix`, `email`, `feishu`, `dingtalk`, `mattermost`, `irc`, `teams`, `imessage`, `google_chat`, `qq`, `line`, `nostr`.
+
+#### Per-Type Fields
+
+| Type     | Required Fields          | Optional Fields                            |
+| -------- | ------------------------ | ------------------------------------------ |
+| telegram | `token`                  | `allowed_users`, `group_mode`              |
+| discord  | `token`                  | `guild`, `allowed_roles`                   |
+| slack    | `bot_token`, `app_token` | `allowed_channels`                         |
+| whatsapp | `token`                  | (implementation auto-selected per runtime) |
+| signal   | `phone`                  | `signal_cli_path`                          |
+
+Most channels: just `type` (if needed) + `token`. Done.
+
+#### Secrets Handling
+
+Tokens use `$ENV_VAR` references — never stored as plaintext:
+
+```yaml
+channels:
+  telegram:
+    token: $TELEGRAM_BOT_TOKEN  # resolved from env or .env file
+```
+
+ClawDen auto-loads `.env` next to `clawden.yaml`.
+
+### What ClawDen Does Internally
+
+User writes simple YAML. ClawDen resolves instance names → types → per-runtime config:
 
 ```
-User (Telegram) ──► ClawDen Channel Router
+clawden.yaml                     What each runtime actually needs
+────────────                     ──────────────────────────────
+channels:                        ZeroClaw: ZEROCLAW_TELEGRAM_BOT_TOKEN env var
+  support-tg:                            (from support-tg instance)
+    type: telegram               PicoClaw: config.telegram.token in JSON
+    token: $SUPPORT_TOKEN                (from creative-tg instance)
+  creative-tg:
+    type: telegram
+    token: $CREATIVE_TOKEN
+
+runtimes:
+  - name: zeroclaw
+    channels: [support-tg]
+  - name: picoclaw
+    channels: [creative-tg]
+```
+
+Each CRI adapter maps from instance type + credentials → runtime-specific format. Users never see this.
+
+### Config Translation by Runtime
+
+This table shows how ClawDen translates each channel instance into the format each runtime expects. This is the internal mapping that CRI adapters implement.
+
+#### OpenClaw (JSON5 config — highest priority)
+
+OpenClaw uses JSON5 config files with per-channel library configuration:
+
+| Channel  | Library    | Config translation                                                                    |
+| -------- | ---------- | ------------------------------------------------------------------------------------- |
+| Telegram | grammY     | `{ "telegram": { "token": "<resolved>" } }` in JSON5 config                           |
+| Discord  | discord.js | `{ "discord": { "token": "<resolved>", "guild": "..." } }` in JSON5 config            |
+| Slack    | Bolt       | `{ "slack": { "botToken": "<resolved>", "appToken": "<resolved>" } }` in JSON5 config |
+| WhatsApp | Baileys    | `{ "whatsapp": { "token": "<resolved>" } }` in JSON5 config                           |
+
+OpenClaw's gateway architecture (port 18789) means channel tokens go into its config file, not env vars. ClawDen generates the JSON5 config and mounts it.
+
+#### ZeroClaw (env vars + TOML config)
+
+ZeroClaw uses environment variables prefixed with `ZEROCLAW_`:
+
+| Channel  | Env var(s)                    | Notes                      |
+| -------- | ----------------------------- | -------------------------- |
+| Telegram | `ZEROCLAW_TELEGRAM_BOT_TOKEN` | Native Rust implementation |
+| Discord  | `ZEROCLAW_DISCORD_BOT_TOKEN`  | Native Rust implementation |
+| WhatsApp | `ZEROCLAW_WHATSAPP_TOKEN`     | Meta Cloud API             |
+| Signal   | `ZEROCLAW_SIGNAL_PHONE`       | Native Rust, signal-cli    |
+
+ClawDen sets these env vars when spawning the ZeroClaw process. TOML config file is also supported (`config.toml`) but env vars take precedence.
+
+#### NanoClaw (code-driven, skill-based)
+
+NanoClaw uses skill-based channel registration via the Claude Agent SDK:
+
+| Channel  | Method           | Config translation                                                      |
+| -------- | ---------------- | ----------------------------------------------------------------------- |
+| Telegram | Skill injection  | Pass token via `NANOCLAW_TELEGRAM_TOKEN` env var; skill auto-registers  |
+| Discord  | Skill injection  | Pass token via `NANOCLAW_DISCORD_TOKEN` env var; skill auto-registers   |
+| Slack    | Skill injection  | Pass tokens via `NANOCLAW_SLACK_BOT_TOKEN` + `NANOCLAW_SLACK_APP_TOKEN` |
+| WhatsApp | Default built-in | Pass token via `NANOCLAW_WHATSAPP_TOKEN` env var                        |
+
+NanoClaw's channels are code-driven — the runtime reads env vars and programmatically registers channel skills. ClawDen only needs to inject the right env vars.
+
+#### PicoClaw (JSON config)
+
+PicoClaw uses a JSON config file:
+
+| Channel     | Config path                                         | Notes                    |
+| ----------- | --------------------------------------------------- | ------------------------ |
+| Telegram    | `config.telegram.token`                             | Native Go implementation |
+| Discord     | `config.discord.token`                              | Native Go implementation |
+| Slack       | `config.slack.bot_token` + `config.slack.app_token` | Native Go implementation |
+| Feishu/Lark | `config.feishu.app_id` + `config.feishu.app_secret` | Native Go implementation |
+
+ClawDen generates the JSON config file and mounts it. PicoClaw reads `config.json` from its working directory.
+
+### Channel Proxy: Every Agent on Every Channel
+
+If a runtime doesn't natively support a channel (see matrix above), ClawDen proxies automatically:
+
+```
+User (Telegram) ──► ClawDen Channel Proxy
                          │
                    ┌─────┴─────┐
                    │           │
-            [native channel] [proxy mode]
+            [native]       [proxied]
                    │           │
-              ZeroClaw    IronClaw
-           (has Telegram) (no Telegram,
-                          ClawDen proxies)
+              ZeroClaw    NullClaw
+           (has Telegram) (ClawDen bridges
+                          via CRI send())
 ```
 
-### Channel Proxy Mode
+Users see a "proxied" indicator in `clawden ps` but otherwise it just works. No config difference.
 
-For runtimes that don't natively support a channel, ClawDen can bridge:
+### Channel Instance Validation
 
-1. ClawDen receives the message on the channel (e.g., Telegram)
-2. Translates to a `send()` call on the CRI adapter
-3. Gets the `AgentResponse` back
-4. Sends the response back on the channel
+ClawDen enforces these rules at startup:
 
-This means every agent in the fleet is reachable on every channel, even if the runtime doesn't natively support it.
+1. **One instance, one runtime.** A channel instance name can only appear in one runtime's `channels` list. If `support-tg` is assigned to both `zeroclaw` and `picoclaw` → startup error.
+2. **One token, one instance.** Two channel instances of the same type cannot resolve to the same token value. This catches copy-paste mistakes (e.g., both `support-tg` and `creative-tg` pointing to the same `$BOT_TOKEN`). Same resolved token across instances of the same type → startup error.
+3. **Type must be valid.** If `type` can't be inferred from name and isn't explicitly set → startup error.
+4. **Referenced channels must exist.** Runtime references a channel name not in `channels:` → startup error.
 
-### Channel Credential Management
+Example error messages:
+```
+Error: Channel 'support-tg' is assigned to both 'zeroclaw' and 'picoclaw'.
+       Each channel instance can only connect to one runtime.
 
-All channel credentials flow through ClawDen's secret vault (spec 013):
-- Bot tokens, API keys, webhook secrets stored encrypted
-- Injected into runtime configs at deploy time via env vars
-- Never exposed in logs or API responses
-- Rotatable without redeploying containers
+Error: Channels 'support-tg' and 'creative-tg' resolve to the same telegram token.
+       Each bot token can only be used by one channel instance.
 
-### Auth & Security Patterns
+Error: Channel 'my-chat' has no 'type' field and 'my-chat' is not a known channel type.
+       Add 'type: telegram' (or another supported type) to the channel config.
 
-Every runtime uses some form of allowlisting:
-- **Allowlist model**: Empty = deny all, `["*"]` = allow all, else exact-match (universal across all runtimes)
-- **Pairing**: OpenClaw and some others use a pairing code flow for DM access
-- **Group activation**: Mention-only vs always-respond (configurable per-channel)
+Error: Runtime 'zeroclaw' references channel 'slack-bot' which is not defined in 'channels:'.
+```
 
-ClawDen normalizes these into a canonical security policy per agent.
+### Channel CLI Commands
+
+```bash
+clawden channels           # list configured channels + connection status
+clawden channels test      # test all channel credentials
+clawden channels test telegram  # test just telegram
+```
+
+### Auth & Security
+
+- **Allowlist model**: Empty = deny all (safe default), `["*"]` = allow all, else exact-match
+- Configured per-channel instance in YAML:
+
+```yaml
+channels:
+  support-tg:
+    type: telegram
+    token: $SUPPORT_TG_TOKEN
+    allowed_users: ["12345", "67890"]   # optional
+  team-discord:
+    type: discord
+    token: $DISCORD_BOT_TOKEN
+    allowed_roles: ["admin"]            # optional
+```
+
+- Credentials encrypted at rest, never in logs or API responses
 
 ## Plan
 
-- [ ] Audit and document the complete channel matrix (this spec captures the initial audit)
-- [ ] Design canonical channel config schema in `clawden-config` (credentials + allowlists + policies)
-- [ ] Implement channel config translators per runtime in the CRI adapters
-- [ ] Build channel proxy in `clawden-server` for bridging unsupported channels
-- [ ] Implement channel health monitoring (is the Telegram bot connected? Is Discord auth valid?)
-- [ ] Add channel management to the dashboard (spec 014) — enable/disable, status, logs per channel
-- [ ] Document channel setup guides for operators
+### Phase 1: OpenClaw, ZeroClaw, NanoClaw, PicoClaw
+- [ ] Define channel instance schema (name, type inference, per-type fields)
+- [ ] Implement channel instance validation (1:1 instance-runtime, token uniqueness, type resolution, reference checks)
+- [ ] Implement channel credential resolver ($ENV_VAR + .env auto-load)
+- [ ] Add OpenClaw credential mapping (JSON5 config, grammY, discord.js, Baileys, Bolt) — highest priority
+- [ ] Add ZeroClaw credential mapping (env vars, TOML config)
+- [ ] Add NanoClaw credential mapping (code-driven, skill-based channels)
+- [ ] Add PicoClaw credential mapping (JSON config, native Go)
+- [ ] Implement channel proxy for unsupported runtime+channel combos
+- [ ] Implement `clawden channels` and `clawden channels test` CLI commands
+- [ ] Channel health monitoring
+
+### Phase 2: IronClaw, NullClaw, MicroClaw & Dashboard
+- [ ] Add IronClaw credential mapping (WASM capabilities, secret injection)
+- [ ] Add NullClaw credential mapping (JSON config)
+- [ ] Add MicroClaw credential mapping (YAML config)
+- [ ] Add channel status to dashboard (spec 021)
 
 ## Test
 
-- [ ] Channel matrix accurately reflects each runtime's current capabilities
-- [ ] Canonical channel config round-trips through each runtime's translator
-- [ ] Channel proxy can bridge a Telegram message to a runtime that lacks native Telegram support
-- [ ] Channel credentials are encrypted at rest and never appear in logs
-- [ ] Channel health monitor detects a disconnected bot token
-- [ ] Dashboard shows real-time channel status per agent
+- [ ] `clawden.yaml` with telegram channel instance + ZeroClaw runtime connects and responds
+- [ ] $ENV_VAR references resolve correctly from environment and .env file
+- [ ] Same channel instance assigned to two runtimes → clear error at startup
+- [ ] Same resolved token across two instances of the same type → clear error at startup
+- [ ] Channel instance with unknown name and no `type` field → clear error at startup
+- [ ] Runtime references undefined channel instance → clear error at startup
+- [ ] Type inference works: instance name `telegram` → type `telegram` without explicit `type` field
+- [ ] Multiple telegram instances with different tokens + different runtimes → works correctly
+- [ ] Channel proxy bridges Telegram to a runtime without native support
+- [ ] `clawden channels test` validates credentials without starting runtimes
+- [ ] Credentials never appear in logs or `clawden ps` output
+- [ ] Allowlist correctly restricts who can message the agent
 
 ## Notes
 
-- **Telegram is the universal channel** — all 8 runtimes support it. It's the safest default for testing and the best candidate for ClawDen's proxy implementation
-- **WhatsApp fragmentation** — three incompatible approaches: Baileys (OpenClaw, NanoClaw, TinyClaw), Meta Cloud API (ZeroClaw, OpenFang), and Node.js bridge (Nanobot). ClawDen should support all three
-- **NanoClaw's skill-based channels** — NanoClaw adds channels via Claude Code skills (`/add-telegram`, `/add-slack`), not built-in code. Channel support varies per fork. ClawDen should track announced skills, not just core code
-- **IronClaw's WASM channels** — channels are compiled to WebAssembly (`wasm32-wasip2`) for sandboxed execution. Host injects secrets, WASM never sees raw tokens. Most secure approach but harder to extend
-- **OpenFang is the long-tail leader** with 40 channels — if a user wants an obscure channel (Threema, Keybase, Revolt, Pumble, etc.), OpenFang likely has it. All channels use the `ChannelAdapter` trait with `Zeroizing<String>` for credential safety
-- **Nanobot has the richest Python ecosystem** — 10 channels including Mochat (unique to Nanobot), with `BaseChannel` ABC, `MessageBus`, and `ChannelManager` pattern. Config uses Pydantic schemas with camelCase alias support
-- **TinyClaw is the simplest** — 3 channels (Telegram, Discord, WhatsApp), standalone Node.js clients, SQLite queue for message routing. DM-only for Discord. Good for quick personal setups
-- **Chinese IM ecosystem** — DingTalk, Lark/Feishu, QQ, WeCom are important for APAC deployment. PicoClaw and Nanobot have the best coverage here
-- **Config format divergence** — JSON5 (OpenClaw), JSON (Nanobot, PicoClaw, TinyClaw), TOML (ZeroClaw, OpenFang), .env (NanoClaw), WASM capabilities JSON (IronClaw). ClawDen's config translator (spec 013) must handle all six formats
-- **Security patterns**: OpenFang uses env var indirection (`bot_token_env`) + `Zeroizing<String>`; IronClaw uses host-injected secrets with WASM sandbox; others store tokens directly in config or `.env`. ClawDen should enforce the most secure pattern (env var indirection + encrypted vault)
+- **OpenClaw is Phase 1 top priority**: Most popular runtime — complex channel story (10+ channels, grammY, discord.js, Baileys, Bolt, JSON5 config) but critical to support first
+- **IronClaw deferred to Phase 2**: WASM-based channels are the most secure (sandboxed) but limited set and lower adoption. Proxy covers the gap in the meantime
+- **NullClaw, MicroClaw deferred to Phase 2**: Lower priority runtimes, straightforward credential mapping when needed
+- **Telegram is universal** — all runtimes support it. Best default for testing
+- **Config format divergence is internal**: JSON5 (OpenClaw), TOML (ZeroClaw), code-driven (NanoClaw), JSON (PicoClaw). Users never see this — they write one `clawden.yaml`
+- **Future: channel routing** — single bot token → ClawDen webhook ingress → route by conversation context. Deferred, too complex for now
+- **Channel instances vs channel types** — the 1:1 relationship is between instances and runtimes, not types and runtimes. Multiple instances of the same type (e.g., two Telegram bots) are a common multi-agent pattern
