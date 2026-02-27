@@ -1,0 +1,11 @@
+# ClawDen Runtime Defaults
+# Internal defaults for all runtimes. Users override via clawden.yaml.
+
+[general]
+log_level = "info"
+workspace = "/home/clawden/workspace"
+
+[health]
+endpoint = "/health"
+interval_ms = 30000
+timeout_ms = 5000

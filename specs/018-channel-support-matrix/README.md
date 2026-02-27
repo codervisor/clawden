@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-02-26
 priority: high
 tags:
@@ -13,7 +13,10 @@ depends_on:
 - 010-claw-runtime-interface
 parent: 009-orchestration-platform
 created_at: 2026-02-26T02:50:41.154596674Z
-updated_at: 2026-02-27T12:58:54.851774Z
+updated_at: 2026-02-27T14:05:21.105413Z
+transitions:
+- status: in-progress
+  at: 2026-02-27T14:05:21.105413Z
 ---
 # Chat Channel Support Matrix & Unified Channel Layer
 
@@ -325,20 +328,20 @@ channels:
 ## Plan
 
 ### Phase 1a: Tier 1 Channels (Telegram, Discord, Feishu/Lark)
-- [ ] Define channel instance schema (name, type inference, per-type fields)
-- [ ] Implement channel instance validation (1:1 instance-runtime, token uniqueness, type resolution, reference checks)
-- [ ] Implement channel credential resolver ($ENV_VAR + .env auto-load)
-- [ ] Add OpenClaw credential mapping for Tier 1 channels (grammY, discord.js, Feishu SDK) — highest priority
-- [ ] Add ZeroClaw credential mapping for Tier 1 channels (env vars, TOML)
-- [ ] Add NanoClaw credential mapping for Tier 1 channels (skill injection, env vars)
-- [ ] Add PicoClaw credential mapping for Tier 1 channels (JSON config)
-- [ ] Implement `clawden channels` and `clawden channels test` CLI commands
+- [x] Define channel instance schema (name, type inference, per-type fields)
+- [x] Implement channel instance validation (1:1 instance-runtime, token uniqueness, type resolution, reference checks)
+- [x] Implement channel credential resolver ($ENV_VAR + .env auto-load)
+- [x] Add OpenClaw credential mapping for Tier 1 channels (grammY, discord.js, Feishu SDK) — highest priority
+- [x] Add ZeroClaw credential mapping for Tier 1 channels (env vars, TOML)
+- [x] Add NanoClaw credential mapping for Tier 1 channels (skill injection, env vars)
+- [x] Add PicoClaw credential mapping for Tier 1 channels (JSON config)
+- [x] Implement `clawden channels` and `clawden channels test` CLI commands
 - [ ] Channel health monitoring
 
 ### Phase 1b: Tier 2 Channels (Slack, WhatsApp)
 - [ ] Add Slack credential mapping across Phase 1 runtimes (dual token: bot + app)
 - [ ] Add WhatsApp credential mapping across Phase 1 runtimes (Baileys, Meta API, native Go, default)
-- [ ] Implement channel proxy for unsupported runtime+channel combos
+- [x] Implement channel proxy for unsupported runtime+channel combos
 
 ### Phase 1c: Tier 3 Channels (Signal, DingTalk, QQ, etc.)
 - [ ] Add Signal credential mapping (OpenClaw + ZeroClaw native; proxy for NanoClaw, PicoClaw)

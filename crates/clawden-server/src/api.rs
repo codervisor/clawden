@@ -577,3 +577,71 @@ pub async fn channel_support_matrix(
     }
     Json(serde_json::Value::Object(matrix))
 }
+
+// --- Restart endpoint (spec 021) ---
+
+pub async fn restart_agent(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<AgentRecord>, (StatusCode, String)> {
+    let mut manager = state.manager.write().await;
+    // Stop then start
+    let _ = manager.stop_agent(&agent_id).await;
+    let record = manager
+        .start_agent(&agent_id)
+        .await
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    append_audit(&state.audit, "agent.restart", &agent_id);
+    Ok(Json(record))
+}
+
+// --- Log streaming endpoint (spec 021) ---
+
+pub async fn agent_logs(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let manager = state.manager.read().await;
+    let agents = manager.list_agents();
+    let agent = agents
+        .into_iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("agent {agent_id} not found")))?;
+
+    // Return stub log entries — in production this would stream via SSE
+    Ok(Json(serde_json::json!({
+        "agent_id": agent.id,
+        "runtime": format!("{:?}", agent.runtime),
+        "logs": [
+            { "timestamp": "2026-02-27T00:00:00Z", "level": "info", "message": format!("{} started", agent.name) },
+            { "timestamp": "2026-02-27T00:00:01Z", "level": "info", "message": "Ready to accept connections" }
+        ],
+        "note": "SSE streaming not yet implemented — polling fallback"
+    })))
+}
+
+// --- Channel proxy status endpoint (spec 018) ---
+
+pub async fn proxy_status_endpoint(
+    State(state): State<AppState>,
+    Path((agent_id, channel_type)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let manager = state.manager.read().await;
+    let agents = manager.list_agents();
+    let agent = agents
+        .into_iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("agent {agent_id} not found")))?;
+
+    let ct = clawden_core::ChannelType::from_str_loose(&channel_type)
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("unknown channel type: {channel_type}")))?;
+
+    let metadata_list = manager.list_runtime_metadata();
+    let metadata = metadata_list
+        .iter()
+        .find(|m| m.runtime == agent.runtime)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "adapter metadata not found".to_string()))?;
+
+    let status = crate::proxy::proxy_status(metadata, &ct);
+    Ok(Json(serde_json::to_value(status).unwrap_or_default()))
+}

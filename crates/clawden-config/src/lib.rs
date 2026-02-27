@@ -2,6 +2,236 @@ use clawden_core::ClawRuntime;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
+
+// ---------------------------------------------------------------------------
+// clawden.yaml schema (spec 017)
+// ---------------------------------------------------------------------------
+
+/// Top-level `clawden.yaml` config. Supports two forms:
+///
+/// **Single-runtime shorthand**:
+/// ```yaml
+/// runtime: zeroclaw
+/// channels:
+///   telegram:
+///     token: $TELEGRAM_BOT_TOKEN
+/// ```
+///
+/// **Multi-runtime full form**:
+/// ```yaml
+/// channels:
+///   support-tg:
+///     type: telegram
+///     token: $SUPPORT_TG_TOKEN
+/// runtimes:
+///   - name: zeroclaw
+///     channels: [support-tg]
+///     tools: [git, http]
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClawDenYaml {
+    /// Single-runtime shorthand (mutually exclusive with `runtimes`).
+    #[serde(default)]
+    pub runtime: Option<String>,
+
+    /// Named channel instances.
+    #[serde(default)]
+    pub channels: HashMap<String, ChannelInstanceYaml>,
+
+    /// Multi-runtime list.
+    #[serde(default)]
+    pub runtimes: Vec<RuntimeEntryYaml>,
+
+    /// Single-runtime tools shorthand.
+    #[serde(default)]
+    pub tools: Vec<String>,
+
+    /// Single-runtime config overrides shorthand.
+    #[serde(default)]
+    pub config: HashMap<String, Value>,
+}
+
+/// A channel instance entry in `clawden.yaml`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelInstanceYaml {
+    /// Channel platform type. Inferred from the key name if it matches a known type.
+    #[serde(rename = "type", default)]
+    pub channel_type: Option<String>,
+
+    /// Bot/API token (supports `$ENV_VAR` syntax).
+    #[serde(default)]
+    pub token: Option<String>,
+
+    /// Slack bot token.
+    #[serde(default)]
+    pub bot_token: Option<String>,
+
+    /// Slack app token.
+    #[serde(default)]
+    pub app_token: Option<String>,
+
+    /// Phone number for Signal.
+    #[serde(default)]
+    pub phone: Option<String>,
+
+    /// Optional guild ID for Discord.
+    #[serde(default)]
+    pub guild: Option<String>,
+
+    /// Optional user allowlist.
+    #[serde(default)]
+    pub allowed_users: Vec<String>,
+
+    /// Optional role allowlist (Discord).
+    #[serde(default)]
+    pub allowed_roles: Vec<String>,
+
+    /// Optional channel allowlist (Slack).
+    #[serde(default)]
+    pub allowed_channels: Vec<String>,
+
+    /// Group activation mode.
+    #[serde(default)]
+    pub group_mode: Option<String>,
+
+    /// Catch-all for any extra channel-specific fields.
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
+}
+
+/// A runtime entry in the `runtimes` array.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeEntryYaml {
+    pub name: String,
+    #[serde(default)]
+    pub channels: Vec<String>,
+    #[serde(default)]
+    pub tools: Vec<String>,
+    #[serde(default)]
+    pub config: HashMap<String, Value>,
+}
+
+/// Known built-in tools.
+pub const KNOWN_TOOLS: &[&str] = &["git", "http", "browser", "gui"];
+
+/// Known channel type names for type inference.
+const KNOWN_CHANNEL_TYPES: &[&str] = &[
+    "telegram", "discord", "slack", "whatsapp", "signal", "matrix", "email",
+    "feishu", "lark", "dingtalk", "mattermost", "irc", "teams", "imessage",
+    "google_chat", "qq", "line", "nostr",
+];
+
+impl ClawDenYaml {
+    /// Parse a clawden.yaml file from disk. Auto-loads `.env` from the same directory.
+    pub fn from_file(path: &Path) -> Result<Self, String> {
+        // Auto-load .env from the directory containing clawden.yaml
+        if let Some(dir) = path.parent() {
+            let env_path = dir.join(".env");
+            if env_path.exists() {
+                let _ = dotenvy::from_path(&env_path);
+            }
+        }
+
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
+        Self::from_str(&content)
+    }
+
+    /// Parse from a YAML string.
+    pub fn from_str(yaml: &str) -> Result<Self, String> {
+        serde_yaml::from_str(yaml).map_err(|e| format!("invalid clawden.yaml: {e}"))
+    }
+
+    /// Validate the config and return structured errors.
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
+        // Must have either `runtime` or `runtimes`, not both
+        if self.runtime.is_some() && !self.runtimes.is_empty() {
+            errors.push("cannot use both 'runtime' (shorthand) and 'runtimes' (multi) at the same time".to_string());
+        }
+        if self.runtime.is_none() && self.runtimes.is_empty() {
+            errors.push("must specify either 'runtime' or 'runtimes'".to_string());
+        }
+
+        // Validate channel types can be resolved
+        for (name, ch) in &self.channels {
+            let resolved = ch.channel_type.as_deref()
+                .or_else(|| if KNOWN_CHANNEL_TYPES.contains(&name.as_str()) { Some(name.as_str()) } else { None });
+            if resolved.is_none() {
+                errors.push(format!(
+                    "Channel '{}' has no 'type' field and '{}' is not a known channel type. \
+                     Add 'type: telegram' (or another supported type) to the channel config.",
+                    name, name
+                ));
+            }
+        }
+
+        // Validate channel references exist and enforce 1:1 instance→runtime
+        let mut channel_owners: HashMap<String, String> = HashMap::new();
+        for rt in &self.runtimes {
+            for ch_name in &rt.channels {
+                if !self.channels.contains_key(ch_name) {
+                    errors.push(format!(
+                        "Runtime '{}' references channel '{}' which is not defined in 'channels:'.",
+                        rt.name, ch_name
+                    ));
+                }
+                if let Some(prev_owner) = channel_owners.get(ch_name) {
+                    errors.push(format!(
+                        "Channel '{}' is assigned to both '{}' and '{}'. \
+                         Each channel instance can only connect to one runtime.",
+                        ch_name, prev_owner, rt.name
+                    ));
+                } else {
+                    channel_owners.insert(ch_name.clone(), rt.name.clone());
+                }
+            }
+        }
+
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+
+    /// Resolve `$ENV_VAR` references in all credential fields.
+    pub fn resolve_env_vars(&mut self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        for (name, ch) in &mut self.channels {
+            resolve_field(&mut ch.token, name, "token", &mut errors);
+            resolve_field(&mut ch.bot_token, name, "bot_token", &mut errors);
+            resolve_field(&mut ch.app_token, name, "app_token", &mut errors);
+            resolve_field(&mut ch.phone, name, "phone", &mut errors);
+            resolve_field(&mut ch.guild, name, "guild", &mut errors);
+        }
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+
+    /// Resolve the channel type for a given instance name.
+    pub fn resolve_channel_type(name: &str, ch: &ChannelInstanceYaml) -> Option<String> {
+        ch.channel_type.clone().or_else(|| {
+            if KNOWN_CHANNEL_TYPES.contains(&name) {
+                Some(name.to_string())
+            } else {
+                None
+            }
+        })
+    }
+}
+
+/// Resolve a single `$ENV_VAR` field in-place.
+fn resolve_field(field: &mut Option<String>, instance: &str, field_name: &str, errors: &mut Vec<String>) {
+    if let Some(val) = field.as_ref() {
+        if let Some(env_name) = val.strip_prefix('$') {
+            match std::env::var(env_name) {
+                Ok(resolved) => *field = Some(resolved),
+                Err(_) => errors.push(format!(
+                    "Channel '{}' field '{}': environment variable '{}' is not set",
+                    instance, field_name, env_name
+                )),
+            }
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Canonical config types
@@ -441,6 +671,108 @@ pub fn detect_drift(
 ) -> Result<Vec<ConfigDiff>, String> {
     let actual_canonical = translator.from_runtime_config(runtime_native)?;
     Ok(diff_configs(canonical, &actual_canonical))
+}
+
+// ---------------------------------------------------------------------------
+// Channel credential translation (spec 018)
+// ---------------------------------------------------------------------------
+
+/// Translates a clawden.yaml channel instance into the format a specific runtime expects.
+pub struct ChannelCredentialMapper;
+
+impl ChannelCredentialMapper {
+    /// Generate OpenClaw JSON5 config fragment for a channel instance.
+    /// OpenClaw uses per-channel library config (grammY, discord.js, Baileys, Bolt).
+    pub fn openclaw_channel_config(
+        channel_type: &str,
+        ch: &ChannelInstanceYaml,
+    ) -> Result<Value, String> {
+        match channel_type {
+            "telegram" => Ok(serde_json::json!({
+                "telegram": { "token": ch.token.as_deref().unwrap_or("") }
+            })),
+            "discord" => {
+                let mut cfg = serde_json::json!({
+                    "discord": { "token": ch.token.as_deref().unwrap_or("") }
+                });
+                if let Some(guild) = &ch.guild {
+                    cfg["discord"]["guild"] = Value::String(guild.clone());
+                }
+                Ok(cfg)
+            }
+            "slack" => Ok(serde_json::json!({
+                "slack": {
+                    "botToken": ch.bot_token.as_deref().unwrap_or(""),
+                    "appToken": ch.app_token.as_deref().unwrap_or("")
+                }
+            })),
+            "whatsapp" => Ok(serde_json::json!({
+                "whatsapp": { "token": ch.token.as_deref().unwrap_or("") }
+            })),
+            "feishu" | "lark" => Ok(serde_json::json!({
+                "feishu": { "token": ch.token.as_deref().unwrap_or("") }
+            })),
+            _ => Ok(serde_json::json!({
+                channel_type: { "token": ch.token.as_deref().unwrap_or("") }
+            })),
+        }
+    }
+
+    /// Generate ZeroClaw env vars for a channel instance.
+    /// ZeroClaw uses `ZEROCLAW_<CHANNEL>_<FIELD>` prefixed env vars.
+    pub fn zeroclaw_env_vars(
+        channel_type: &str,
+        ch: &ChannelInstanceYaml,
+    ) -> HashMap<String, String> {
+        let prefix = format!("ZEROCLAW_{}", channel_type.to_uppercase());
+        let mut vars = HashMap::new();
+        if let Some(token) = &ch.token {
+            vars.insert(format!("{prefix}_BOT_TOKEN"), token.clone());
+        }
+        if let Some(phone) = &ch.phone {
+            vars.insert(format!("{prefix}_PHONE"), phone.clone());
+        }
+        vars
+    }
+
+    /// Generate NanoClaw env vars for a channel instance.
+    /// NanoClaw uses `NANOCLAW_<CHANNEL>_<FIELD>` prefixed env vars.
+    pub fn nanoclaw_env_vars(
+        channel_type: &str,
+        ch: &ChannelInstanceYaml,
+    ) -> HashMap<String, String> {
+        let prefix = format!("NANOCLAW_{}", channel_type.to_uppercase());
+        let mut vars = HashMap::new();
+        if let Some(token) = &ch.token {
+            vars.insert(format!("{prefix}_TOKEN"), token.clone());
+        }
+        if let Some(bt) = &ch.bot_token {
+            vars.insert(format!("{prefix}_BOT_TOKEN"), bt.clone());
+        }
+        if let Some(at) = &ch.app_token {
+            vars.insert(format!("{prefix}_APP_TOKEN"), at.clone());
+        }
+        vars
+    }
+
+    /// Generate PicoClaw JSON config fragment for a channel instance.
+    /// PicoClaw uses `config.<channel>.<field>` in JSON.
+    pub fn picoclaw_channel_config(
+        channel_type: &str,
+        ch: &ChannelInstanceYaml,
+    ) -> Result<Value, String> {
+        let mut cfg = serde_json::Map::new();
+        if let Some(token) = &ch.token {
+            cfg.insert("token".to_string(), Value::String(token.clone()));
+        }
+        if let Some(bt) = &ch.bot_token {
+            cfg.insert("bot_token".to_string(), Value::String(bt.clone()));
+        }
+        if let Some(at) = &ch.app_token {
+            cfg.insert("app_token".to_string(), Value::String(at.clone()));
+        }
+        Ok(serde_json::json!({ channel_type: cfg }))
+    }
 }
 
 #[cfg(test)]

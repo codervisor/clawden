@@ -4,16 +4,17 @@ mod channels;
 mod discovery;
 mod lifecycle;
 mod manager;
+mod proxy;
 mod swarm;
 
 use crate::api::{
-    agent_channels, agent_metrics_history, audit_log, binding_conflicts, channel_instances,
-    channel_matrix, channel_support_matrix, create_binding, create_team, delete_binding,
-    delete_channel_config, deploy_runtime, deploy_status, fan_out_task, fleet_status,
-    get_channel_config, health_summary, list_agents, list_bindings, list_channels,
-    list_endpoints, list_runtimes, list_swarm_tasks, list_teams, register_agent,
-    register_endpoint, scan_endpoints, send_task, start_agent, stop_agent, test_channel,
-    upsert_channel_config, AppState,
+    agent_channels, agent_logs, agent_metrics_history, audit_log, binding_conflicts,
+    channel_instances, channel_matrix, channel_support_matrix, create_binding, create_team,
+    delete_binding, delete_channel_config, deploy_runtime, deploy_status, fan_out_task,
+    fleet_status, get_channel_config, health_summary, list_agents, list_bindings, list_channels,
+    list_endpoints, list_runtimes, list_swarm_tasks, list_teams, proxy_status_endpoint,
+    register_agent, register_endpoint, restart_agent, scan_endpoints, send_task, start_agent,
+    stop_agent, test_channel, upsert_channel_config, AppState,
 };
 use crate::audit::{AuditEvent, AuditLog};
 use crate::discovery::DiscoveryService;
@@ -121,9 +122,15 @@ async fn main() {
             axum::routing::post(deploy_runtime),
         )
         .route("/agents/{agent_id}/deploy-status", get(deploy_status))
+        .route("/agents/{agent_id}/restart", axum::routing::post(restart_agent))
+        .route("/agents/{agent_id}/logs", get(agent_logs))
         .route(
             "/agents/{agent_id}/metrics/history",
             get(agent_metrics_history),
+        )
+        .route(
+            "/agents/{agent_id}/proxy-status/{channel_type}",
+            get(proxy_status_endpoint),
         )
         // Channel endpoints (spec 018/021)
         .route("/channels", get(list_channels))

@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-02-26
 priority: high
 tags:
@@ -8,11 +8,14 @@ tags:
 - runtime
 - infra
 - container
-parent: 009-orchestration-platform
 depends_on:
 - 010-claw-runtime-interface
+parent: 009-orchestration-platform
 created_at: 2026-02-26T02:42:25.266699500Z
-updated_at: 2026-02-26T02:42:25.266699500Z
+updated_at: 2026-02-27T14:05:21.098968Z
+transitions:
+- status: in-progress
+  at: 2026-02-27T14:05:21.098968Z
 ---
 # Docker Runtime Images & Deployment
 
@@ -270,19 +273,19 @@ ClawDen passes `config` entries as env vars. Each runtime handles its own env �
 ## Plan
 
 ### Phase 1: Priority Runtimes
-- [ ] Define `clawden.yaml` schema (runtimes, channels, tools, config overrides)
-- [ ] Implement OpenClaw credential mapping (JSON5 config, grammY, discord.js, Baileys, Bolt) — highest priority
-- [ ] Implement ZeroClaw credential mapping (env vars, TOML config)
-- [ ] Implement NanoClaw credential mapping (code-driven, skill-based channels)
-- [ ] Implement PicoClaw credential mapping (JSON config, native Go)
-- [ ] Implement `clawden run <runtime> --channel <name> --with <tools>` CLI command
-- [ ] Build `clawden-runtime` Dockerfile (Debian slim + Node.js 22 LTS)
-- [ ] Implement `entrypoint.sh` — runtime selection + tool setup loop
-- [ ] Create `git` and `http` tool setup scripts
+- [x] Define `clawden.yaml` schema (runtimes, channels, tools, config overrides)
+- [x] Implement OpenClaw credential mapping (JSON5 config, grammY, discord.js, Baileys, Bolt) — highest priority
+- [x] Implement ZeroClaw credential mapping (env vars, TOML config)
+- [x] Implement NanoClaw credential mapping (code-driven, skill-based channels)
+- [x] Implement PicoClaw credential mapping (JSON config, native Go)
+- [x] Implement `clawden run <runtime> --channel <name> --with <tools>` CLI command
+- [x] Build `clawden-runtime` Dockerfile (Debian slim + Node.js 22 LTS)
+- [x] Implement `entrypoint.sh` — runtime selection + tool setup loop
+- [x] Create `git` and `http` tool setup scripts
 - [ ] Package Phase 1 runtimes into image
-- [ ] Implement `clawden up` / `clawden ps` / `clawden stop` / `clawden logs`
-- [ ] Implement `clawden channels` — list + test
-- [ ] Implement channel proxy for unsupported runtime+channel combos
+- [x] Implement `clawden up` / `clawden ps` / `clawden stop` / `clawden logs`
+- [x] Implement `clawden channels` — list + test
+- [x] Implement channel proxy for unsupported runtime+channel combos
 - [ ] CI: build + push image to GHCR
 
 ### Phase 2: Remaining Runtimes & Advanced Tools

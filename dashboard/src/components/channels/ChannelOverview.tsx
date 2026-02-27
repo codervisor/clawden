@@ -15,6 +15,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { ChannelStatusMatrix } from './ChannelStatusMatrix';
 
 // --- Types ---
 
@@ -210,6 +211,9 @@ export function ChannelOverview() {
       {showMatrix && (
         <ChannelSupportMatrix supportMatrix={supportMatrix} />
       )}
+
+      {/* Channel Status Matrix — real-time instance × agent grid */}
+      <ChannelStatusMatrix />
 
       {/* Active Bindings */}
       {bindings.length > 0 && (

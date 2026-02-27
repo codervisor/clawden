@@ -290,7 +290,7 @@ function FleetOverview({
                       <td className="px-6 py-4"><StateBadge state={agent.state} /></td>
                       <td className="px-6 py-4"><HealthBadge status={agent.health} /></td>
                       <td className="px-6 py-4 text-right font-mono">{agent.task_count}</td>
-                      <td className="px-6 py-4 max-w-[200px] truncate text-muted-foreground text-xs">{agent.capabilities.join(', ') || '—'}</td>
+                      <td className="px-6 py-4 max-w-50 truncate text-muted-foreground text-xs">{agent.capabilities.join(', ') || '—'}</td>
                       <td className="px-6 py-4 text-right">
                         <Button variant="outline" size="sm" onClick={() => onSelectAgent(agent.id)}>
                           Details
@@ -310,17 +310,69 @@ function FleetOverview({
 
 // --- Agent Detail ---
 
+interface LogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+}
+
+interface ChannelBinding {
+  channel_type: string;
+  instance_id: string;
+  status: string;
+}
+
 function AgentDetail({ agent, onBack }: { agent: AgentRecord | null; onBack: () => void }) {
   const [confirmDialog, setConfirmDialog] = useState<{ action: string; label: string } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [channels, setChannels] = useState<ChannelBinding[]>([]);
+
+  // Fetch logs and channels when agent changes
+  useEffect(() => {
+    if (!agent) return;
+    let alive = true;
+
+    const fetchDetails = async () => {
+      try {
+        const [logsRes, channelsRes] = await Promise.all([
+          fetch(`/api/agents/${encodeURIComponent(agent.id)}/logs`),
+          fetch(`/api/agents/${encodeURIComponent(agent.id)}/channels`),
+        ]);
+        if (!alive) return;
+        if (logsRes.ok) setLogs(await logsRes.json());
+        if (channelsRes.ok) setChannels(await channelsRes.json());
+      } catch { /* ignore */ }
+    };
+
+    void fetchDetails();
+    const timer = setInterval(() => void fetchDetails(), 5_000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [agent?.id]);
 
   const handleAction = (action: string, label: string) => {
     setConfirmDialog({ action, label });
   };
 
-  const confirmAction = () => {
+  const confirmAction = async () => {
     if (!confirmDialog || !agent) return;
-    toast.success(`${confirmDialog.label} sent to ${agent.name}`);
-    setConfirmDialog(null);
+    setActionLoading(true);
+    try {
+      const endpoint = confirmDialog.action === 'restart'
+        ? `/api/agents/${encodeURIComponent(agent.id)}/restart`
+        : `/api/agents/${encodeURIComponent(agent.id)}/stop`;
+      const res = await fetch(endpoint, { method: 'POST' });
+      if (res.ok) {
+        toast.success(`${confirmDialog.label} sent to ${agent.name}`);
+      } else {
+        toast.error(`Failed to ${confirmDialog.action} agent`);
+      }
+    } catch {
+      toast.error(`Failed to ${confirmDialog.action} agent`);
+    } finally {
+      setActionLoading(false);
+      setConfirmDialog(null);
+    }
   };
 
   if (!agent) {
@@ -387,6 +439,28 @@ function AgentDetail({ agent, onBack }: { agent: AgentRecord | null; onBack: () 
 
           <Separator />
 
+          {/* Connected Channels */}
+          <div>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Connected Channels</h4>
+            {channels.length > 0 ? (
+              <div className="space-y-2">
+                {channels.map((ch) => (
+                  <div key={`${ch.channel_type}-${ch.instance_id}`} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{ch.channel_type}</span>
+                      <span className="text-xs text-muted-foreground font-mono">{ch.instance_id}</span>
+                    </div>
+                    <Badge variant={ch.status === 'connected' ? 'success' : 'secondary'}>{ch.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">No channels connected</p>
+            )}
+          </div>
+
+          <Separator />
+
           <div>
             <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Capabilities</h4>
             <div className="flex flex-wrap gap-2">
@@ -402,13 +476,38 @@ function AgentDetail({ agent, onBack }: { agent: AgentRecord | null; onBack: () 
 
           <Separator />
 
+          {/* Recent Logs */}
+          <div>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Recent Logs</h4>
+            {logs.length > 0 ? (
+              <div className="max-h-48 overflow-y-auto rounded-lg border bg-muted/20 p-2 font-mono text-xs space-y-1">
+                {logs.map((entry, i) => (
+                  <div key={i} className="flex gap-2">
+                    <span className="text-muted-foreground shrink-0">{entry.timestamp}</span>
+                    <span className={cn(
+                      'shrink-0 w-12 text-center rounded px-1',
+                      entry.level === 'error' && 'text-destructive',
+                      entry.level === 'warn' && 'text-amber-500',
+                      entry.level === 'info' && 'text-blue-500',
+                    )}>{entry.level}</span>
+                    <span className="break-all">{entry.message}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">No logs available</p>
+            )}
+          </div>
+
+          <Separator />
+
           <div>
             <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Actions</h4>
             <div className="flex gap-3">
-              <Button variant="outline" size="sm" onClick={() => handleAction('restart', 'Restart')}>
+              <Button variant="outline" size="sm" onClick={() => handleAction('restart', 'Restart')} disabled={actionLoading}>
                 Restart Agent
               </Button>
-              <Button variant="destructive" size="sm" onClick={() => handleAction('stop', 'Stop')}>
+              <Button variant="destructive" size="sm" onClick={() => handleAction('stop', 'Stop')} disabled={actionLoading}>
                 Stop Agent
               </Button>
             </div>
@@ -422,7 +521,7 @@ function AgentDetail({ agent, onBack }: { agent: AgentRecord | null; onBack: () 
         description={`Are you sure you want to ${confirmDialog?.action} agent "${agent.name}"? This action may interrupt active tasks.`}
         confirmLabel={confirmDialog?.label}
         cancelLabel="Cancel"
-        onConfirm={confirmAction}
+        onConfirm={() => void confirmAction()}
         onCancel={() => setConfirmDialog(null)}
         destructive={confirmDialog?.action === 'stop'}
       />
@@ -561,7 +660,7 @@ function ConfigEditor() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2 space-y-4">
-        <Card className="overflow-hidden flex flex-col h-[600px]">
+        <Card className="overflow-hidden flex flex-col h-150">
           <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-2">
             <span className="font-mono text-xs text-muted-foreground">config.json</span>
             <Badge variant="outline">JSON</Badge>

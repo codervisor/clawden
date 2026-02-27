@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-02-27
 priority: high
 tags:
@@ -16,7 +16,10 @@ depends_on:
 - 020-dashboard-ui-ux-enhancement
 parent: 009-orchestration-platform
 created_at: 2026-02-27T03:34:06.627574Z
-updated_at: 2026-02-27T03:34:06.627574Z
+updated_at: 2026-02-27T14:05:21.107609Z
+transitions:
+- status: in-progress
+  at: 2026-02-27T14:05:21.107609Z
 ---
 # Runtime Instance Manager & Channel Management Dashboard
 
@@ -171,28 +174,28 @@ Fleet → **Runtimes** (NEW) → **Channels** (NEW) → Tasks → Config → Aud
 ## Plan
 
 ### Phase 1: Runtime Instance Manager
-- [ ] Add `/runtimes` and `/runtimes/{runtime}/deploy` API endpoints
-- [ ] Add `/agents/{id}/deploy-status` and `/agents/{id}/logs` endpoints
-- [ ] Build RuntimeCatalog + RuntimeCard components
-- [ ] Build InstanceList with state/health badges and actions
-- [ ] Build DeployDialog multi-step wizard with DeployProgress panel
-- [ ] Add "Runtimes" nav item and wire end-to-end
+- [x] Add `/runtimes` and `/runtimes/{runtime}/deploy` API endpoints
+- [x] Add `/agents/{id}/deploy-status` and `/agents/{id}/logs` endpoints
+- [x] Build RuntimeCatalog + RuntimeCard components
+- [x] Build InstanceList with state/health badges and actions
+- [x] Build DeployDialog multi-step wizard with DeployProgress panel
+- [x] Add "Runtimes" nav item and wire end-to-end
 
 ### Phase 2: Channel Management
-- [ ] Add `/channels` CRUD endpoints with encrypted credential storage
-- [ ] Add `/channels/{type}/test` and `/channels/matrix` endpoints
-- [ ] Build ChannelOverview grid with status indicators
-- [ ] Build ChannelConfigForm with per-channel credential fields
-- [ ] Build ChannelAssignment + ChannelStatusMatrix components
+- [x] Add `/channels` CRUD endpoints with encrypted credential storage
+- [x] Add `/channels/{type}/test` and `/channels/matrix` endpoints
+- [x] Build ChannelOverview grid with status indicators
+- [x] Build ChannelConfigForm with per-channel credential fields
+- [x] Build ChannelAssignment + ChannelStatusMatrix components
 - [ ] Implement auto-config push (channel → translator → set_config)
-- [ ] Add "Channels" nav item and wire end-to-end
-- [ ] Implement channel_bindings store with token uniqueness enforcement
-- [ ] Add conflict detection endpoint and dashboard warnings
+- [x] Add "Channels" nav item and wire end-to-end
+- [x] Implement channel_bindings store with token uniqueness enforcement
+- [x] Add conflict detection endpoint and dashboard warnings
 
 ### Phase 3: Integration & Polish
-- [ ] Link runtime cards to channel support badges (native vs proxied)
-- [ ] Add deployment + channel events to audit log
-- [ ] Toast notifications, loading skeletons, empty states for new pages
+- [x] Link runtime cards to channel support badges (native vs proxied)
+- [x] Add deployment + channel events to audit log
+- [x] Toast notifications, loading skeletons, empty states for new pages
 - [ ] Dark/light theme support, keyboard shortcuts (R → Runtimes, C → Channels)
 
 ## Test

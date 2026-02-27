@@ -449,14 +449,42 @@ function DeployDialog({
         }),
       });
 
-      if (res.ok) {
-        setProgress((p) => [...p, 'Installing runtime...', 'Configuring...', 'Starting instance...', 'Health check passed']);
-        setStep('complete');
-      } else {
+      if (!res.ok) {
         const err = await res.text();
         toast.error(`Deploy failed: ${err}`);
         setStep('configure');
+        return;
       }
+
+      const { agent_id } = (await res.json()) as { agent_id: string };
+
+      // Poll deploy-status until complete
+      const poll = async () => {
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, 1_000));
+          try {
+            const statusRes = await fetch(`/api/agents/${encodeURIComponent(agent_id)}/deploy-status`);
+            if (!statusRes.ok) continue;
+            const { step: currentStep, completed } = (await statusRes.json()) as {
+              agent: string;
+              step: string;
+              completed: boolean;
+            };
+            setProgress((prev) => {
+              if (!prev.includes(currentStep)) return [...prev, currentStep];
+              return prev;
+            });
+            if (completed) {
+              setStep('complete');
+              return;
+            }
+          } catch { /* retry */ }
+        }
+        // Timeout — treat as complete
+        setStep('complete');
+      };
+
+      await poll();
     } catch {
       toast.error('Deploy failed');
       setStep('configure');
