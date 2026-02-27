@@ -15,75 +15,90 @@ depends_on:
 created_at: 2026-02-26T02:50:41.154596674Z
 updated_at: 2026-02-26T02:50:41.154596674Z
 ---
-
 # Chat Channel Support Matrix & Unified Channel Layer
 
 ## Overview
 
-Every claw runtime has independently built its own messaging integrations — Telegram bots, Discord adapters, WhatsApp bridges, etc. The result is fragmented: OpenClaw supports 14+ channels, NullClaw supports 17, PicoClaw supports 6, but each uses different libraries, auth flows, and configuration patterns. ClawDen needs a unified channel layer so operators can configure messaging channels once and route them to any runtime in the fleet.
+Every claw runtime has independently built its own messaging integrations — Telegram bots, Discord adapters, WhatsApp bridges, etc. The result is fragmented: OpenClaw supports 10+ channels, OpenFang supports 40, Nanobot supports 10, but each uses different libraries, auth flows, and configuration patterns. ClawDen needs a unified channel layer so operators can configure messaging channels once and route them to any runtime in the fleet.
 
 This spec documents which channels each runtime supports (the compatibility matrix) and designs ClawDen's channel abstraction for cross-runtime message routing.
 
+**Canonical runtime list**: Per [ClawCharts.com](https://clawcharts.com/) (February 2026): OpenClaw, Nanobot, PicoClaw, ZeroClaw, NanoClaw, IronClaw, TinyClaw, OpenFang.
+
 ## Channel Support Matrix
 
-Data sourced from official GitHub repos (February 2026).
+Data sourced from official GitHub repos (February 2026). Runtime list per [ClawCharts.com](https://clawcharts.com/).
 
 ### By Runtime
 
-| Channel | OpenClaw | ZeroClaw | PicoClaw | NanoClaw | IronClaw | NullClaw | MicroClaw | MimiClaw |
-|---------|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:---------:|:--------:|
-| **CLI / REPL** | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | ✅ (serial) |
-| **Telegram** | ✅ | ✅ | ✅ | ✅ | ✅ (WASM) | ✅ | ✅ | ✅ |
-| **Discord** | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
-| **WhatsApp** | ✅ (Baileys) | ✅ (Meta API) | — | ✅ (Baileys) | — | ✅ | ✅ | — |
-| **Slack** | ✅ (Bolt) | — | — | ✅ | ✅ (WASM) | ✅ | ✅ | — |
-| **Signal** | ✅ (signal-cli) | — | — | ✅ | — | ✅ | ✅ | — |
-| **iMessage** | ✅ (BlueBubbles + legacy) | — | — | — | — | ✅ | ✅ | — |
-| **Matrix** | — | — | — | — | — | ✅ | ✅ | — |
-| **Google Chat** | ✅ | — | — | — | — | — | — | — |
-| **Microsoft Teams** | ✅ | — | — | — | — | — | — | — |
-| **DingTalk** | — | — | ✅ | — | — | ✅ | ✅ | — |
-| **LINE** | — | — | ✅ | — | — | ✅ | — | — |
-| **Lark / Feishu** | — | — | — | — | — | ✅ | ✅ | — |
-| **QQ** | — | — | ✅ | — | — | ✅ | ✅ | — |
-| **WeCom** | — | — | ✅ | — | — | — | — | — |
-| **IRC** | — | — | — | — | — | ✅ | ✅ | — |
-| **Nostr** | — | ✅ | — | — | — | — | ✅ | — |
-| **Email** | — | — | — | — | — | ✅ | ✅ | — |
-| **Nextcloud Talk** | — | ✅ | — | — | — | — | — | — |
-| **Zalo** | ✅ | — | — | — | — | — | — | — |
-| **OneBot** | — | — | — | — | — | ✅ | — | — |
-| **Linq** | — | ✅ | — | — | — | — | — | — |
-| **WebChat / Web UI** | ✅ | — | — | — | ✅ (SSE/WS) | — | ✅ | ✅ (WS) |
-| **Webhook (generic)** | ✅ | — | — | — | ✅ | ✅ | — | — |
-| **MaixCam** | — | — | — | — | — | ✅ | — | — |
-| **Mattermost** | — | — | — | — | — | ✅ | — | — |
-| **Total channels** | **14+** | **6** | **6** | **5** | **4** | **17** | **13** | **2** |
+| Channel | OpenClaw | Nanobot | PicoClaw | ZeroClaw | NanoClaw | IronClaw | TinyClaw | OpenFang |
+|---------|:--------:|:-------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|
+| **Telegram** | ✅ | ✅ | ✅ | ✅ | ✅ (skill) | ✅ (WASM) | ✅ | ✅ |
+| **Discord** | ✅ | ✅ | ✅ | ✅ | ✅ (skill) | ✅ (WASM) | ✅ | ✅ |
+| **Slack** | ✅ | ✅ | ✅ | ✅ | ✅ (skill) | ✅ (WASM) | — | ✅ |
+| **WhatsApp** | ✅ (Baileys) | ✅ (bridge) | ✅ | ✅ (Meta API) | ✅ (default) | — | ✅ (QR) | ✅ (Cloud API) |
+| **Signal** | ✅ (signal-cli) | — | — | ✅ | — | ✅ (built-in) | — | ✅ |
+| **Matrix** | — | ✅ | — | ✅ | — | — | — | ✅ |
+| **Email** | — | ✅ | — | ✅ | — | — | — | ✅ |
+| **Feishu/Lark** | ✅ | ✅ | ✅ | ✅ | — | — | — | ✅ |
+| **DingTalk** | — | ✅ | ✅ | — | — | — | — | ✅ |
+| **Mattermost** | ✅ | — | — | ✅ | — | — | — | ✅ |
+| **IRC** | ✅ | — | — | ✅ | — | — | — | ✅ |
+| **MS Teams** | ✅ | — | — | — | — | — | — | ✅ |
+| **iMessage** | ✅ | — | — | ✅ | — | — | — | — |
+| **Google Chat** | ✅ | — | — | — | — | — | — | ✅ |
+| **QQ** | — | ✅ | ✅ | — | — | — | — | — |
+| **LINE** | — | — | ✅ | — | — | — | — | ✅ |
+| **Nostr** | ✅ | — | — | ✅ | — | — | — | ✅ |
+| **Mochat** | — | ✅ | — | — | — | — | — | — |
+| **WeChat/WeCom** | — | — | ✅ | — | — | — | — | — |
+| **Viber** | — | — | — | — | — | — | — | ✅ |
+| **Messenger** | — | — | — | — | — | — | — | ✅ |
+| **Mastodon** | — | — | — | — | — | — | — | ✅ |
+| **Bluesky** | — | — | — | — | — | — | — | ✅ |
+| **Reddit** | — | — | — | — | — | — | — | ✅ |
+| **Twitch** | — | — | — | — | — | — | — | ✅ |
+| **Webex** | — | — | — | — | — | — | — | ✅ |
+| **Threema** | — | — | — | — | — | — | — | ✅ |
+| **Keybase** | — | — | — | — | — | — | — | ✅ |
+| **Total** | **10+** | **10** | **~10** | **16+** | **4** | **5** | **3** | **40** |
 
 ### By Channel (Coverage Across Runtimes)
 
 | Channel | Runtimes Supporting It | Notes |
 |---------|----------------------|-------|
 | Telegram | 8/8 (all) | Universal — every runtime supports it. Best candidate for "default" channel |
-| Discord | 6/8 | Missing: IronClaw, MimiClaw |
-| WhatsApp | 4/8 | Two implementations: Baileys (OpenClaw, NanoClaw) vs Meta Cloud API (ZeroClaw, NullClaw) |
-| CLI/REPL | 6/8 | Local-only, not routable through ClawDen |
-| Slack | 5/8 | Bolt SDK (OpenClaw), Socket Mode or webhook-based (others) |
-| Signal | 4/8 | Requires `signal-cli` daemon |
-| WebChat | 4/8 | Each runtime has its own Web UI approach |
+| Discord | 7/8 | All except TinyClaw (DM routing only, no guild support) — update: TinyClaw does support it |
+| Slack | 6/8 | Missing: TinyClaw, but well-supported otherwise |
+| WhatsApp | 7/8 | Three approaches: Baileys (OpenClaw, NanoClaw, TinyClaw), Meta Cloud API (ZeroClaw, OpenFang), Node bridge (Nanobot) |
+| Signal | 4/8 | Requires `signal-cli` daemon or built-in (IronClaw) |
+| Feishu/Lark | 5/8 | Important for APAC enterprise deployment |
+
+### Architecture Patterns by Runtime
+
+| Runtime | Lang | Channel Abstraction | Config Format | Secrets Pattern |
+|---------|------|---------------------|---------------|-----------------|
+| **OpenClaw** | TS | `ChannelPlugin` extension registry | JSON5 | `channels.<provider>.botToken` + env fallback |
+| **Nanobot** | Python | `BaseChannel` ABC + `MessageBus` + `ChannelManager` | JSON | `channels.<provider>.token` (Pydantic) |
+| **PicoClaw** | Go | `Channel` interface + `BaseChannel` embed | JSON | Struct tags with env var binding |
+| **ZeroClaw** | Rust | `Channel` trait (listen/send/health/name) | TOML | CLI: `zeroclaw channel add` |
+| **NanoClaw** | TS | `Channel` interface + skills pattern | `.env` | `TELEGRAM_BOT_TOKEN`, etc. |
+| **IronClaw** | Rust | WASM components (`wasm32-wasip2`), `Guest` trait | Capabilities JSON + secrets store | `ironclaw secret set <name> <value>`, host-injected |
+| **TinyClaw** | TS | Standalone client scripts + SQLite queue | JSON | `.env` file |
+| **OpenFang** | Rust | `ChannelAdapter` trait → `Stream<ChannelMessage>` + `BridgeManager` | TOML | `bot_token_env` → `.env`, `Zeroizing<String>` |
 
 ### Implementation Libraries by Runtime
 
 | Runtime | Telegram | Discord | WhatsApp | Slack |
 |---------|----------|---------|----------|-------|
 | OpenClaw | grammY | discord.js | Baileys | Bolt |
+| Nanobot | python-telegram-bot | Gateway WebSocket | Node.js bridge | Socket Mode SDK |
+| PicoClaw | native Go | native Go | — | native Go |
 | ZeroClaw | native Rust | native Rust | Meta Cloud API | — |
-| PicoClaw | native Go | native Go | — | — |
 | NanoClaw | (via skills) | (via skills) | Baileys | (via skills) |
-| IronClaw | WASM channel | — | — | WASM channel |
-| NullClaw | native Zig | native Zig | native Zig | native Zig |
-| MicroClaw | native Rust | native Rust | native Rust | native Rust |
-| MimiClaw | native C (ESP HTTP) | — | — | — |
+| IronClaw | WASM channel | WASM channel | — | WASM tool |
+| TinyClaw | node-telegram-bot-api | discord.js | whatsapp-web.js | — |
+| OpenFang | native Rust | native Rust | Cloud API (Rust) | Socket Mode (Rust) |
 
 ## Design
 
@@ -157,9 +172,12 @@ ClawDen normalizes these into a canonical security policy per agent.
 ## Notes
 
 - **Telegram is the universal channel** — all 8 runtimes support it. It's the safest default for testing and the best candidate for ClawDen's proxy implementation
-- **WhatsApp fragmentation** — two incompatible approaches: Baileys (unofficial, full-featured, used by OpenClaw/NanoClaw) vs Meta Cloud API (official, webhook-based, used by ZeroClaw). ClawDen should support both
-- **NanoClaw's skill-based channels** — NanoClaw adds channels via Claude Code skills (`/add-telegram`, `/add-slack`), not built-in code. This means channel support varies per fork. ClawDen should track announced skills, not just core code
-- **IronClaw's WASM channels** — channels are compiled to WebAssembly for sandboxed execution. Unique approach that's more secure but harder to extend
-- **NullClaw has the broadest channel support** (17 channels) despite being the newest and smallest binary (678 KB). All channels are native Zig vtable implementations
-- **Chinese IM ecosystem** — DingTalk, Lark/Feishu, QQ, WeCom, and Zalo are important for APAC deployment. PicoClaw (from Sipeed, a Chinese hardware company) and NullClaw have the best coverage here
-- **MimiClaw is Telegram-only** by hardware constraint (ESP32-S3 WiFi + HTTP). Adding more channels would require more flash/RAM than a $5 chip can provide
+- **WhatsApp fragmentation** — three incompatible approaches: Baileys (OpenClaw, NanoClaw, TinyClaw), Meta Cloud API (ZeroClaw, OpenFang), and Node.js bridge (Nanobot). ClawDen should support all three
+- **NanoClaw's skill-based channels** — NanoClaw adds channels via Claude Code skills (`/add-telegram`, `/add-slack`), not built-in code. Channel support varies per fork. ClawDen should track announced skills, not just core code
+- **IronClaw's WASM channels** — channels are compiled to WebAssembly (`wasm32-wasip2`) for sandboxed execution. Host injects secrets, WASM never sees raw tokens. Most secure approach but harder to extend
+- **OpenFang is the long-tail leader** with 40 channels — if a user wants an obscure channel (Threema, Keybase, Revolt, Pumble, etc.), OpenFang likely has it. All channels use the `ChannelAdapter` trait with `Zeroizing<String>` for credential safety
+- **Nanobot has the richest Python ecosystem** — 10 channels including Mochat (unique to Nanobot), with `BaseChannel` ABC, `MessageBus`, and `ChannelManager` pattern. Config uses Pydantic schemas with camelCase alias support
+- **TinyClaw is the simplest** — 3 channels (Telegram, Discord, WhatsApp), standalone Node.js clients, SQLite queue for message routing. DM-only for Discord. Good for quick personal setups
+- **Chinese IM ecosystem** — DingTalk, Lark/Feishu, QQ, WeCom are important for APAC deployment. PicoClaw and Nanobot have the best coverage here
+- **Config format divergence** — JSON5 (OpenClaw), JSON (Nanobot, PicoClaw, TinyClaw), TOML (ZeroClaw, OpenFang), .env (NanoClaw), WASM capabilities JSON (IronClaw). ClawDen's config translator (spec 013) must handle all six formats
+- **Security patterns**: OpenFang uses env var indirection (`bot_token_env`) + `Zeroizing<String>`; IronClaw uses host-injected secrets with WASM sandbox; others store tokens directly in config or `.env`. ClawDen should enforce the most secure pattern (env var indirection + encrypted vault)
