@@ -1,14 +1,19 @@
 mod api;
 mod audit;
+mod channels;
 mod discovery;
 mod lifecycle;
 mod manager;
 mod swarm;
 
 use crate::api::{
-    audit_log, create_team, fan_out_task, fleet_status, health_summary, list_agents,
-    list_endpoints, list_swarm_tasks, list_teams, register_agent, register_endpoint,
-    scan_endpoints, send_task, start_agent, stop_agent, AppState,
+    agent_channels, agent_metrics_history, audit_log, binding_conflicts, channel_instances,
+    channel_matrix, channel_support_matrix, create_binding, create_team, delete_binding,
+    delete_channel_config, deploy_runtime, deploy_status, fan_out_task, fleet_status,
+    get_channel_config, health_summary, list_agents, list_bindings, list_channels,
+    list_endpoints, list_runtimes, list_swarm_tasks, list_teams, register_agent,
+    register_endpoint, scan_endpoints, send_task, start_agent, stop_agent, test_channel,
+    upsert_channel_config, AppState,
 };
 use crate::audit::{AuditEvent, AuditLog};
 use crate::discovery::DiscoveryService;
@@ -52,6 +57,7 @@ async fn main() {
         audit: audit_store.clone(),
         discovery: Arc::new(RwLock::new(DiscoveryService::new())),
         swarm: Arc::new(RwLock::new(SwarmCoordinator::new())),
+        channels: Arc::new(RwLock::new(channels::ChannelStore::new())),
     };
 
     let health_interval_ms = std::env::var("CLAWDEN_HEALTH_INTERVAL_MS")
@@ -108,6 +114,45 @@ async fn main() {
         .route("/swarm/teams/create", axum::routing::post(create_team))
         .route("/swarm/fan-out", axum::routing::post(fan_out_task))
         .route("/swarm/tasks", get(list_swarm_tasks))
+        // Runtime endpoints (spec 017/021)
+        .route("/runtimes", get(list_runtimes))
+        .route(
+            "/runtimes/{runtime}/deploy",
+            axum::routing::post(deploy_runtime),
+        )
+        .route("/agents/{agent_id}/deploy-status", get(deploy_status))
+        .route(
+            "/agents/{agent_id}/metrics/history",
+            get(agent_metrics_history),
+        )
+        // Channel endpoints (spec 018/021)
+        .route("/channels", get(list_channels))
+        .route(
+            "/channels/{channel_type}",
+            get(get_channel_config)
+                .put(upsert_channel_config)
+                .delete(delete_channel_config),
+        )
+        .route(
+            "/channels/{channel_type}/instances",
+            get(channel_instances),
+        )
+        .route(
+            "/channels/{channel_type}/test",
+            axum::routing::post(test_channel),
+        )
+        .route("/agents/{agent_id}/channels", get(agent_channels))
+        .route("/channels/matrix", get(channel_matrix))
+        .route("/channels/support-matrix", get(channel_support_matrix))
+        .route(
+            "/channels/bindings",
+            get(list_bindings).post(create_binding),
+        )
+        .route(
+            "/channels/bindings/{binding_id}",
+            axum::routing::delete(delete_binding),
+        )
+        .route("/channels/bindings/conflicts", get(binding_conflicts))
         .with_state(shared_state);
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 

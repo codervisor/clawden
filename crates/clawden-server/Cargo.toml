@@ -1,15 +1,16 @@
 [package]
-name = "clawden-server"
-version.workspace = true
 edition.workspace = true
 license.workspace = true
+name = "clawden-server"
+version.workspace = true
 
 [dependencies]
 axum.workspace = true
-clawden-adapters = { path = "../clawden-adapters" }
-clawden-core = { path = "../clawden-core" }
+clawden-adapters = {path = "../clawden-adapters"}
+clawden-core = {path = "../clawden-core"}
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio.workspace = true
-tracing.workspace = true
 tracing-subscriber.workspace = true
+tracing.workspace = true

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -15,12 +16,164 @@ pub enum ClawRuntime {
     MimiClaw,
 }
 
+impl std::fmt::Display for ClawRuntime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClawRuntime::OpenClaw => write!(f, "OpenClaw"),
+            ClawRuntime::ZeroClaw => write!(f, "ZeroClaw"),
+            ClawRuntime::PicoClaw => write!(f, "PicoClaw"),
+            ClawRuntime::NanoClaw => write!(f, "NanoClaw"),
+            ClawRuntime::IronClaw => write!(f, "IronClaw"),
+            ClawRuntime::NullClaw => write!(f, "NullClaw"),
+            ClawRuntime::MicroClaw => write!(f, "MicroClaw"),
+            ClawRuntime::MimiClaw => write!(f, "MimiClaw"),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Channel types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelType {
+    Telegram,
+    Discord,
+    Slack,
+    Whatsapp,
+    Signal,
+    Matrix,
+    Email,
+    Feishu,
+    Dingtalk,
+    Mattermost,
+    Irc,
+    Teams,
+    Imessage,
+    GoogleChat,
+    Qq,
+    Line,
+    Nostr,
+}
+
+impl std::fmt::Display for ChannelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ChannelType::Telegram => "telegram",
+            ChannelType::Discord => "discord",
+            ChannelType::Slack => "slack",
+            ChannelType::Whatsapp => "whatsapp",
+            ChannelType::Signal => "signal",
+            ChannelType::Matrix => "matrix",
+            ChannelType::Email => "email",
+            ChannelType::Feishu => "feishu",
+            ChannelType::Dingtalk => "dingtalk",
+            ChannelType::Mattermost => "mattermost",
+            ChannelType::Irc => "irc",
+            ChannelType::Teams => "teams",
+            ChannelType::Imessage => "imessage",
+            ChannelType::GoogleChat => "google_chat",
+            ChannelType::Qq => "qq",
+            ChannelType::Line => "line",
+            ChannelType::Nostr => "nostr",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl ChannelType {
+    pub fn from_str_loose(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "telegram" => Some(Self::Telegram),
+            "discord" => Some(Self::Discord),
+            "slack" => Some(Self::Slack),
+            "whatsapp" => Some(Self::Whatsapp),
+            "signal" => Some(Self::Signal),
+            "matrix" => Some(Self::Matrix),
+            "email" => Some(Self::Email),
+            "feishu" | "lark" => Some(Self::Feishu),
+            "dingtalk" => Some(Self::Dingtalk),
+            "mattermost" => Some(Self::Mattermost),
+            "irc" => Some(Self::Irc),
+            "teams" => Some(Self::Teams),
+            "imessage" => Some(Self::Imessage),
+            "google_chat" | "googlechat" => Some(Self::GoogleChat),
+            "qq" => Some(Self::Qq),
+            "line" => Some(Self::Line),
+            "nostr" => Some(Self::Nostr),
+            _ => None,
+        }
+    }
+}
+
+/// Describes how a runtime natively supports a channel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelSupport {
+    /// Runtime has built-in native support.
+    Native,
+    /// Supported via a runtime-specific mechanism (e.g. skill, WASM plugin).
+    Via(String),
+    /// Not natively supported — requires ClawDen channel proxy.
+    Unsupported,
+}
+
+/// Per-channel instance credential/config fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelInstanceConfig {
+    pub instance_name: String,
+    pub channel_type: ChannelType,
+    pub credentials: HashMap<String, String>,
+    #[serde(default)]
+    pub options: HashMap<String, serde_json::Value>,
+}
+
+/// Status of a channel binding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelBindingStatus {
+    Active,
+    Draining,
+    Released,
+}
+
+/// Tracks a channel token bound to a specific agent instance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelBinding {
+    pub instance_id: String,
+    pub channel_type: ChannelType,
+    pub bot_token_hash: String,
+    pub status: ChannelBindingStatus,
+    pub bound_at_unix_ms: u64,
+}
+
+/// Connection status for a channel within a runtime instance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelConnectionStatus {
+    Connected,
+    Disconnected,
+    RateLimited,
+    Proxied,
+}
+
+// ---------------------------------------------------------------------------
+// Runtime metadata
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeMetadata {
     pub runtime: ClawRuntime,
     pub version: String,
     pub language: String,
     pub capabilities: Vec<String>,
+    #[serde(default)]
+    pub default_port: Option<u16>,
+    #[serde(default)]
+    pub config_format: Option<String>,
+    #[serde(default)]
+    pub channel_support: HashMap<ChannelType, ChannelSupport>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

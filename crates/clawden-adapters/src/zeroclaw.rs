@@ -1,20 +1,39 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use clawden_core::{
-    AgentConfig, AgentHandle, AgentMessage, AgentMetrics, AgentResponse, ClawAdapter, ClawRuntime,
-    EventStream, HealthStatus, InstallConfig, RuntimeConfig, RuntimeMetadata, Skill, SkillManifest,
+    AgentConfig, AgentHandle, AgentMessage, AgentMetrics, AgentResponse, ChannelSupport,
+    ChannelType, ClawAdapter, ClawRuntime, EventStream, HealthStatus, InstallConfig,
+    RuntimeConfig, RuntimeMetadata, Skill, SkillManifest,
 };
+use std::collections::HashMap;
 
 pub struct ZeroClawAdapter;
 
 #[async_trait]
 impl ClawAdapter for ZeroClawAdapter {
     fn metadata(&self) -> RuntimeMetadata {
+        let mut channel_support = HashMap::new();
+        channel_support.insert(ChannelType::Telegram, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Discord, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Slack, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Whatsapp, ChannelSupport::Via("Meta Cloud API".into()));
+        channel_support.insert(ChannelType::Signal, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Feishu, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Matrix, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Email, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Mattermost, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Irc, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Imessage, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Nostr, ChannelSupport::Native);
+
         RuntimeMetadata {
             runtime: ClawRuntime::ZeroClaw,
             version: "unknown".to_string(),
             language: "rust".to_string(),
             capabilities: vec!["chat".to_string(), "reasoning".to_string()],
+            default_port: Some(42617),
+            config_format: Some("toml".to_string()),
+            channel_support,
         }
     }
 

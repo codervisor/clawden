@@ -8,11 +8,13 @@ import { useSidebar } from '../../hooks/useSidebar';
 import { useTheme } from '../../hooks/useTheme';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
-type View = 'fleet' | 'agent-detail' | 'tasks' | 'config' | 'audit';
+type View = 'fleet' | 'agent-detail' | 'runtimes' | 'channels' | 'tasks' | 'config' | 'audit';
 
 const VIEW_TITLES: Record<View, string> = {
   fleet: 'Fleet Overview',
   'agent-detail': 'Agent Details',
+  runtimes: 'Runtimes',
+  channels: 'Channels',
   tasks: 'Task Monitor',
   config: 'Configuration',
   audit: 'Audit Log',
@@ -32,6 +34,8 @@ export function Layout({ view, onNavigate, wsConnected, children }: LayoutProps)
 
   useKeyboardShortcuts([
     { key: 'b', meta: true, handler: toggle },
+    { key: 'r', meta: true, shift: true, handler: () => onNavigate('runtimes') },
+    { key: 'c', meta: true, shift: true, handler: () => onNavigate('channels') },
   ]);
 
   return (

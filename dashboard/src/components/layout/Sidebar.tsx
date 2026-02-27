@@ -1,8 +1,8 @@
-import { BarChart2, ClipboardList, Server, Settings } from 'lucide-react';
+import { BarChart2, ClipboardList, Cpu, MessageCircle, Server, Settings } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Tooltip } from '../ui/tooltip';
 
-type View = 'fleet' | 'agent-detail' | 'tasks' | 'config' | 'audit';
+type View = 'fleet' | 'agent-detail' | 'runtimes' | 'channels' | 'tasks' | 'config' | 'audit';
 
 interface SidebarProps {
   view: View;
@@ -12,6 +12,8 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { view: 'fleet' as const, label: 'Fleet Overview', icon: Server },
+  { view: 'runtimes' as const, label: 'Runtimes', icon: Cpu },
+  { view: 'channels' as const, label: 'Channels', icon: MessageCircle },
   { view: 'tasks' as const, label: 'Task Monitor', icon: BarChart2 },
   { view: 'config' as const, label: 'Config Editor', icon: Settings },
   { view: 'audit' as const, label: 'Audit Log', icon: ClipboardList },

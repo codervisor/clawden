@@ -5,6 +5,7 @@ use std::sync::Arc;
 use clawden_adapters::AdapterRegistry;
 use clawden_core::{
     AgentConfig, AgentHandle, AgentMessage, AgentResponse, ClawRuntime, HealthStatus,
+    RuntimeMetadata,
 };
 use serde::Serialize;
 
@@ -71,6 +72,10 @@ impl LifecycleManager {
         let mut agents: Vec<_> = self.agents.values().cloned().collect();
         agents.sort_by(|a, b| a.id.cmp(&b.id));
         agents
+    }
+
+    pub fn list_runtime_metadata(&self) -> Vec<RuntimeMetadata> {
+        self.adapters.list_metadata()
     }
 
     pub async fn start_agent(&mut self, agent_id: &str) -> Result<AgentRecord, String> {

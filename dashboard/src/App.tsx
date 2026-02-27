@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Skeleton } from './components/ui/skeleton';
 import { Separator } from './components/ui/separator';
 import { AlertDialog } from './components/ui/alert-dialog';
+import { RuntimeCatalog } from './components/runtimes/RuntimeCatalog';
+import { ChannelOverview } from './components/channels/ChannelOverview';
 import { ArrowLeft, Server, AlertTriangle } from 'lucide-react';
 import { useTheme } from './hooks/useTheme';
 import { cn } from './lib/utils';
@@ -40,7 +42,7 @@ interface AuditEvent {
   timestamp_unix_ms: number;
 }
 
-type View = 'fleet' | 'agent-detail' | 'tasks' | 'config' | 'audit';
+type View = 'fleet' | 'agent-detail' | 'runtimes' | 'channels' | 'tasks' | 'config' | 'audit';
 
 type BadgeVariant = 'success' | 'warning' | 'secondary' | 'outline' | 'destructive';
 
@@ -198,6 +200,12 @@ export function App() {
       {view === 'agent-detail' && (
         <AgentDetail agent={selectedAgent} onBack={() => setView('fleet')} />
       )}
+
+      {view === 'runtimes' && (
+        <RuntimeCatalog agents={agents} onSelectAgent={openAgentDetail} />
+      )}
+
+      {view === 'channels' && <ChannelOverview />}
 
       {view === 'tasks' && <TaskMonitor agents={agents} loading={loading} />}
 

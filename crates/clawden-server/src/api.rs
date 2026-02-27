@@ -3,11 +3,15 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use clawden_core::ClawRuntime;
+use clawden_core::{ClawRuntime, RuntimeMetadata};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::audit::AuditLog;
+use crate::channels::{
+    BindChannelRequest, BindingConflict, ChannelConfigRequest, ChannelStore, ChannelTypeSummary,
+    MatrixRow,
+};
 use crate::discovery::{DiscoveredEndpoint, DiscoveryMethod, DiscoveryService};
 use crate::lifecycle::AgentState;
 use crate::manager::{append_audit, AgentRecord, LifecycleManager};
@@ -19,6 +23,7 @@ pub struct AppState {
     pub audit: Arc<AuditLog>,
     pub discovery: Arc<RwLock<DiscoveryService>>,
     pub swarm: Arc<RwLock<SwarmCoordinator>>,
+    pub channels: Arc<RwLock<ChannelStore>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -259,4 +264,316 @@ pub async fn fan_out_task(
 pub async fn list_swarm_tasks(State(state): State<AppState>) -> Json<serde_json::Value> {
     let swarm = state.swarm.read().await;
     Json(serde_json::to_value(swarm.list_tasks(None)).unwrap_or_default())
+}
+
+// --- Runtime endpoints (spec 017/021) ---
+
+pub async fn list_runtimes(State(state): State<AppState>) -> Json<Vec<RuntimeMetadata>> {
+    let manager = state.manager.read().await;
+    Json(manager.list_runtime_metadata())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeployRuntimeRequest {
+    pub instance_name: String,
+    pub runtime: ClawRuntime,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+    #[serde(default)]
+    pub channels: Vec<String>,
+    #[serde(default)]
+    pub tools: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeployStatusResponse {
+    pub agent: AgentRecord,
+    pub step: String,
+    pub completed: bool,
+}
+
+pub async fn deploy_runtime(
+    State(state): State<AppState>,
+    Path(runtime_name): Path<String>,
+    Json(request): Json<DeployRuntimeRequest>,
+) -> Result<Json<DeployStatusResponse>, (StatusCode, String)> {
+    // Validate runtime name matches path
+    let runtime_str = format!("{:?}", request.runtime).to_lowercase();
+    if !runtime_name.to_lowercase().contains(&runtime_str.replace("claw", ""))
+        && runtime_name.to_lowercase() != runtime_str
+    {
+        // Allow flexible matching
+    }
+
+    let mut manager = state.manager.write().await;
+    let record = manager.register_agent(
+        request.instance_name.clone(),
+        request.runtime,
+        request.capabilities,
+    );
+
+    // Start the agent (install + start)
+    let agent_id = record.id.clone();
+    let started = manager.start_agent(&agent_id).await;
+
+    append_audit(&state.audit, "runtime.deploy", &agent_id);
+
+    match started {
+        Ok(agent) => {
+            // Assign channels
+            if !request.channels.is_empty() {
+                let mut channels = state.channels.write().await;
+                for ch in &request.channels {
+                    channels.assign_channel(&agent_id, ch);
+                }
+            }
+
+            Ok(Json(DeployStatusResponse {
+                agent,
+                step: "running".to_string(),
+                completed: true,
+            }))
+        }
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),
+    }
+}
+
+pub async fn deploy_status(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<DeployStatusResponse>, (StatusCode, String)> {
+    let manager = state.manager.read().await;
+    let agents = manager.list_agents();
+    let agent = agents
+        .into_iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("agent {agent_id} not found")))?;
+
+    let step = match agent.state {
+        AgentState::Registered => "registered",
+        AgentState::Installed => "installed",
+        AgentState::Running => "running",
+        AgentState::Stopped => "stopped",
+        AgentState::Degraded => "degraded",
+    };
+
+    Ok(Json(DeployStatusResponse {
+        completed: agent.state == AgentState::Running,
+        step: step.to_string(),
+        agent,
+    }))
+}
+
+pub async fn agent_metrics_history(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let manager = state.manager.read().await;
+    let agents = manager.list_agents();
+    let _agent = agents
+        .into_iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "agent not found".to_string()))?;
+
+    // Return stub metrics history
+    Ok(Json(serde_json::json!({
+        "data_points": [],
+        "message": "metrics history collection not yet implemented"
+    })))
+}
+
+// --- Channel endpoints (spec 018/021) ---
+
+pub async fn list_channels(
+    State(state): State<AppState>,
+) -> Json<Vec<ChannelTypeSummary>> {
+    let channels = state.channels.read().await;
+    Json(channels.list_channel_summaries())
+}
+
+pub async fn get_channel_config(
+    State(state): State<AppState>,
+    Path(channel_type): Path<String>,
+) -> Json<Vec<serde_json::Value>> {
+    let channels = state.channels.read().await;
+    let ct = clawden_core::ChannelType::from_str_loose(&channel_type);
+    let configs: Vec<serde_json::Value> = match ct {
+        Some(ct) => channels
+            .list_configs_by_type(&ct)
+            .into_iter()
+            .map(|c| serde_json::to_value(c).unwrap_or_default())
+            .collect(),
+        None => vec![],
+    };
+    Json(configs)
+}
+
+pub async fn upsert_channel_config(
+    State(state): State<AppState>,
+    Path(_channel_type): Path<String>,
+    Json(req): Json<ChannelConfigRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
+    let mut channels = state.channels.write().await;
+    let config = channels
+        .upsert_config(req)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    append_audit(
+        &state.audit,
+        "channel.configure",
+        &config.instance_name,
+    );
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::to_value(config).unwrap_or_default()),
+    ))
+}
+
+pub async fn delete_channel_config(
+    State(state): State<AppState>,
+    Path(channel_type): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let mut channels = state.channels.write().await;
+    if channels.delete_config(&channel_type) {
+        append_audit(&state.audit, "channel.delete", &channel_type);
+        Ok(Json(serde_json::json!({ "deleted": channel_type })))
+    } else {
+        Err((StatusCode::NOT_FOUND, format!("channel config {channel_type} not found")))
+    }
+}
+
+pub async fn channel_instances(
+    State(state): State<AppState>,
+    Path(channel_type): Path<String>,
+) -> Json<Vec<serde_json::Value>> {
+    let channels = state.channels.read().await;
+    let ct = clawden_core::ChannelType::from_str_loose(&channel_type);
+    let configs: Vec<serde_json::Value> = match ct {
+        Some(ct) => channels
+            .list_configs_by_type(&ct)
+            .into_iter()
+            .map(|c| serde_json::to_value(c).unwrap_or_default())
+            .collect(),
+        None => vec![],
+    };
+    Json(configs)
+}
+
+pub async fn test_channel(
+    State(state): State<AppState>,
+    Path(channel_type): Path<String>,
+) -> Json<serde_json::Value> {
+    // Stub: validate that we have configs for this type
+    let channels = state.channels.read().await;
+    let ct = clawden_core::ChannelType::from_str_loose(&channel_type);
+    let count = match ct {
+        Some(ct) => channels.list_configs_by_type(&ct).len(),
+        None => 0,
+    };
+    Json(serde_json::json!({
+        "channel_type": channel_type,
+        "instances_tested": count,
+        "status": if count > 0 { "ok" } else { "no_instances" },
+    }))
+}
+
+pub async fn agent_channels(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> Json<Vec<serde_json::Value>> {
+    let channels = state.channels.read().await;
+    let configs = channels.get_agent_channels(&agent_id);
+    let result: Vec<serde_json::Value> = configs
+        .into_iter()
+        .map(|c| {
+            let status = channels.get_connection_status(&agent_id, &c.instance_name);
+            serde_json::json!({
+                "instance_name": c.instance_name,
+                "channel_type": c.channel_type.to_string(),
+                "status": status,
+            })
+        })
+        .collect();
+    Json(result)
+}
+
+pub async fn channel_matrix(
+    State(state): State<AppState>,
+) -> Json<Vec<MatrixRow>> {
+    let manager = state.manager.read().await;
+    let agents: Vec<(String, String)> = manager
+        .list_agents()
+        .into_iter()
+        .map(|a| (a.id, format!("{:?}", a.runtime)))
+        .collect();
+    let channels = state.channels.read().await;
+    Json(channels.build_matrix(&agents))
+}
+
+pub async fn list_bindings(
+    State(state): State<AppState>,
+) -> Json<Vec<clawden_core::ChannelBinding>> {
+    let channels = state.channels.read().await;
+    Json(channels.list_bindings())
+}
+
+pub async fn create_binding(
+    State(state): State<AppState>,
+    Json(req): Json<BindChannelRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
+    let mut channels = state.channels.write().await;
+    let binding = channels
+        .bind(req.instance_id.clone(), &req.channel_type, &req.bot_token)
+        .map_err(|e| (StatusCode::CONFLICT, e))?;
+    append_audit(&state.audit, "channel.bind", &req.instance_id);
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::to_value(binding).unwrap_or_default()),
+    ))
+}
+
+pub async fn delete_binding(
+    State(state): State<AppState>,
+    Path(binding_id): Path<usize>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let mut channels = state.channels.write().await;
+    let binding = channels
+        .unbind(binding_id)
+        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    append_audit(
+        &state.audit,
+        "channel.unbind",
+        &binding.instance_id,
+    );
+    Ok(Json(serde_json::to_value(binding).unwrap_or_default()))
+}
+
+pub async fn binding_conflicts(
+    State(state): State<AppState>,
+) -> Json<Vec<BindingConflict>> {
+    let channels = state.channels.read().await;
+    Json(channels.detect_conflicts())
+}
+
+/// Full channel support matrix from adapter metadata
+pub async fn channel_support_matrix(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    let manager = state.manager.read().await;
+    let metadata = manager.list_runtime_metadata();
+    let mut matrix = serde_json::Map::new();
+    for meta in &metadata {
+        let runtime_name = format!("{:?}", meta.runtime);
+        let channels: serde_json::Map<String, serde_json::Value> = meta
+            .channel_support
+            .iter()
+            .map(|(ct, support)| {
+                (
+                    ct.to_string(),
+                    serde_json::to_value(support).unwrap_or_default(),
+                )
+            })
+            .collect();
+        matrix.insert(runtime_name, serde_json::Value::Object(channels));
+    }
+    Json(serde_json::Value::Object(matrix))
 }

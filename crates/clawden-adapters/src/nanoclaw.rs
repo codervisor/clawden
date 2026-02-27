@@ -1,20 +1,31 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use clawden_core::{
-    AgentConfig, AgentHandle, AgentMessage, AgentMetrics, AgentResponse, ClawAdapter, ClawRuntime,
-    EventStream, HealthStatus, InstallConfig, RuntimeConfig, RuntimeMetadata, Skill, SkillManifest,
+    AgentConfig, AgentHandle, AgentMessage, AgentMetrics, AgentResponse, ChannelSupport,
+    ChannelType, ClawAdapter, ClawRuntime, EventStream, HealthStatus, InstallConfig,
+    RuntimeConfig, RuntimeMetadata, Skill, SkillManifest,
 };
+use std::collections::HashMap;
 
 pub struct NanoClawAdapter;
 
 #[async_trait]
 impl ClawAdapter for NanoClawAdapter {
     fn metadata(&self) -> RuntimeMetadata {
+        let mut channel_support = HashMap::new();
+        channel_support.insert(ChannelType::Telegram, ChannelSupport::Via("skill".into()));
+        channel_support.insert(ChannelType::Discord, ChannelSupport::Via("skill".into()));
+        channel_support.insert(ChannelType::Slack, ChannelSupport::Via("skill".into()));
+        channel_support.insert(ChannelType::Whatsapp, ChannelSupport::Native);
+
         RuntimeMetadata {
             runtime: ClawRuntime::NanoClaw,
             version: "unknown".to_string(),
             language: "typescript".to_string(),
             capabilities: vec!["chat".to_string(), "skills".to_string()],
+            default_port: None,
+            config_format: Some("code".to_string()),
+            channel_support,
         }
     }
 
