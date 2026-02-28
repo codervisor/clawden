@@ -117,9 +117,24 @@ pub const KNOWN_TOOLS: &[&str] = &["git", "http", "browser", "gui"];
 
 /// Known channel type names for type inference.
 const KNOWN_CHANNEL_TYPES: &[&str] = &[
-    "telegram", "discord", "slack", "whatsapp", "signal", "matrix", "email",
-    "feishu", "lark", "dingtalk", "mattermost", "irc", "teams", "imessage",
-    "google_chat", "qq", "line", "nostr",
+    "telegram",
+    "discord",
+    "slack",
+    "whatsapp",
+    "signal",
+    "matrix",
+    "email",
+    "feishu",
+    "lark",
+    "dingtalk",
+    "mattermost",
+    "irc",
+    "teams",
+    "imessage",
+    "google_chat",
+    "qq",
+    "line",
+    "nostr",
 ];
 
 impl ClawDenYaml {
@@ -135,11 +150,11 @@ impl ClawDenYaml {
 
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
-        Self::from_str(&content)
+        Self::parse_yaml(&content)
     }
 
     /// Parse from a YAML string.
-    pub fn from_str(yaml: &str) -> Result<Self, String> {
+    pub fn parse_yaml(yaml: &str) -> Result<Self, String> {
         serde_yaml::from_str(yaml).map_err(|e| format!("invalid clawden.yaml: {e}"))
     }
 
@@ -149,7 +164,10 @@ impl ClawDenYaml {
 
         // Must have either `runtime` or `runtimes`, not both
         if self.runtime.is_some() && !self.runtimes.is_empty() {
-            errors.push("cannot use both 'runtime' (shorthand) and 'runtimes' (multi) at the same time".to_string());
+            errors.push(
+                "cannot use both 'runtime' (shorthand) and 'runtimes' (multi) at the same time"
+                    .to_string(),
+            );
         }
         if self.runtime.is_none() && self.runtimes.is_empty() {
             errors.push("must specify either 'runtime' or 'runtimes'".to_string());
@@ -157,8 +175,13 @@ impl ClawDenYaml {
 
         // Validate channel types can be resolved
         for (name, ch) in &self.channels {
-            let resolved = ch.channel_type.as_deref()
-                .or_else(|| if KNOWN_CHANNEL_TYPES.contains(&name.as_str()) { Some(name.as_str()) } else { None });
+            let resolved = ch.channel_type.as_deref().or_else(|| {
+                if KNOWN_CHANNEL_TYPES.contains(&name.as_str()) {
+                    Some(name.as_str())
+                } else {
+                    None
+                }
+            });
             if resolved.is_none() {
                 errors.push(format!(
                     "Channel '{}' has no 'type' field and '{}' is not a known channel type. \
@@ -190,7 +213,11 @@ impl ClawDenYaml {
             }
         }
 
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     /// Resolve `$ENV_VAR` references in all credential fields.
@@ -203,7 +230,11 @@ impl ClawDenYaml {
             resolve_field(&mut ch.phone, name, "phone", &mut errors);
             resolve_field(&mut ch.guild, name, "guild", &mut errors);
         }
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     /// Resolve the channel type for a given instance name.
@@ -219,7 +250,12 @@ impl ClawDenYaml {
 }
 
 /// Resolve a single `$ENV_VAR` field in-place.
-fn resolve_field(field: &mut Option<String>, instance: &str, field_name: &str, errors: &mut Vec<String>) {
+fn resolve_field(
+    field: &mut Option<String>,
+    instance: &str,
+    field_name: &str,
+    errors: &mut Vec<String>,
+) {
     if let Some(val) = field.as_ref() {
         if let Some(env_name) = val.strip_prefix('$') {
             match std::env::var(env_name) {

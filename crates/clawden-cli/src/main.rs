@@ -199,12 +199,28 @@ fn main() -> Result<()> {
                 .send()?
                 .error_for_status()?;
             let runtimes_list: serde_json::Value = response.json()?;
-            println!("Available runtimes: {}", serde_json::to_string_pretty(&runtimes_list)?);
+            println!(
+                "Available runtimes: {}",
+                serde_json::to_string_pretty(&runtimes_list)?
+            );
         }
-        Commands::Run { runtime, channel, tools } => {
+        Commands::Run {
+            runtime,
+            channel,
+            tools,
+        } => {
             let rt = runtime.unwrap_or_else(|| "zeroclaw".to_string());
-            let tools_list = tools.map(|t| t.split(',').map(|s| s.trim().to_string()).collect::<Vec<_>>()).unwrap_or_default();
-            println!("Running {} with channels {:?} and tools {:?}", rt, channel, tools_list);
+            let tools_list = tools
+                .map(|t| {
+                    t.split(',')
+                        .map(|s| s.trim().to_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            println!(
+                "Running {} with channels {:?} and tools {:?}",
+                rt, channel, tools_list
+            );
             let body = serde_json::json!({
                 "instance_name": format!("{}-default", rt),
                 "runtime": rt,
@@ -227,9 +243,13 @@ fn main() -> Result<()> {
             if agents.is_empty() {
                 println!("No running runtimes");
             } else {
-                println!("{:<20} {:<12} {:<10} {:<10}", "NAME", "RUNTIME", "STATE", "HEALTH");
+                println!(
+                    "{:<20} {:<12} {:<10} {:<10}",
+                    "NAME", "RUNTIME", "STATE", "HEALTH"
+                );
                 for agent in &agents {
-                    println!("{:<20} {:<12} {:<10} {:<10}",
+                    println!(
+                        "{:<20} {:<12} {:<10} {:<10}",
                         agent["name"].as_str().unwrap_or("-"),
                         agent["runtime"].as_str().unwrap_or("-"),
                         agent["state"].as_str().unwrap_or("-"),
@@ -273,9 +293,13 @@ fn main() -> Result<()> {
                     if channels.is_empty() {
                         println!("No channels configured");
                     } else {
-                        println!("{:<15} {:<10} {:<12} {:<12}", "TYPE", "INSTANCES", "CONNECTED", "DISCONNECTED");
+                        println!(
+                            "{:<15} {:<10} {:<12} {:<12}",
+                            "TYPE", "INSTANCES", "CONNECTED", "DISCONNECTED"
+                        );
                         for ch in &channels {
-                            println!("{:<15} {:<10} {:<12} {:<12}",
+                            println!(
+                                "{:<15} {:<10} {:<12} {:<12}",
                                 ch["channel_type"].as_str().unwrap_or("-"),
                                 ch["instance_count"].as_u64().unwrap_or(0),
                                 ch["connected"].as_u64().unwrap_or(0),
@@ -290,10 +314,7 @@ fn main() -> Result<()> {
                     } else {
                         format!("{base}/channels/telegram/test")
                     };
-                    let response = client
-                        .post(&url)
-                        .send()?
-                        .error_for_status()?;
+                    let response = client.post(&url).send()?.error_for_status()?;
                     let result: serde_json::Value = response.json()?;
                     println!("Test result: {}", serde_json::to_string_pretty(&result)?);
                 }

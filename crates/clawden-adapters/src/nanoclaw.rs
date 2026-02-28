@@ -2,8 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use clawden_core::{
     AgentConfig, AgentHandle, AgentMessage, AgentMetrics, AgentResponse, ChannelSupport,
-    ChannelType, ClawAdapter, ClawRuntime, EventStream, HealthStatus, InstallConfig,
-    RuntimeConfig, RuntimeMetadata, Skill, SkillManifest,
+    ChannelType, ClawAdapter, ClawRuntime, EventStream, HealthStatus, InstallConfig, RuntimeConfig,
+    RuntimeMetadata, Skill, SkillManifest,
 };
 use std::collections::HashMap;
 

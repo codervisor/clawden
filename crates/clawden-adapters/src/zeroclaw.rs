@@ -2,8 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use clawden_core::{
     AgentConfig, AgentHandle, AgentMessage, AgentMetrics, AgentResponse, ChannelSupport,
-    ChannelType, ClawAdapter, ClawRuntime, EventStream, HealthStatus, InstallConfig,
-    RuntimeConfig, RuntimeMetadata, Skill, SkillManifest,
+    ChannelType, ClawAdapter, ClawRuntime, EventStream, HealthStatus, InstallConfig, RuntimeConfig,
+    RuntimeMetadata, Skill, SkillManifest,
 };
 use std::collections::HashMap;
 
@@ -16,7 +16,10 @@ impl ClawAdapter for ZeroClawAdapter {
         channel_support.insert(ChannelType::Telegram, ChannelSupport::Native);
         channel_support.insert(ChannelType::Discord, ChannelSupport::Native);
         channel_support.insert(ChannelType::Slack, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Whatsapp, ChannelSupport::Via("Meta Cloud API".into()));
+        channel_support.insert(
+            ChannelType::Whatsapp,
+            ChannelSupport::Via("Meta Cloud API".into()),
+        );
         channel_support.insert(ChannelType::Signal, ChannelSupport::Native);
         channel_support.insert(ChannelType::Feishu, ChannelSupport::Native);
         channel_support.insert(ChannelType::Matrix, ChannelSupport::Native);

@@ -2,8 +2,8 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use clawden_core::{
     AgentConfig, AgentHandle, AgentMessage, AgentMetrics, AgentResponse, ChannelSupport,
-    ChannelType, ClawAdapter, ClawRuntime, EventStream, HealthStatus, InstallConfig,
-    RuntimeConfig, RuntimeMetadata, Skill, SkillManifest,
+    ChannelType, ClawAdapter, ClawRuntime, EventStream, HealthStatus, InstallConfig, RuntimeConfig,
+    RuntimeMetadata, Skill, SkillManifest,
 };
 use std::collections::HashMap;
 
@@ -17,7 +17,10 @@ impl ClawAdapter for OpenClawAdapter {
         channel_support.insert(ChannelType::Discord, ChannelSupport::Native);
         channel_support.insert(ChannelType::Slack, ChannelSupport::Native);
         channel_support.insert(ChannelType::Whatsapp, ChannelSupport::Via("Baileys".into()));
-        channel_support.insert(ChannelType::Signal, ChannelSupport::Via("signal-cli".into()));
+        channel_support.insert(
+            ChannelType::Signal,
+            ChannelSupport::Via("signal-cli".into()),
+        );
         channel_support.insert(ChannelType::Feishu, ChannelSupport::Native);
         channel_support.insert(ChannelType::Mattermost, ChannelSupport::Native);
         channel_support.insert(ChannelType::Irc, ChannelSupport::Native);

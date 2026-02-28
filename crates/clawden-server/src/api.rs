@@ -282,6 +282,7 @@ pub struct DeployRuntimeRequest {
     #[serde(default)]
     pub channels: Vec<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub tools: Vec<String>,
 }
 
@@ -299,7 +300,9 @@ pub async fn deploy_runtime(
 ) -> Result<Json<DeployStatusResponse>, (StatusCode, String)> {
     // Validate runtime name matches path
     let runtime_str = format!("{:?}", request.runtime).to_lowercase();
-    if !runtime_name.to_lowercase().contains(&runtime_str.replace("claw", ""))
+    if !runtime_name
+        .to_lowercase()
+        .contains(&runtime_str.replace("claw", ""))
         && runtime_name.to_lowercase() != runtime_str
     {
         // Allow flexible matching
@@ -384,9 +387,7 @@ pub async fn agent_metrics_history(
 
 // --- Channel endpoints (spec 018/021) ---
 
-pub async fn list_channels(
-    State(state): State<AppState>,
-) -> Json<Vec<ChannelTypeSummary>> {
+pub async fn list_channels(State(state): State<AppState>) -> Json<Vec<ChannelTypeSummary>> {
     let channels = state.channels.read().await;
     Json(channels.list_channel_summaries())
 }
@@ -417,11 +418,7 @@ pub async fn upsert_channel_config(
     let config = channels
         .upsert_config(req)
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    append_audit(
-        &state.audit,
-        "channel.configure",
-        &config.instance_name,
-    );
+    append_audit(&state.audit, "channel.configure", &config.instance_name);
     Ok((
         StatusCode::OK,
         Json(serde_json::to_value(config).unwrap_or_default()),
@@ -437,7 +434,10 @@ pub async fn delete_channel_config(
         append_audit(&state.audit, "channel.delete", &channel_type);
         Ok(Json(serde_json::json!({ "deleted": channel_type })))
     } else {
-        Err((StatusCode::NOT_FOUND, format!("channel config {channel_type} not found")))
+        Err((
+            StatusCode::NOT_FOUND,
+            format!("channel config {channel_type} not found"),
+        ))
     }
 }
 
@@ -496,9 +496,7 @@ pub async fn agent_channels(
     Json(result)
 }
 
-pub async fn channel_matrix(
-    State(state): State<AppState>,
-) -> Json<Vec<MatrixRow>> {
+pub async fn channel_matrix(State(state): State<AppState>) -> Json<Vec<MatrixRow>> {
     let manager = state.manager.read().await;
     let agents: Vec<(String, String)> = manager
         .list_agents()
@@ -539,25 +537,17 @@ pub async fn delete_binding(
     let binding = channels
         .unbind(binding_id)
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
-    append_audit(
-        &state.audit,
-        "channel.unbind",
-        &binding.instance_id,
-    );
+    append_audit(&state.audit, "channel.unbind", &binding.instance_id);
     Ok(Json(serde_json::to_value(binding).unwrap_or_default()))
 }
 
-pub async fn binding_conflicts(
-    State(state): State<AppState>,
-) -> Json<Vec<BindingConflict>> {
+pub async fn binding_conflicts(State(state): State<AppState>) -> Json<Vec<BindingConflict>> {
     let channels = state.channels.read().await;
     Json(channels.detect_conflicts())
 }
 
 /// Full channel support matrix from adapter metadata
-pub async fn channel_support_matrix(
-    State(state): State<AppState>,
-) -> Json<serde_json::Value> {
+pub async fn channel_support_matrix(State(state): State<AppState>) -> Json<serde_json::Value> {
     let manager = state.manager.read().await;
     let metadata = manager.list_runtime_metadata();
     let mut matrix = serde_json::Map::new();
@@ -633,14 +623,23 @@ pub async fn proxy_status_endpoint(
         .find(|a| a.id == agent_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("agent {agent_id} not found")))?;
 
-    let ct = clawden_core::ChannelType::from_str_loose(&channel_type)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("unknown channel type: {channel_type}")))?;
+    let ct = clawden_core::ChannelType::from_str_loose(&channel_type).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("unknown channel type: {channel_type}"),
+        )
+    })?;
 
     let metadata_list = manager.list_runtime_metadata();
     let metadata = metadata_list
         .iter()
         .find(|m| m.runtime == agent.runtime)
-        .ok_or_else(|| (StatusCode::NOT_FOUND, "adapter metadata not found".to_string()))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                "adapter metadata not found".to_string(),
+            )
+        })?;
 
     let status = crate::proxy::proxy_status(metadata, &ct);
     Ok(Json(serde_json::to_value(status).unwrap_or_default()))

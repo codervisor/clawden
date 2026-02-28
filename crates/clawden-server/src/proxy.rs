@@ -1,4 +1,4 @@
-use clawden_core::{AgentMessage, AgentResponse, ChannelSupport, ChannelType, ClawRuntime, RuntimeMetadata};
+use clawden_core::{AgentMessage, AgentResponse, ChannelSupport, ChannelType, RuntimeMetadata};
 use serde::Serialize;
 
 /// Channel proxy status for a proxied connection.
@@ -45,6 +45,7 @@ pub fn proxy_status(metadata: &RuntimeMetadata, channel: &ChannelType) -> ProxyS
 /// The channel adapter (e.g., Telegram bot) receives a message, determines the
 /// target runtime doesn't natively support this channel, and routes through
 /// this proxy.
+#[allow(dead_code)]
 pub fn create_proxy_message(
     channel_type: &ChannelType,
     sender: &str,
@@ -57,6 +58,7 @@ pub fn create_proxy_message(
 }
 
 /// Format a proxied response for sending back to the channel.
+#[allow(dead_code)]
 pub fn format_proxy_response(response: &AgentResponse) -> String {
     response.content.clone()
 }

@@ -63,7 +63,10 @@ impl ChannelStore {
 
     // --- Channel configs ---
 
-    pub fn upsert_config(&mut self, req: ChannelConfigRequest) -> Result<ChannelInstanceConfig, String> {
+    pub fn upsert_config(
+        &mut self,
+        req: ChannelConfigRequest,
+    ) -> Result<ChannelInstanceConfig, String> {
         let channel_type = ChannelType::from_str_loose(&req.channel_type)
             .ok_or_else(|| format!("unknown channel type: {}", req.channel_type))?;
 
@@ -77,6 +80,7 @@ impl ChannelStore {
         Ok(config)
     }
 
+    #[allow(dead_code)]
     pub fn get_config(&self, instance_name: &str) -> Option<&ChannelInstanceConfig> {
         self.configs.get(instance_name)
     }
@@ -85,6 +89,7 @@ impl ChannelStore {
         self.configs.remove(instance_name).is_some()
     }
 
+    #[allow(dead_code)]
     pub fn list_configs(&self) -> Vec<&ChannelInstanceConfig> {
         self.configs.values().collect()
     }
@@ -123,12 +128,14 @@ impl ChannelStore {
         }
         type_map
             .into_iter()
-            .map(|(channel_type, (instance_count, connected, disconnected))| ChannelTypeSummary {
-                channel_type,
-                instance_count,
-                connected,
-                disconnected,
-            })
+            .map(
+                |(channel_type, (instance_count, connected, disconnected))| ChannelTypeSummary {
+                    channel_type,
+                    instance_count,
+                    connected,
+                    disconnected,
+                },
+            )
             .collect()
     }
 
@@ -194,18 +201,26 @@ impl ChannelStore {
         let mut groups: HashMap<(String, String), Vec<String>> = HashMap::new();
         for binding in self.bindings.values() {
             if binding.status == ChannelBindingStatus::Active {
-                let key = (binding.channel_type.to_string(), binding.bot_token_hash.clone());
-                groups.entry(key).or_default().push(binding.instance_id.clone());
+                let key = (
+                    binding.channel_type.to_string(),
+                    binding.bot_token_hash.clone(),
+                );
+                groups
+                    .entry(key)
+                    .or_default()
+                    .push(binding.instance_id.clone());
             }
         }
         groups
             .into_iter()
             .filter(|(_, ids)| ids.len() > 1)
-            .map(|((channel_type, bot_token_hash), instance_ids)| BindingConflict {
-                channel_type,
-                bot_token_hash,
-                instance_ids,
-            })
+            .map(
+                |((channel_type, bot_token_hash), instance_ids)| BindingConflict {
+                    channel_type,
+                    bot_token_hash,
+                    instance_ids,
+                },
+            )
             .collect()
     }
 
@@ -218,6 +233,7 @@ impl ChannelStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn unassign_channel(&mut self, agent_id: &str, channel_instance_name: &str) {
         if let Some(list) = self.assignments.get_mut(agent_id) {
             list.retain(|n| n != channel_instance_name);
@@ -227,17 +243,13 @@ impl ChannelStore {
     pub fn get_agent_channels(&self, agent_id: &str) -> Vec<&ChannelInstanceConfig> {
         self.assignments
             .get(agent_id)
-            .map(|names| {
-                names
-                    .iter()
-                    .filter_map(|n| self.configs.get(n))
-                    .collect()
-            })
+            .map(|names| names.iter().filter_map(|n| self.configs.get(n)).collect())
             .unwrap_or_default()
     }
 
     // --- Connection status ---
 
+    #[allow(dead_code)]
     pub fn set_connection_status(
         &mut self,
         agent_id: &str,

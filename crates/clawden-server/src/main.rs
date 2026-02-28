@@ -122,7 +122,10 @@ async fn main() {
             axum::routing::post(deploy_runtime),
         )
         .route("/agents/{agent_id}/deploy-status", get(deploy_status))
-        .route("/agents/{agent_id}/restart", axum::routing::post(restart_agent))
+        .route(
+            "/agents/{agent_id}/restart",
+            axum::routing::post(restart_agent),
+        )
         .route("/agents/{agent_id}/logs", get(agent_logs))
         .route(
             "/agents/{agent_id}/metrics/history",
@@ -140,10 +143,7 @@ async fn main() {
                 .put(upsert_channel_config)
                 .delete(delete_channel_config),
         )
-        .route(
-            "/channels/{channel_type}/instances",
-            get(channel_instances),
-        )
+        .route("/channels/{channel_type}/instances", get(channel_instances))
         .route(
             "/channels/{channel_type}/test",
             axum::routing::post(test_channel),
