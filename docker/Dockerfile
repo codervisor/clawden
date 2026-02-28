@@ -7,6 +7,17 @@
 #
 # Image: ghcr.io/codervisor/clawden-runtime:latest
 # Base: Debian slim + Node.js 22 LTS (for OpenClaw and NanoClaw)
+#
+# Runtimes are pulled from their upstream GitHub releases / npm:
+#   ZeroClaw: https://github.com/zeroclaw-labs/zeroclaw/releases
+#   PicoClaw: https://github.com/picoclaw-labs/picoclaw/releases
+#   OpenClaw: npm install -g openclaw
+#   NanoClaw: https://github.com/qwibitai/nanoclaw (git clone)
+
+# Pinned runtime versions — bump these to upgrade
+ARG ZEROCLAW_VERSION=0.1.7
+ARG PICOCLAW_VERSION=latest
+ARG OPENCLAW_VERSION=latest
 
 FROM debian:bookworm-slim AS base
 
@@ -44,10 +55,52 @@ RUN chmod +x /opt/clawden/entrypoint.sh \
 # Copy internal defaults
 COPY docker/defaults.toml /etc/clawden/defaults.toml
 
-# Phase 1 runtime binaries would be copied here during CI build:
-# COPY --from=zeroclaw-builder /usr/local/bin/zeroclaw /opt/clawden/runtimes/zeroclaw
-# COPY --from=picoclaw-builder /usr/local/bin/picoclaw /opt/clawden/runtimes/picoclaw
-# For OpenClaw and NanoClaw, their Node.js apps go into /opt/clawden/runtimes/{name}/
+# --- Phase 1 runtimes: download pre-built releases ---
+
+# ZeroClaw (Rust binary) — from GitHub Releases
+ARG ZEROCLAW_VERSION
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+        amd64)  ZC_ARCH="x86_64-unknown-linux-gnu" ;; \
+        arm64)  ZC_ARCH="aarch64-unknown-linux-gnu" ;; \
+        *)      echo "Unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/zeroclaw-labs/zeroclaw/releases/download/v${ZEROCLAW_VERSION}/zeroclaw-${ZC_ARCH}.tar.gz" \
+        -o /tmp/zeroclaw.tar.gz \
+    && tar -xzf /tmp/zeroclaw.tar.gz -C /tmp \
+    && mv /tmp/zeroclaw /opt/clawden/runtimes/zeroclaw \
+    && chmod +x /opt/clawden/runtimes/zeroclaw \
+    && rm -rf /tmp/zeroclaw*
+
+# PicoClaw (Go binary) — from GitHub Releases
+ARG PICOCLAW_VERSION
+RUN set -eux; \
+    curl -fsSL "https://github.com/picoclaw-labs/picoclaw/releases/download/picoclaw/picoclaw_x64.7z" \
+        -o /tmp/picoclaw.7z \
+    && apt-get update && apt-get install -y --no-install-recommends p7zip-full \
+    && 7z x /tmp/picoclaw.7z -o/tmp/picoclaw \
+    && find /tmp/picoclaw -type f -name 'picoclaw*' -exec mv {} /opt/clawden/runtimes/picoclaw \; \
+    && chmod +x /opt/clawden/runtimes/picoclaw \
+    && apt-get purge -y p7zip-full && apt-get autoremove -y \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/picoclaw*
+
+# OpenClaw (Node.js app) — from npm
+ARG OPENCLAW_VERSION
+RUN npm install -g "openclaw@${OPENCLAW_VERSION}" \
+    && ln -s "$(npm root -g)/openclaw" /opt/clawden/runtimes/openclaw
+
+# NanoClaw (Node.js app) — cloned from GitHub (no npm/releases yet)
+ARG NANOCLAW_REF=main
+RUN set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends git \
+    && git clone --depth 1 --branch "${NANOCLAW_REF}" \
+       https://github.com/qwibitai/nanoclaw.git /opt/clawden/runtimes/nanoclaw \
+    && cd /opt/clawden/runtimes/nanoclaw \
+    && npm install --production \
+    && rm -rf .git .github docs assets \
+    && apt-get purge -y git && apt-get autoremove -y \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /home/clawden/workspace
 VOLUME /home/clawden/workspace

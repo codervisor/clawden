@@ -282,11 +282,11 @@ ClawDen passes `config` entries as env vars. Each runtime handles its own env �
 - [x] Build `clawden-runtime` Dockerfile (Debian slim + Node.js 22 LTS)
 - [x] Implement `entrypoint.sh` — runtime selection + tool setup loop
 - [x] Create `git` and `http` tool setup scripts
-- [ ] Package Phase 1 runtimes into image
+- [x] Package Phase 1 runtimes into image
 - [x] Implement `clawden up` / `clawden ps` / `clawden stop` / `clawden logs`
 - [x] Implement `clawden channels` — list + test
 - [x] Implement channel proxy for unsupported runtime+channel combos
-- [ ] CI: build + push image to GHCR
+- [x] CI: build + push image to GHCR
 
 ### Phase 2: Remaining Runtimes & Advanced Tools
 - [ ] Add IronClaw to image (WASM capabilities, PostgreSQL sidecar)

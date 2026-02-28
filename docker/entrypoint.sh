@@ -57,6 +57,11 @@ case "$RUNTIME" in
         exec "$BINARY" "$@"
         ;;
     openclaw)
+        # OpenClaw is installed globally via npm; the symlink at
+        # /opt/clawden/runtimes/openclaw points to the npm package dir.
+        if command -v openclaw &>/dev/null; then
+            exec openclaw "$@"
+        fi
         APP_DIR="/opt/clawden/runtimes/openclaw"
         if [ ! -d "$APP_DIR" ]; then
             echo "Error: OpenClaw app not found at ${APP_DIR}" >&2
@@ -72,7 +77,8 @@ case "$RUNTIME" in
             exit 1
         fi
         cd "$APP_DIR"
-        exec node index.js "$@"
+        # NanoClaw is a TypeScript app — use npm start which handles transpilation
+        exec npm start -- "$@"
         ;;
     *)
         echo "Error: Unknown runtime '${RUNTIME}'" >&2
