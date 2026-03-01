@@ -8,6 +8,7 @@
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "prepare": "husky",
     "build": "cargo build --workspace && pnpm --filter '@clawden/*' run build",
     "build:rust": "cargo build --workspace",
     "build:rust:release": "cargo build --workspace --release",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
+    "husky": "^9.1.7",
     "tsx": "^4.8.1"
   }
 }

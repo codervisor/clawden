@@ -1223,10 +1223,8 @@ runtimes:
 "#;
         let parsed = ClawDenYaml::parse_yaml(yaml).expect("yaml should parse");
         let errors = parsed.validate().expect_err("validation should fail");
-        assert!(
-            errors
-                .iter()
-                .any(|e| e.contains("references provider 'not-a-real-provider'"))
-        );
+        assert!(errors
+            .iter()
+            .any(|e| e.contains("references provider 'not-a-real-provider'")));
     }
 }

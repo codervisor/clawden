@@ -1,0 +1,23 @@
+#!/bin/sh
+# Run full validation before pushing
+
+echo "🦀 Running Rust checks..."
+
+echo "  → Clippy lints..."
+cargo clippy --workspace --all-targets -- -D warnings
+if [ $? -ne 0 ]; then
+  echo "❌ Clippy checks failed! Fix the warnings before pushing."
+  exit 1
+fi
+
+echo "  → Running tests..."
+cargo test --workspace
+if [ $? -ne 0 ]; then
+  echo "❌ Rust tests failed! Fix the failing tests before pushing."
+  exit 1
+fi
+
+echo "✅ Rust checks passed!"
+
+echo ""
+echo "🎉 All pre-push checks passed!"
