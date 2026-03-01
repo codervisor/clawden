@@ -4,7 +4,7 @@
 # - NanoClaw (Node.js, code-driven, Claude Agent SDK)
 # - ZeroClaw (Rust binary, TOML + env vars)
 # - PicoClaw (Go binary, JSON config)
-# - OpenFang (Rust binary, Agent OS, TOML config, dashboard on port 4200)
+# - OpenFang (Rust binary, Agent OS, TOML config, dashboard on port 4200) [DISABLED]
 #
 # Image: ghcr.io/codervisor/clawden-runtime:latest
 # Base: Debian slim + Node.js 22 LTS (for OpenClaw and NanoClaw)
@@ -14,13 +14,13 @@
 #   PicoClaw: https://github.com/picoclaw-labs/picoclaw/releases
 #   OpenClaw: npm install -g openclaw
 #   NanoClaw: https://github.com/qwibitai/nanoclaw (git clone)
-#   OpenFang: https://github.com/RightNow-AI/openfang/releases
+#   OpenFang: https://github.com/RightNow-AI/openfang/releases [DISABLED]
 
 # Pinned runtime versions — bump these to upgrade
 ARG ZEROCLAW_VERSION=0.1.7
 ARG PICOCLAW_VERSION=latest
 ARG OPENCLAW_VERSION=latest
-ARG OPENFANG_VERSION=0.2.0
+# ARG OPENFANG_VERSION=0.2.0  # DISABLED: OpenFang temporarily removed
 
 FROM debian:bookworm-slim AS base
 
@@ -103,30 +103,31 @@ RUN set -eux; \
     && npm install --omit=dev --ignore-scripts \
     && rm -rf .git .github docs assets
 
-# OpenFang (Rust binary) — from GitHub Releases (.deb package)
-# Note: arm64 .deb not yet available upstream; amd64 only for now
-ARG OPENFANG_VERSION
-ARG TARGETARCH
-RUN set -eux; \
-    case "${TARGETARCH}" in \
-        amd64) \
-            curl -fsSL "https://github.com/RightNow-AI/openfang/releases/download/v${OPENFANG_VERSION}/OpenFang_0.1.0_amd64.deb" \
-                -o /tmp/openfang.deb \
-            && dpkg -x /tmp/openfang.deb /tmp/openfang-extracted \
-            && find /tmp/openfang-extracted -type f -iname 'openfang' -exec mv {} /opt/clawden/runtimes/openfang \; \
-            && if [ ! -f /opt/clawden/runtimes/openfang ]; then \
-                 echo "ERROR: openfang binary not found in .deb package. Contents:" >&2; \
-                 find /tmp/openfang-extracted -type f >&2; \
-                 exit 1; \
-               fi \
-            && chmod +x /opt/clawden/runtimes/openfang \
-            && rm -rf /tmp/openfang* \
-            ;; \
-        arm64) \
-            echo "[clawden] Warning: OpenFang arm64 binary not yet available upstream, skipping" >&2 \
-            ;; \
-        *)  echo "Unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac
+# DISABLED: OpenFang temporarily removed from Docker image
+# # OpenFang (Rust binary) — from GitHub Releases (.deb package)
+# # Note: arm64 .deb not yet available upstream; amd64 only for now
+# ARG OPENFANG_VERSION
+# ARG TARGETARCH
+# RUN set -eux; \
+#     case "${TARGETARCH}" in \
+#         amd64) \
+#             curl -fsSL "https://github.com/RightNow-AI/openfang/releases/download/v${OPENFANG_VERSION}/OpenFang_0.1.0_amd64.deb" \
+#                 -o /tmp/openfang.deb \
+#             && dpkg -x /tmp/openfang.deb /tmp/openfang-extracted \
+#             && find /tmp/openfang-extracted -type f -iname 'openfang' -exec mv {} /opt/clawden/runtimes/openfang \; \
+#             && if [ ! -f /opt/clawden/runtimes/openfang ]; then \
+#                  echo "ERROR: openfang binary not found in .deb package. Contents:" >&2; \
+#                  find /tmp/openfang-extracted -type f >&2; \
+#                  exit 1; \
+#                fi \
+#             && chmod +x /opt/clawden/runtimes/openfang \
+#             && rm -rf /tmp/openfang* \
+#             ;; \
+#         arm64) \
+#             echo "[clawden] Warning: OpenFang arm64 binary not yet available upstream, skipping" >&2 \
+#             ;; \
+#         *)  echo "Unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+#     esac
 
 WORKDIR /home/clawden/workspace
 VOLUME /home/clawden/workspace
