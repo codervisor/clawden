@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-03-01
 priority: high
 tags:
@@ -12,9 +12,11 @@ depends_on:
 - 010-claw-runtime-interface
 parent: 009-orchestration-platform
 created_at: 2026-03-01T06:18:51.745164Z
-updated_at: 2026-03-01T06:18:51.745164Z
+updated_at: 2026-03-01T06:31:16.999507Z
+transitions:
+- status: in-progress
+  at: 2026-03-01T06:31:16.999507Z
 ---
-
 # CLI-Direct Architecture — Eliminate Mandatory Server Dependency
 
 ## Overview
@@ -107,18 +109,20 @@ clawden dashboard --port 3000  # custom port
 
 ## Plan
 
-- [ ] Move `LifecycleManager`, `AgentState`, `AuditLog` from `clawden-server` to `clawden-core`
-- [ ] Move `ChannelStore`, `SwarmCoordinator`, `DiscoveryService` to `clawden-core`
-- [ ] Create `ProcessManager` in `clawden-core` (Docker + Direct modes)
-- [ ] Refactor `clawden-server` to thin HTTP wrapper over `clawden-core`
-- [ ] Rewrite `clawden-cli` to call `clawden-core` directly (remove `reqwest`)
-- [ ] Add `clawden dashboard` subcommand
+- [x] Move `LifecycleManager`, `AgentState`, `AuditLog` from `clawden-server` to `clawden-core`
+- [x] Move `ChannelStore`, `SwarmCoordinator`, `DiscoveryService` to `clawden-core`
+- [x] Create `ProcessManager` in `clawden-core` (Docker + Direct modes)
+- [x] Refactor `clawden-server` to thin HTTP wrapper over `clawden-core`
+- [x] Rewrite `clawden-cli` to call `clawden-core` directly (remove `reqwest`)
+- [x] Add `clawden dashboard` subcommand
 - [ ] Verify existing dashboard API endpoints still work
 
 ## Test
 
-- [ ] `clawden run zeroclaw` works without server running
-- [ ] `clawden ps` / `clawden stop` work without server running
+- [x] `clawden run zeroclaw` works without server running
+- [x] `clawden ps` / `clawden stop` work without server running
 - [ ] `clawden dashboard` starts server and dashboard is accessible
 - [ ] All existing REST API endpoints work when server is running
 - [ ] Audit log captures events from both CLI-direct and server paths
+
+Operational note (2026-03-01): `clawden dashboard --port 18081` successfully launched `clawden-server` with log evidence `starting clawden server addr=127.0.0.1:18081`. Endpoint probing from this VS Code terminal environment returned proxy-style 404/502 responses, so API reachability checks remain conservative and unchecked.

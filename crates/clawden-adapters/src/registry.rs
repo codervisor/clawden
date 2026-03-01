@@ -35,6 +35,10 @@ impl AdapterRegistry {
         self.adapters.get(runtime).cloned()
     }
 
+    pub fn adapters_map(&self) -> HashMap<ClawRuntime, Arc<dyn ClawAdapter>> {
+        self.adapters.clone()
+    }
+
     pub fn list(&self) -> Vec<ClawRuntime> {
         let mut runtimes: Vec<_> = self.adapters.keys().cloned().collect();
         runtimes.sort_by_key(|runtime| format!("{runtime:?}"));

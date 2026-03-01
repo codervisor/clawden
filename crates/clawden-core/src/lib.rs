@@ -1,7 +1,28 @@
+mod audit;
+mod channels;
+mod discovery;
+mod install;
+mod lifecycle;
+mod manager;
+mod process;
+mod swarm;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+pub use audit::{append_audit, AuditEvent, AuditLog};
+pub use channels::{
+    BindChannelRequest, BindingConflict, ChannelConfigRequest, ChannelStore, ChannelTypeSummary,
+    MatrixRow,
+};
+pub use discovery::{DiscoveredEndpoint, DiscoveryMethod, DiscoveryService};
+pub use install::{InstallOutcome, InstalledRuntime, RuntimeInstaller};
+pub use lifecycle::AgentState;
+pub use manager::{AgentRecord, LifecycleManager};
+pub use process::{ExecutionMode, ProcessInfo, ProcessManager, RuntimeProcessStatus};
+pub use swarm::{SwarmCoordinator, SwarmMember, SwarmRole};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -27,6 +48,35 @@ impl std::fmt::Display for ClawRuntime {
             ClawRuntime::NullClaw => write!(f, "NullClaw"),
             ClawRuntime::MicroClaw => write!(f, "MicroClaw"),
             ClawRuntime::MimiClaw => write!(f, "MimiClaw"),
+        }
+    }
+}
+
+impl ClawRuntime {
+    pub fn from_str_loose(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "openclaw" | "open-claw" | "open" => Some(Self::OpenClaw),
+            "zeroclaw" | "zero-claw" | "zero" => Some(Self::ZeroClaw),
+            "picoclaw" | "pico-claw" | "pico" => Some(Self::PicoClaw),
+            "nanoclaw" | "nano-claw" | "nano" => Some(Self::NanoClaw),
+            "ironclaw" | "iron-claw" | "iron" => Some(Self::IronClaw),
+            "nullclaw" | "null-claw" | "null" => Some(Self::NullClaw),
+            "microclaw" | "micro-claw" | "micro" => Some(Self::MicroClaw),
+            "mimiclaw" | "mimi-claw" | "mimi" => Some(Self::MimiClaw),
+            _ => None,
+        }
+    }
+
+    pub fn as_slug(&self) -> &'static str {
+        match self {
+            ClawRuntime::OpenClaw => "openclaw",
+            ClawRuntime::ZeroClaw => "zeroclaw",
+            ClawRuntime::PicoClaw => "picoclaw",
+            ClawRuntime::NanoClaw => "nanoclaw",
+            ClawRuntime::IronClaw => "ironclaw",
+            ClawRuntime::NullClaw => "nullclaw",
+            ClawRuntime::MicroClaw => "microclaw",
+            ClawRuntime::MimiClaw => "mimiclaw",
         }
     }
 }

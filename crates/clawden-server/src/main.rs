@@ -1,11 +1,5 @@
 mod api;
-mod audit;
-mod channels;
-mod discovery;
-mod lifecycle;
-mod manager;
 mod proxy;
-mod swarm;
 
 use crate::api::{
     agent_channels, agent_logs, agent_metrics_history, audit_log, binding_conflicts,
@@ -16,12 +10,11 @@ use crate::api::{
     register_agent, register_endpoint, restart_agent, scan_endpoints, send_task, start_agent,
     stop_agent, test_channel, upsert_channel_config, AppState,
 };
-use crate::audit::{AuditEvent, AuditLog};
-use crate::discovery::DiscoveryService;
-use crate::lifecycle::AgentState;
-use crate::manager::{append_audit, LifecycleManager};
-use crate::swarm::SwarmCoordinator;
 use axum::{routing::get, Json, Router};
+use clawden_core::{
+    append_audit, AgentState, AuditEvent, AuditLog, ChannelStore, DiscoveryService,
+    LifecycleManager, SwarmCoordinator,
+};
 use serde::Serialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -52,13 +45,14 @@ async fn main() {
         .init();
 
     let audit_store = Arc::new(AuditLog::default());
-    let manager = LifecycleManager::new(clawden_adapters::builtin_registry());
+    let registry = clawden_adapters::builtin_registry();
+    let manager = LifecycleManager::new(registry.adapters_map());
     let shared_state = AppState {
         manager: Arc::new(RwLock::new(manager)),
         audit: audit_store.clone(),
         discovery: Arc::new(RwLock::new(DiscoveryService::new())),
         swarm: Arc::new(RwLock::new(SwarmCoordinator::new())),
-        channels: Arc::new(RwLock::new(channels::ChannelStore::new())),
+        channels: Arc::new(RwLock::new(ChannelStore::new())),
     };
 
     let health_interval_ms = std::env::var("CLAWDEN_HEALTH_INTERVAL_MS")
@@ -83,7 +77,7 @@ async fn main() {
             let recovered = manager.recover_degraded().await;
             drop(manager);
 
-            append_audit(&monitor_audit, "health.tick", "fleet");
+            append_audit(&monitor_audit, "api", "health.tick", "fleet");
             info!(
                 checked_agents = recovered.len(),
                 interval_ms = health_interval_ms,
@@ -161,7 +155,11 @@ async fn main() {
         )
         .route("/channels/bindings/conflicts", get(binding_conflicts))
         .with_state(shared_state);
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    let port = std::env::var("CLAWDEN_SERVER_PORT")
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+        .unwrap_or(8080);
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
     let startup_event = AuditEvent {
         actor: "system".to_string(),
@@ -198,7 +196,7 @@ async fn main() {
         "lifecycle transition check"
     );
 
-    append_audit(&audit_store, "server.ready", "clawden-server");
+    append_audit(&audit_store, "system", "server.ready", "clawden-server");
 
     info!(%addr, "starting clawden server");
 

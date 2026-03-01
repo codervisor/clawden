@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-03-01
 priority: high
 tags:
@@ -8,13 +8,15 @@ tags:
 - native
 - cli
 - direct-install
-parent: 009-orchestration-platform
 depends_on:
 - 023-cli-direct-architecture
+parent: 009-orchestration-platform
 created_at: 2026-03-01T02:44:52.520937Z
-updated_at: 2026-03-01T02:44:52.520937Z
+updated_at: 2026-03-01T06:31:16.990765Z
+transitions:
+- status: in-progress
+  at: 2026-03-01T06:31:16.990765Z
 ---
-
 # Direct Install — Docker-Free Deployment
 
 ## Overview
@@ -199,31 +201,31 @@ Direct mode runs runtimes with a controlled environment:
 ## Plan
 
 ### Phase 1: Core Direct Install
-- [ ] Implement `clawden install <runtime>` — platform detection + GitHub Release download for binary runtimes
-- [ ] Implement `clawden install` for Node.js runtimes (OpenClaw via npm, NanoClaw via git clone)
-- [ ] Implement `~/.clawden/runtimes/` directory layout with version management + symlinks
-- [ ] Implement download cache (`~/.clawden/cache/`) to avoid re-downloading
-- [ ] Implement `clawden install --list` and `clawden uninstall`
-- [ ] Add Docker detection in `clawden run` — fall back to direct mode when Docker unavailable
-- [ ] Implement `--no-docker` flag and `CLAWDEN_NO_DOCKER` env var
-- [ ] Implement baseline download validation (artifact pattern, extraction sanity, optional checksum verification when available)
-- [ ] Implement install locking (`~/.clawden/.install.lock`) and atomic directory swap
-- [ ] Implement audit logging for install/uninstall lifecycle events
+- [x] Implement `clawden install <runtime>` — platform detection + GitHub Release download for binary runtimes
+- [x] Implement `clawden install` for Node.js runtimes (OpenClaw via npm, NanoClaw via git clone)
+- [x] Implement `~/.clawden/runtimes/` directory layout with version management + symlinks
+- [x] Implement download cache (`~/.clawden/cache/`) to avoid re-downloading
+- [x] Implement `clawden install --list` and `clawden uninstall`
+- [x] Add Docker detection in `clawden run` — fall back to direct mode when Docker unavailable
+- [x] Implement `--no-docker` flag and `CLAWDEN_NO_DOCKER` env var
+- [x] Implement baseline download validation (artifact pattern, extraction sanity, optional checksum verification when available)
+- [x] Implement install locking (`~/.clawden/.install.lock`) and atomic directory swap
+- [x] Implement audit logging for install/uninstall lifecycle events
 
 ### Phase 2: Process Management
-- [ ] Implement direct-mode process spawning (background, PID files, log redirection)
-- [ ] Implement `clawden ps` for direct mode (PID, uptime, port, status)
-- [ ] Implement `clawden stop` for direct mode (SIGTERM → SIGKILL)
-- [ ] Implement `clawden logs` for direct mode (tail log files)
+- [x] Implement direct-mode process spawning (background, PID files, log redirection)
+- [x] Implement `clawden ps` for direct mode (PID, uptime, port, status)
+- [x] Implement `clawden stop` for direct mode (SIGTERM → SIGKILL)
+- [x] Implement `clawden logs` for direct mode (tail log files)
 - [ ] Implement health check polling for direct-mode runtimes
 - [ ] Implement crash restart with exponential backoff (`--restart=on-failure`)
 - [ ] Implement audit logging for start/stop/crash/restart lifecycle events
 
 ### Phase 3: Tool Verification & Polish
-- [ ] Implement host tool verification (git, curl, browser checks) with actionable install hints
-- [ ] Implement `clawden install --all` for bulk install
-- [ ] Add `clawden doctor` command — checks system prerequisites, installed runtimes, connectivity
-- [ ] Add upgrade support: `clawden install zeroclaw@latest` re-downloads if newer version available
+- [x] Implement host tool verification (git, curl, browser checks) with actionable install hints
+- [x] Implement `clawden install --all` for bulk install
+- [x] Add `clawden doctor` command — checks system prerequisites, installed runtimes, connectivity
+- [x] Add upgrade support: `clawden install zeroclaw@latest` re-downloads if newer version available
 - [ ] Documentation: direct install quickstart guide
 
 ### Phase 4: Windows Support (Deferred)
@@ -235,26 +237,26 @@ Direct mode runs runtimes with a controlled environment:
 
 ## Test
 
-- [ ] `clawden install zeroclaw` downloads correct binary for current platform to `~/.clawden/runtimes/`
+- [x] `clawden install zeroclaw` downloads correct binary for current platform to `~/.clawden/runtimes/`
 - [ ] `clawden install openclaw` runs `npm install` into managed prefix successfully
-- [ ] `clawden install --list` shows installed runtimes with versions
-- [ ] `clawden uninstall zeroclaw` removes runtime and cleans up symlinks
+- [x] `clawden install --list` shows installed runtimes with versions
+- [x] `clawden uninstall zeroclaw` removes runtime and cleans up symlinks
 - [ ] `clawden run zeroclaw` uses direct mode when Docker is not installed
-- [ ] `clawden run zeroclaw --no-docker` forces direct mode even when Docker is available
+- [x] `clawden run zeroclaw --no-docker` forces direct mode even when Docker is available
 - [ ] `clawden.yaml` config works identically in direct mode and Docker mode
 - [ ] `clawden up` starts runtimes as background processes with PID files in direct mode
-- [ ] `clawden ps` shows correct process status (running, stopped, crashed) in direct mode
-- [ ] `clawden stop` cleanly shuts down runtime processes
-- [ ] `clawden logs zeroclaw` streams runtime logs from log files
+- [x] `clawden ps` shows correct process status (running, stopped, crashed) in direct mode
+- [x] `clawden stop` cleanly shuts down runtime processes
+- [x] `clawden logs zeroclaw` streams runtime logs from log files
 - [ ] Health check detects crashed runtimes and reports status accurately
 - [ ] Missing tool on host produces a helpful error message with install instructions
-- [ ] `clawden doctor` reports system readiness accurately
+- [x] `clawden doctor` reports system readiness accurately
 - [ ] Corrupted or incomplete archive is rejected with clear error message
-- [ ] Valid artifact passes baseline validation and install completes successfully
+- [x] Valid artifact passes baseline validation and install completes successfully
 - [ ] Concurrent `clawden install zeroclaw` invocations don't corrupt `~/.clawden/`
 - [ ] Interrupted install leaves no partial directory in `~/.clawden/runtimes/`
 - [ ] Install, uninstall, start, stop, crash, restart events appear in `~/.clawden/logs/audit.log`
-- [ ] `clawden run --no-docker` bypasses HTTP server dependency and spawns runtime directly via `clawden-core`
+- [x] `clawden run --no-docker` bypasses HTTP server dependency and spawns runtime directly via `clawden-core`
 
 ## Notes
 
@@ -268,3 +270,11 @@ Direct mode runs runtimes with a controlled environment:
 - Future consideration: systemd unit / launchd plist generation for `clawden up` as a system service (out of scope for now).
 - Windows support is deferred to Phase 4. The design relies on Unix symlinks, `flock`, and POSIX signals — all of which need platform-specific alternatives on Windows.
 - OpenFang was considered for the download sources table but is excluded because it is not in the current `ClawRuntime` enum or adapter registry. It can be added in a future spec if needed.
+
+- Implemented direct-install command surface in `clawden-cli`: `install`, `install --all`, `install --list`, `uninstall`, `logs`, `doctor`.
+- Added `RuntimeInstaller` and `ProcessManager` in `clawden-core` with lock file, atomic temp-dir swap, runtime symlink management, PID/log files, and audit log writes.
+- `clawden run`/`up` now perform docker detection and direct fallback with `--no-docker` and `CLAWDEN_NO_DOCKER` support.
+
+- Replaced installer stubs with real host install paths in `clawden-core`: ZeroClaw via GitHub release asset discovery + tar extraction, PicoClaw via GitHub artifact + 7z extraction, OpenClaw via npm managed prefix, NanoClaw via git clone + pnpm install.
+- Verified with live commands: `install --list`, `install zeroclaw`, `uninstall zeroclaw`, `doctor`, and audit log inspection for install/start/stop/uninstall events.
+- `install openclaw` is implemented but can be slow in constrained environments due npm dependency resolution; test remains pending completion.

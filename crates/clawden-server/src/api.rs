@@ -3,19 +3,14 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use clawden_core::{ClawRuntime, RuntimeMetadata};
+use clawden_core::{
+    append_audit, AgentRecord, AgentState, AuditEvent, AuditLog, BindChannelRequest,
+    BindingConflict, ChannelConfigRequest, ChannelStore, ChannelTypeSummary, ClawRuntime,
+    DiscoveryMethod, DiscoveryService, DiscoveredEndpoint, LifecycleManager, MatrixRow,
+    RuntimeMetadata, SwarmCoordinator, SwarmMember, SwarmRole,
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-
-use crate::audit::AuditLog;
-use crate::channels::{
-    BindChannelRequest, BindingConflict, ChannelConfigRequest, ChannelStore, ChannelTypeSummary,
-    MatrixRow,
-};
-use crate::discovery::{DiscoveredEndpoint, DiscoveryMethod, DiscoveryService};
-use crate::lifecycle::AgentState;
-use crate::manager::{append_audit, AgentRecord, LifecycleManager};
-use crate::swarm::{SwarmCoordinator, SwarmMember, SwarmRole};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -61,7 +56,7 @@ pub async fn register_agent(
 ) -> (StatusCode, Json<AgentRecord>) {
     let mut manager = state.manager.write().await;
     let record = manager.register_agent(request.name, request.runtime, request.capabilities);
-    append_audit(&state.audit, "agent.register", &record.id);
+    append_audit(&state.audit, "api", "agent.register", &record.id);
     (StatusCode::CREATED, Json(record))
 }
 
@@ -79,7 +74,7 @@ pub async fn start_agent(
         .start_agent(&agent_id)
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    append_audit(&state.audit, "agent.start", &agent_id);
+    append_audit(&state.audit, "api", "agent.start", &agent_id);
     Ok(Json(record))
 }
 
@@ -92,7 +87,7 @@ pub async fn stop_agent(
         .stop_agent(&agent_id)
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    append_audit(&state.audit, "agent.stop", &agent_id);
+    append_audit(&state.audit, "api", "agent.stop", &agent_id);
     Ok(Json(record))
 }
 
@@ -132,7 +127,7 @@ pub async fn send_task(
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
-    append_audit(&state.audit, "task.send", &agent.id);
+    append_audit(&state.audit, "api", "task.send", &agent.id);
 
     Ok(Json(TaskSendResponse {
         agent,
@@ -140,7 +135,7 @@ pub async fn send_task(
     }))
 }
 
-pub async fn audit_log(State(state): State<AppState>) -> Json<Vec<crate::audit::AuditEvent>> {
+pub async fn audit_log(State(state): State<AppState>) -> Json<Vec<AuditEvent>> {
     Json(state.audit.list())
 }
 
@@ -170,7 +165,7 @@ pub async fn register_endpoint(
         method,
         runtime_hint: req.runtime_hint,
     });
-    append_audit(&state.audit, "discovery.register", &key);
+    append_audit(&state.audit, "api", "discovery.register", &key);
     (StatusCode::CREATED, Json(serde_json::json!({ "key": key })))
 }
 
@@ -227,7 +222,7 @@ pub async fn create_team(
     let mut swarm = state.swarm.write().await;
     let team = swarm.create_team(req.name.clone(), members);
     let response = serde_json::to_value(team).unwrap_or_default();
-    append_audit(&state.audit, "swarm.create_team", &req.name);
+    append_audit(&state.audit, "api", "swarm.create_team", &req.name);
     (StatusCode::CREATED, Json(response))
 }
 
@@ -257,7 +252,7 @@ pub async fn fan_out_task(
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let value = serde_json::to_value(&tasks).unwrap_or_default();
-    append_audit(&state.audit, "swarm.fan_out", &req.team_name);
+    append_audit(&state.audit, "api", "swarm.fan_out", &req.team_name);
     Ok(Json(value))
 }
 
@@ -319,7 +314,7 @@ pub async fn deploy_runtime(
     let agent_id = record.id.clone();
     let started = manager.start_agent(&agent_id).await;
 
-    append_audit(&state.audit, "runtime.deploy", &agent_id);
+    append_audit(&state.audit, "api", "runtime.deploy", &agent_id);
 
     match started {
         Ok(agent) => {
@@ -418,7 +413,7 @@ pub async fn upsert_channel_config(
     let config = channels
         .upsert_config(req)
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    append_audit(&state.audit, "channel.configure", &config.instance_name);
+    append_audit(&state.audit, "api", "channel.configure", &config.instance_name);
     Ok((
         StatusCode::OK,
         Json(serde_json::to_value(config).unwrap_or_default()),
@@ -431,7 +426,7 @@ pub async fn delete_channel_config(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let mut channels = state.channels.write().await;
     if channels.delete_config(&channel_type) {
-        append_audit(&state.audit, "channel.delete", &channel_type);
+        append_audit(&state.audit, "api", "channel.delete", &channel_type);
         Ok(Json(serde_json::json!({ "deleted": channel_type })))
     } else {
         Err((
@@ -522,7 +517,7 @@ pub async fn create_binding(
     let binding = channels
         .bind(req.instance_id.clone(), &req.channel_type, &req.bot_token)
         .map_err(|e| (StatusCode::CONFLICT, e))?;
-    append_audit(&state.audit, "channel.bind", &req.instance_id);
+    append_audit(&state.audit, "api", "channel.bind", &req.instance_id);
     Ok((
         StatusCode::CREATED,
         Json(serde_json::to_value(binding).unwrap_or_default()),
@@ -537,7 +532,7 @@ pub async fn delete_binding(
     let binding = channels
         .unbind(binding_id)
         .map_err(|e| (StatusCode::NOT_FOUND, e))?;
-    append_audit(&state.audit, "channel.unbind", &binding.instance_id);
+    append_audit(&state.audit, "api", "channel.unbind", &binding.instance_id);
     Ok(Json(serde_json::to_value(binding).unwrap_or_default()))
 }
 
@@ -581,7 +576,7 @@ pub async fn restart_agent(
         .start_agent(&agent_id)
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    append_audit(&state.audit, "agent.restart", &agent_id);
+    append_audit(&state.audit, "api", "agent.restart", &agent_id);
     Ok(Json(record))
 }
 
