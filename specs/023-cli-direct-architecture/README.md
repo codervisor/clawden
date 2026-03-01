@@ -69,7 +69,7 @@ User → clawden dashboard → Server (thin Axum wrapper over clawden-core)
 | `SwarmCoordinator` | `clawden-server/swarm.rs` | `clawden-core` |
 | `DiscoveryService` | `clawden-server/discovery.rs` | `clawden-core` |
 
-What stays in `clawden-server`: Axum router, HTTP handlers (thin wrappers), WebSocket streaming, static file serving, the `clawden dashboard` subcommand.
+What stays in `clawden-server`: Axum router, HTTP handlers (thin wrappers), WebSocket streaming, static file serving, and server bootstrap APIs invoked by the `clawden dashboard` CLI command.
 
 ### ProcessManager (new in `clawden-core`)
 
@@ -87,10 +87,22 @@ pub struct ProcessManager {
 
 Handles: process spawning (Docker containers or native), PID files, log files, health polling, graceful shutdown, crash restart with backoff.
 
+### Runtime Ownership Model
+
+To avoid split-brain control when both CLI-direct and dashboard server are used, ClawDen enforces **one runtime per supervising process**:
+
+- A runtime instance has exactly one active supervisor at a time (CLI process or server process).
+- Ownership is recorded in runtime state (`owner_process_id`, `owner_kind`, `started_at`).
+- Start requests for an already-owned runtime are rejected unless `--takeover` is explicitly requested.
+- Stop/restart requests are only accepted from the current owner or via explicit takeover.
+- Health monitor and restart loops only run in the owner process.
+
+This keeps process control deterministic while still allowing both CLI-direct workflows and optional dashboard workflows.
+
 ### CLI Changes
 
 - Remove `reqwest` dependency — CLI calls `clawden-core` directly
-- Add `clawden dashboard` subcommand (starts Axum server + opens browser)
+- Add `clawden dashboard` subcommand in `clawden-cli` (starts Axum server + opens browser)
 - All existing commands (`run`, `up`, `ps`, `stop`, `channels`) work without server
 
 ### Server as Optional Dashboard Host
@@ -110,6 +122,7 @@ clawden dashboard --port 3000  # custom port
 - [ ] Move `LifecycleManager`, `AgentState`, `AuditLog` from `clawden-server` to `clawden-core`
 - [ ] Move `ChannelStore`, `SwarmCoordinator`, `DiscoveryService` to `clawden-core`
 - [ ] Create `ProcessManager` in `clawden-core` (Docker + Direct modes)
+- [ ] Implement runtime ownership metadata and takeover rules (one runtime per supervising process)
 - [ ] Refactor `clawden-server` to thin HTTP wrapper over `clawden-core`
 - [ ] Rewrite `clawden-cli` to call `clawden-core` directly (remove `reqwest`)
 - [ ] Add `clawden dashboard` subcommand
@@ -122,3 +135,4 @@ clawden dashboard --port 3000  # custom port
 - [ ] `clawden dashboard` starts server and dashboard is accessible
 - [ ] All existing REST API endpoints work when server is running
 - [ ] Audit log captures events from both CLI-direct and server paths
+- [ ] Concurrent CLI-direct and dashboard operations cannot both supervise the same runtime unless takeover is requested

@@ -29,7 +29,7 @@ The current deployment story (`clawden up`) requires Docker. Many target users �
 
 ### Goal
 
-`clawden run zeroclaw --channel telegram` works identically whether Docker is installed or not. If Docker is present, use it (existing behavior). If not, run the runtime directly on the host.
+`clawden run zeroclaw --channel telegram` works whether Docker is installed or not. If Docker is present, ClawDen uses Docker by default for sandboxing and safer isolation. If Docker is not available (or `--no-docker` is explicitly set), ClawDen runs the runtime directly on the host.
 
 ## Design
 
@@ -37,7 +37,7 @@ The current deployment story (`clawden up`) requires Docker. Many target users �
 
 When the user runs `clawden run <runtime>`, ClawDen checks in order:
 
-1. **Docker available?** → Use container (existing spec 017 behavior)
+1. **Docker available?** → Use container by default (security-first behavior from spec 017)
 2. **Runtime binary installed locally?** → Run directly on host
 3. **Neither?** → Prompt: `Runtime 'zeroclaw' not installed. Run 'clawden install zeroclaw' to install it.`
 
@@ -106,26 +106,26 @@ Same upstream sources as the Docker image — no new infrastructure needed:
 
 Binary runtimes need the correct platform artifact. ClawDen detects:
 
-- **OS**: `linux`, `darwin` (Phase 1). `windows` deferred to Phase 2 — symlinks, signal handling, and PID management require platform-specific implementations.
+- **OS**: `linux`, `darwin` (Phase 1). `windows` deferred to Phase 4 — symlinks, signal handling, and PID management require platform-specific implementations.
 - **Arch**: `x64` (`x86_64`), `arm64` (`aarch64`)
 
 Maps to upstream release naming conventions per runtime (e.g., `zeroclaw-0.1.7-linux-x86_64.tar.gz`).
 
-### Download Integrity Verification
+### Download Validation (Simple Baseline)
 
-All downloaded artifacts are verified before installation to prevent supply-chain attacks:
+Use a simple, practical validation policy that avoids heavy key or manifest management:
 
-- **Binary runtimes (GitHub Releases)**: Each release must publish a `SHA256SUMS` file alongside artifacts. `clawden install` downloads the checksum file, verifies the downloaded archive's SHA-256 hash matches, and rejects mismatches with a clear error.
-- **npm runtimes (OpenClaw)**: npm's built-in integrity checking (`npm install --integrity`) is used. The expected package integrity hash is pinned in ClawDen's internal manifest.
-- **Git-cloned runtimes (NanoClaw)**: After cloning, verify the HEAD commit is signed or matches a known commit hash from ClawDen's pinned manifest.
-- **Cache validation**: Cached downloads in `~/.clawden/cache/` store the verified checksum alongside each archive. Re-installs from cache re-verify before use.
+- **Transport**: Only download from trusted HTTPS upstreams already used by the Docker flow.
+- **Binary runtimes (GitHub Releases)**: Validate expected artifact name/pattern for platform, ensure non-empty archive, and ensure extraction yields the expected executable path.
+- **npm runtimes (OpenClaw)**: Rely on npm's default package integrity and TLS checks via standard `npm install`.
+- **Git-cloned runtimes (NanoClaw)**: Clone from the canonical repository URL and validate expected project files before marking install complete.
+- **Optional checksum path**: If a runtime publishes `SHA256SUMS`, verify it and fail on mismatch; if not present, continue with baseline validation.
 
-If checksum verification fails:
+If validation fails:
 ```
-[clawden] ERROR: Checksum mismatch for zeroclaw-0.1.7-linux-x86_64.tar.gz
-         Expected: sha256:abc123...
-         Got:      sha256:def456...
-         The download may be corrupted or tampered with. Aborting install.
+[clawden] ERROR: Download validation failed for zeroclaw-0.1.7-linux-x86_64.tar.gz
+         Reason: archive is missing expected runtime binary
+         The artifact may be corrupted or incompatible. Aborting install.
 ```
 
 ### Process Management (Direct Mode)
@@ -206,7 +206,7 @@ Direct mode runs runtimes with a controlled environment:
 - [ ] Implement `clawden install --list` and `clawden uninstall`
 - [ ] Add Docker detection in `clawden run` — fall back to direct mode when Docker unavailable
 - [ ] Implement `--no-docker` flag and `CLAWDEN_NO_DOCKER` env var
-- [ ] Implement download integrity verification (SHA256SUMS for binaries, npm integrity, git commit pinning)
+- [ ] Implement baseline download validation (artifact pattern, extraction sanity, optional checksum verification when available)
 - [ ] Implement install locking (`~/.clawden/.install.lock`) and atomic directory swap
 - [ ] Implement audit logging for install/uninstall lifecycle events
 
@@ -249,12 +249,12 @@ Direct mode runs runtimes with a controlled environment:
 - [ ] Health check detects crashed runtimes and reports status accurately
 - [ ] Missing tool on host produces a helpful error message with install instructions
 - [ ] `clawden doctor` reports system readiness accurately
-- [ ] Download with tampered checksum is rejected with clear error message
-- [ ] Valid checksum passes verification and install completes successfully
+- [ ] Corrupted or incomplete archive is rejected with clear error message
+- [ ] Valid artifact passes baseline validation and install completes successfully
 - [ ] Concurrent `clawden install zeroclaw` invocations don't corrupt `~/.clawden/`
 - [ ] Interrupted install leaves no partial directory in `~/.clawden/runtimes/`
 - [ ] Install, uninstall, start, stop, crash, restart events appear in `~/.clawden/logs/audit.log`
-- [ ] `clawden run --no-docker` bypasses server API and spawns runtime directly
+- [ ] `clawden run --no-docker` bypasses HTTP server dependency and spawns runtime directly via `clawden-core`
 
 ## Notes
 
