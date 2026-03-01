@@ -331,7 +331,7 @@ impl ClawDenYaml {
                     provider_name
                 ));
             } else if matches!(resolved_type, Some(LlmProvider::Custom(_)))
-                && provider.base_url.as_deref().map_or(true, str::is_empty)
+                && provider.base_url.as_deref().is_none_or(str::is_empty)
             {
                 errors.push(format!(
                     "Provider '{}' of type custom requires a non-empty 'base_url'",
