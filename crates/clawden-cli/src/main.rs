@@ -54,11 +54,13 @@ async fn main() -> Result<()> {
             restart,
         } => {
             commands::exec_run(
-                runtime,
-                channel,
-                tools,
-                restart,
-                cli.no_docker,
+                commands::RunOptions {
+                    runtime,
+                    channel,
+                    tools,
+                    restart,
+                    no_docker: cli.no_docker,
+                },
                 &installer,
                 &process_manager,
                 &mut manager,

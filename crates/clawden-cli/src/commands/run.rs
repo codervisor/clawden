@@ -7,16 +7,27 @@ use crate::util::{
     parse_runtime, prompt_yes_no,
 };
 
+pub struct RunOptions {
+    pub runtime: Option<String>,
+    pub channel: Vec<String>,
+    pub tools: Option<String>,
+    pub restart: Option<String>,
+    pub no_docker: bool,
+}
+
 pub async fn exec_run(
-    runtime: Option<String>,
-    channel: Vec<String>,
-    tools: Option<String>,
-    restart: Option<String>,
-    no_docker: bool,
+    opts: RunOptions,
     installer: &RuntimeInstaller,
     process_manager: &ProcessManager,
     manager: &mut LifecycleManager,
 ) -> Result<()> {
+    let RunOptions {
+        runtime,
+        channel,
+        tools,
+        restart,
+        no_docker,
+    } = opts;
     if runtime.is_none() && is_first_run_context(installer)? {
         let run_wizard = prompt_yes_no(
             "No project config found. Run setup wizard before starting a runtime?",

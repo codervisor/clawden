@@ -19,7 +19,7 @@ pub use install::{exec_install, exec_uninstall};
 pub use logs::exec_logs;
 pub use providers::exec_providers;
 pub use ps::exec_ps;
-pub use run::exec_run;
+pub use run::{exec_run, RunOptions};
 pub use stop::exec_stop;
 pub use tools::exec_tools;
 pub use up::exec_up;
