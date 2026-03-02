@@ -70,8 +70,8 @@ Extended tools ship as **use-case image variants**:
 | --------------- | ---------------------------------------- | ------ | ----------------------------------------------------------------------------- |
 | `:latest`       | Core + Standard                          | ~650MB | General-purpose agent runtime                                                 |
 | `:browser`      | `:latest` + headless Chromium/Playwright | ~1.1GB | LLM web browsing — search, scrape, fill forms                                 |
-| `:computer-use` | `:browser` + Xvfb/VNC/noVNC/fluxbox      | ~1.3GB | Full computer-use agent — GUI interaction, visual browser, desktop automation |
-| `:full`         | `:computer-use` + compiler toolchain     | ~1.6GB | Advanced users — native compilation, build from source                        |
+| `:computer` | `:browser` + Xvfb/VNC/noVNC/fluxbox      | ~1.3GB | Full computer agent — GUI interaction, visual browser, desktop automation |
+| `:full`     | `:computer` + compiler toolchain         | ~1.6GB | Advanced users — native compilation, build from source                        |
 
 Any extended tool can also be **lazy-installed** into `:latest` at first start (volume-cached), so users are not forced to pick a variant upfront.
 
@@ -100,7 +100,7 @@ Any extended tool can also be **lazy-installed** into `:latest` at first start (
 | Tool       | Components                        | ~Size | Image Variant   | What It Gives the Agent                                           |
 | ---------- | --------------------------------- | ----- | --------------- | ----------------------------------------------------------------- |
 | `browser`  | Chromium 130+, Playwright 1.49+   | 450MB | `:browser`      | Headless web browsing — LLM-driven search, scrape, form fill      |
-| `gui`      | Xvfb, x11vnc, noVNC, fluxbox      | 200MB | `:computer-use` | Full virtual desktop for computer-use agents (requires `browser`) |
+| `gui`      | Xvfb, x11vnc, noVNC, fluxbox      | 200MB | `:computer` | Full virtual desktop for computer agents (requires `browser`) |
 | `compiler` | gcc, g++, make, cmake, pkg-config | 250MB | `:full`         | Compile C/C++ code, build native extensions (advanced users)      |
 
 ### Tool Manifest Format
@@ -234,12 +234,12 @@ export CLAWDEN_BROWSER_WS="ws://localhost:3100"
 Runtimes connect via WebSocket endpoint. Multiple runtime instances share one browser server. `setup.sh` must be idempotent: if the server is already healthy on port 3100, it reuses the existing process and does not spawn duplicates.
 
 **Size mitigation**: Chromium is ~400MB. For the `:latest` image, it's not included. Users who need it either:
-1. Use `clawden-runtime:browser` (or `:computer-use` / `:full` which include it)
+1. Use `clawden-runtime:browser` (or `:computer` / `:full` which include it)
 2. Or use a volume-cached lazy install on `:latest` (first start downloads, subsequent starts skip)
 
 ### GUI Tool Design
 
-`gui` provides a virtual desktop accessible via VNC/noVNC for full computer-use agents. It always requires `browser` — computer-use is a superset that includes visual browser interaction (point-and-click, screenshots) plus arbitrary GUI app control.
+`gui` provides a virtual desktop accessible via VNC/noVNC for full computer agents. It always requires `browser` — `computer` is a superset that includes visual browser interaction (point-and-click, screenshots) plus arbitrary GUI app control.
 
 Because this may run in remote multi-tenant deployments, GUI access is secure-by-default:
 - No unauthenticated VNC (`-nopw`) is allowed.
@@ -260,7 +260,7 @@ export CLAWDEN_VNC_PORT="5900"
 export CLAWDEN_NOVNC_PORT="6080"
 ```
 
-The `:computer-use` image variant includes both `browser` and `gui`. Agents get headless browsing *and* a full desktop — the LLM can choose between Playwright API calls (fast, structured) or visual mouse/keyboard interaction (when DOM access isn't enough).
+The `:computer` image variant includes both `browser` and `gui`. Agents get headless browsing *and* a full desktop — the LLM can choose between Playwright API calls (fast, structured) or visual mouse/keyboard interaction (when DOM access isn't enough).
 
 ### The `core-utils` Tool
 
@@ -327,11 +327,11 @@ Layer 2: Core tools (git, http, core-utils)            ~50MB   │ :latest
 Layer 3: Standard tools (python, code-tools, etc.)    ~170MB   │
 Layer 4: Claw runtimes (zeroclaw, openclaw, etc.)      ~100MB ─┘
 Layer 5: Chromium + Playwright                         ~450MB ─── :browser
-Layer 6: Xvfb + x11vnc + noVNC + fluxbox               ~200MB ─── :computer-use
+Layer 6: Xvfb + x11vnc + noVNC + fluxbox               ~200MB ─── :computer
 Layer 7: gcc, g++, make, cmake                         ~250MB ─── :full
 ```
 
-Each variant is an additive layer on the previous. Layers 2–3 change infrequently, so most rebuilds only touch Layer 4. The `:browser` → `:computer-use` → `:full` chain shares all lower layers, so pulling `:computer-use` when you already have `:browser` only downloads ~200MB.
+Each variant is an additive layer on the previous. Layers 2–3 change infrequently, so most rebuilds only touch Layer 4. The `:browser` → `:computer` → `:full` chain shares all lower layers, so pulling `:computer` when you already have `:browser` only downloads ~200MB.
 
 ## Plan
 
@@ -355,9 +355,9 @@ Each variant is an additive layer on the previous. Layers 2–3 change infrequen
 - [ ] Create `browser` tool (Chromium + Playwright + persistent server)
 - [ ] Build `:browser` image variant (`:latest` + browser layer)
 - [ ] Create `gui` tool (Xvfb + x11vnc + noVNC + fluxbox, depends on `browser`)
-- [ ] Build `:computer-use` image variant (`:browser` + gui layer)
+- [ ] Build `:computer` image variant (`:browser` + gui layer)
 - [ ] Create `compiler` tool (gcc, g++, make, cmake)
-- [ ] Build `:full` image variant (`:computer-use` + compiler layer)
+- [ ] Build `:full` image variant (`:computer` + compiler layer)
 - [ ] Implement lazy install for extended tools in `:latest` image (volume-cached)
 
 ### Phase 4: Ecosystem
@@ -378,7 +378,7 @@ Each variant is an additive layer on the previous. Layers 2–3 change infrequen
 - [ ] `clawden tools list` shows all tools with tier, size, and status
 - [ ] Extended tool lazy install works — first start installs to volume, second start skips
 - [ ] Custom tool in `~/.clawden/tools/my-tool/` with valid `manifest.toml` is discovered and activatable
-- [ ] Image sizes: `:latest` < 700MB, `:browser` < 1.2GB, `:computer-use` < 1.4GB, `:full` < 1.7GB
+- [ ] Image sizes: `:latest` < 700MB, `:browser` < 1.2GB, `:computer` < 1.4GB, `:full` < 1.7GB
 - [ ] GUI security defaults: VNC/noVNC are localhost-only by default, require auth token flow, and are reachable remotely only through authenticated TLS gateway
 
 ## Notes
@@ -387,8 +387,8 @@ Each variant is an additive layer on the previous. Layers 2–3 change infrequen
 - `sandbox` is the highest-priority standard tool — without it, agents running arbitrary code are a security liability
 - `browser` uses Playwright server mode rather than per-request Chromium startup
 - Node.js is already in the base image for OpenClaw/NanoClaw
-- `gui` always requires `browser` — computer-use is a superset of browser-use. The `:computer-use` image includes both.
+- `gui` always requires `browser` — `computer` is a superset of browser use. The `:computer` image includes both.
 - `compiler` targets advanced users only (custom native extensions, research). Most agents never need it.
-- Image variants form a strict chain: `:latest` ⊂ `:browser` ⊂ `:computer-use` ⊂ `:full` — each adds one layer
+- Image variants form a strict chain: `:latest` ⊂ `:browser` ⊂ `:computer` ⊂ `:full` — each adds one layer
 - Direct-install mode (spec 022) uses the same manifests and `setup.sh` scripts — the only difference is install method (apt in container vs. host package manager)
 - `yq` refers to the Go-based `yq` (mikefarah/yq), not the Python wrapper

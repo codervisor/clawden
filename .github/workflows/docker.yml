@@ -9,6 +9,17 @@ on:
         description: "Image tag (e.g. latest, 0.2.0)"
         required: false
         default: "latest"
+      variant:
+        description: "Variant to build"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - latest
+          - browser
+          - computer
+          - full
 
 permissions:
   contents: read
@@ -21,6 +32,22 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: latest
+            suffix: ""
+            floating: latest
+          - target: browser
+            suffix: "-browser"
+            floating: browser
+          - target: computer
+            suffix: "-computer"
+            floating: computer
+          - target: full
+            suffix: "-full"
+            floating: full
     steps:
       - uses: actions/checkout@v4
 
@@ -43,20 +70,36 @@ jobs:
           if [ "${{ github.event_name }}" = "push" ]; then
             TAG="${GITHUB_REF#refs/tags/v}"
             echo "version=${TAG}" >> "$GITHUB_OUTPUT"
-            echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> "$GITHUB_OUTPUT"
           else
             INPUT_TAG="${{ inputs.tag }}"
             echo "version=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
-            echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${INPUT_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Compose image tags
+        id: tags
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          SUFFIX="${{ matrix.suffix }}"
+          FLOATING="${{ matrix.floating }}"
+
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}${SUFFIX}"
+          TAGS+=$'\n'"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${FLOATING}"
+
+          {
+            echo "tags<<EOF"
+            echo "$TAGS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and push
+        if: github.event_name == 'push' || inputs.variant == 'all' || inputs.variant == matrix.target
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
+          target: ${{ matrix.target }}
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

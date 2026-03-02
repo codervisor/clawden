@@ -1,12 +1,16 @@
 # ClawDen Runtime Container
-# Single generic image supporting all Phase 1 runtimes:
+# Multi-target image supporting runtime variants:
 # - OpenClaw (Node.js, JSON5 config, gateway on port 18789)
 # - NanoClaw (Node.js, code-driven, Claude Agent SDK)
 # - ZeroClaw (Rust binary, TOML + env vars)
 # - PicoClaw (Go binary, JSON config)
 # - OpenFang (Rust binary, Agent OS, TOML config, dashboard on port 4200) [DISABLED]
 #
-# Image: ghcr.io/codervisor/clawden-runtime:latest
+# Targets:
+#   latest        -> core + standard tools (default)
+#   browser       -> latest + Chromium + Playwright CLI
+#   computer      -> browser + Xvfb/VNC/noVNC/fluxbox
+#   full          -> computer + compiler toolchain
 # Base: Debian slim + Node.js 22 LTS (for OpenClaw and NanoClaw)
 #
 # Runtimes are installed using `clawden-cli install`, the same code path
@@ -122,3 +126,48 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 USER clawden
 
 ENTRYPOINT ["/opt/clawden/entrypoint.sh"]
+
+# --- Variant stage: browser ---
+FROM base AS browser
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install -g playwright \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /root/.npm /tmp/*
+
+USER clawden
+
+# --- Variant stage: computer ---
+FROM browser AS computer
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
+    fluxbox \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER clawden
+
+# --- Variant stage: full ---
+FROM computer AS full
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    make \
+    cmake \
+    pkg-config \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER clawden
+
+# Keep latest as the default build output when no --target is provided.
+FROM base AS latest
