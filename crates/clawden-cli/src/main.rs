@@ -4,8 +4,8 @@ mod util;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands};
 use clawden_core::{ExecutionMode, LifecycleManager, ProcessManager, RuntimeInstaller};
+use cli::{Cli, Commands};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -67,9 +67,7 @@ async fn main() -> Result<()> {
         }
         Commands::Ps => commands::exec_ps(&process_manager)?,
         Commands::Stop { runtime } => commands::exec_stop(&process_manager, runtime)?,
-        Commands::Logs { runtime, lines } => {
-            commands::exec_logs(&process_manager, runtime, lines)?
-        }
+        Commands::Logs { runtime, lines } => commands::exec_logs(&process_manager, runtime, lines)?,
         Commands::Dashboard { port } => commands::exec_dashboard(port)?,
         Commands::Doctor => commands::exec_doctor(&installer)?,
         Commands::Channels { command } => commands::exec_channels(command, &mut manager)?,

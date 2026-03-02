@@ -19,9 +19,7 @@ pub fn exec_channels(
         }
         Some(ChannelCommand::Test { channel_type }) => {
             if let Some(ct) = channel_type {
-                println!(
-                    "Channel config test for '{ct}' is available in dashboard server mode"
-                );
+                println!("Channel config test for '{ct}' is available in dashboard server mode");
             } else {
                 println!("Channel config test requires a channel type");
             }

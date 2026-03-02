@@ -3,8 +3,8 @@ use clawden_core::{ExecutionMode, LifecycleManager, ProcessManager, RuntimeInsta
 
 use crate::commands::InitOptions;
 use crate::util::{
-    append_audit_file, ensure_installed, env_no_docker_enabled, is_first_run_context, parse_runtime,
-    prompt_yes_no,
+    append_audit_file, ensure_installed, env_no_docker_enabled, is_first_run_context,
+    parse_runtime, prompt_yes_no,
 };
 
 pub async fn exec_run(

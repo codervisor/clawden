@@ -411,16 +411,18 @@ impl ClawDenYaml {
             let provider_map = self.providers.clone();
             let mut resolved_provider = match provider_ref {
                 ProviderRefYaml::Inline(provider) => provider.clone(),
-                ProviderRefYaml::Name(name) => provider_map
-                    .get(name)
-                    .cloned()
-                    .unwrap_or(ProviderEntryYaml {
-                        provider_type: LlmProvider::from_name(name),
-                        api_key: None,
-                        base_url: None,
-                        org_id: None,
-                        extra: HashMap::new(),
-                    }),
+                ProviderRefYaml::Name(name) => {
+                    provider_map
+                        .get(name)
+                        .cloned()
+                        .unwrap_or(ProviderEntryYaml {
+                            provider_type: LlmProvider::from_name(name),
+                            api_key: None,
+                            base_url: None,
+                            org_id: None,
+                            extra: HashMap::new(),
+                        })
+                }
             };
 
             resolve_field(
@@ -447,7 +449,8 @@ impl ClawDenYaml {
                     resolved_provider.api_key = provider_type.resolve_api_key_from_env();
                 }
                 if resolved_provider.base_url.is_none() {
-                    resolved_provider.base_url = provider_type.default_base_url().map(str::to_string);
+                    resolved_provider.base_url =
+                        provider_type.default_base_url().map(str::to_string);
                 }
             }
             *provider_ref = ProviderRefYaml::Inline(resolved_provider);
@@ -1303,7 +1306,10 @@ mod tests {
         let reloaded = SecretVault::from_encrypted_hex(b"persist-key", &exported)
             .expect("vault should reload from encrypted map");
 
-        assert_eq!(reloaded.get("provider/openai").as_deref(), Some("sk-secret"));
+        assert_eq!(
+            reloaded.get("provider/openai").as_deref(),
+            Some("sk-secret")
+        );
     }
 
     #[test]
@@ -1379,11 +1385,15 @@ model: gpt-4o-mini
         let mut parsed = ClawDenYaml::parse_yaml(yaml).expect("yaml should parse");
         parsed.resolve_env_vars().expect("env vars should resolve");
 
-        let ProviderRefYaml::Inline(provider) = parsed.provider.expect("provider should exist") else {
+        let ProviderRefYaml::Inline(provider) = parsed.provider.expect("provider should exist")
+        else {
             panic!("provider shorthand should be normalized to inline provider");
         };
         assert_eq!(provider.api_key.as_deref(), Some("sk-shorthand"));
-        assert_eq!(provider.base_url.as_deref(), Some("https://api.openai.com/v1"));
+        assert_eq!(
+            provider.base_url.as_deref(),
+            Some("https://api.openai.com/v1")
+        );
     }
 
     #[test]
@@ -1398,7 +1408,10 @@ providers:
         let mut parsed = ClawDenYaml::parse_yaml(yaml).expect("yaml should parse");
         parsed.resolve_env_vars().expect("env vars should resolve");
 
-        let provider = parsed.providers.get("google").expect("provider should exist");
+        let provider = parsed
+            .providers
+            .get("google")
+            .expect("provider should exist");
         assert_eq!(provider.api_key.as_deref(), Some("google-key"));
     }
 
@@ -1453,11 +1466,12 @@ runtimes:
         )
         .expect("yaml should be written");
 
-        let mut parsed = ClawDenYaml::from_file(&dir.join("clawden.yaml"))
-            .expect("yaml should load from file");
+        let mut parsed =
+            ClawDenYaml::from_file(&dir.join("clawden.yaml")).expect("yaml should load from file");
         parsed.resolve_env_vars().expect("env vars should resolve");
 
-        let ProviderRefYaml::Inline(provider) = parsed.provider.expect("provider should exist") else {
+        let ProviderRefYaml::Inline(provider) = parsed.provider.expect("provider should exist")
+        else {
             panic!("provider shorthand should resolve into inline provider")
         };
         assert_eq!(provider.api_key.as_deref(), Some("sk-from-dotenv"));

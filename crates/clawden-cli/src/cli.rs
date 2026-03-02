@@ -45,9 +45,7 @@ pub enum Commands {
         list: bool,
     },
     /// Remove a directly installed runtime.
-    Uninstall {
-        runtime: String,
-    },
+    Uninstall { runtime: String },
     /// Start all runtimes from clawden.yaml
     Up {
         /// Specific runtimes to start (starts all if empty)

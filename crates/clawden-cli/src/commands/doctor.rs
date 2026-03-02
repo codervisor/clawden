@@ -8,15 +8,24 @@ use crate::util::{command_exists, get_provider_key_from_vault};
 
 pub fn exec_doctor(installer: &RuntimeInstaller) -> Result<()> {
     println!("Prerequisites");
-    println!("  docker ............... {}", yes_no(ProcessManager::docker_available()));
-    println!("  node ................. {}", yes_no(command_exists("node")));
+    println!(
+        "  docker ............... {}",
+        yes_no(ProcessManager::docker_available())
+    );
+    println!(
+        "  node ................. {}",
+        yes_no(command_exists("node"))
+    );
     println!("  npm .................. {}", yes_no(command_exists("npm")));
     println!("  git .................. {}", yes_no(command_exists("git")));
     println!(
         "  curl/wget ............ {}",
         yes_no(command_exists("curl") || command_exists("wget"))
     );
-    println!("  clawden_home ......... {}", installer.root_dir().display());
+    println!(
+        "  clawden_home ......... {}",
+        installer.root_dir().display()
+    );
 
     let yaml_path = std::env::current_dir()?.join("clawden.yaml");
     if yaml_path.exists() {

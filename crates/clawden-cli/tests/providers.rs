@@ -23,12 +23,15 @@ fn binary_path() -> PathBuf {
 
 fn start_ok_server() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("server should bind");
-    let addr = listener.local_addr().expect("server addr should be available");
+    let addr = listener
+        .local_addr()
+        .expect("server addr should be available");
     thread::spawn(move || {
         if let Ok((mut stream, _)) = listener.accept() {
             let mut buffer = [0u8; 1024];
             let _ = stream.read(&mut buffer);
-            let response = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}";
+            let response =
+                b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}";
             let _ = stream.write_all(response);
         }
     });
@@ -66,7 +69,8 @@ fn providers_list_redacts_api_keys() {
     let home = dir.join("home");
     fs::create_dir_all(&home).expect("home should be created");
 
-    let yaml = "runtime: zeroclaw\nproviders:\n  openai:\n    api_key: sk-visible-should-not-print\n";
+    let yaml =
+        "runtime: zeroclaw\nproviders:\n  openai:\n    api_key: sk-visible-should-not-print\n";
     fs::write(dir.join("clawden.yaml"), yaml).expect("yaml should be written");
 
     let output = Command::new(binary_path())

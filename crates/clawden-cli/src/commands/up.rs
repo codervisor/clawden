@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 use crate::commands::InitOptions;
 use crate::util::{
-    append_audit_file, ensure_installed, env_no_docker_enabled, is_first_run_context, parse_runtime,
-    prompt_yes_no, get_provider_key_from_vault,
+    append_audit_file, ensure_installed, env_no_docker_enabled, get_provider_key_from_vault,
+    is_first_run_context, parse_runtime, prompt_yes_no,
 };
 
 pub async fn exec_up(
@@ -43,7 +43,10 @@ pub async fn exec_up(
     let config = if yaml_path.exists() {
         let mut cfg = ClawDenYaml::from_file(&yaml_path).map_err(|e| anyhow::anyhow!("{}", e))?;
         if let Err(errs) = cfg.resolve_env_vars() {
-            anyhow::bail!("failed to resolve environment variables in clawden.yaml:\n{}", errs.join("\n"));
+            anyhow::bail!(
+                "failed to resolve environment variables in clawden.yaml:\n{}",
+                errs.join("\n")
+            );
         }
         if let Err(errs) = cfg.validate() {
             anyhow::bail!("clawden.yaml validation failed:\n{}", errs.join("\n"));
@@ -102,7 +105,8 @@ pub async fn exec_up(
                 } else {
                     Vec::new()
                 };
-                let info = process_manager.start_direct_with_env(&runtime, &executable, &[], &env_vars)?;
+                let info =
+                    process_manager.start_direct_with_env(&runtime, &executable, &[], &env_vars)?;
                 append_audit_file("runtime.start", &runtime, "ok")?;
                 println!("Started {runtime} (pid {})", info.pid);
             }
@@ -122,7 +126,8 @@ fn runtimes_from_config(config: &ClawDenYaml) -> Vec<String> {
 }
 
 fn runtime_env_vars(config: &ClawDenYaml, runtime: &str) -> Result<Vec<(String, String)>> {
-    let Some((provider_name, mut provider, model)) = runtime_provider_and_model(config, runtime) else {
+    let Some((provider_name, mut provider, model)) = runtime_provider_and_model(config, runtime)
+    else {
         return Ok(Vec::new());
     };
 
@@ -184,17 +189,22 @@ fn runtime_provider_and_model(
                 None => return None,
             };
 
-            let provider = match config.provider.as_ref() {
-                Some(ProviderRefYaml::Inline(entry)) => entry.clone(),
-                Some(ProviderRefYaml::Name(name)) => config.providers.get(name).cloned().unwrap_or(ProviderEntryYaml {
-                    provider_type: infer_provider_type(name),
-                    api_key: None,
-                    base_url: None,
-                    org_id: None,
-                    extra: HashMap::new(),
-                }),
-                None => return None,
-            };
+            let provider =
+                match config.provider.as_ref() {
+                    Some(ProviderRefYaml::Inline(entry)) => entry.clone(),
+                    Some(ProviderRefYaml::Name(name)) => config
+                        .providers
+                        .get(name)
+                        .cloned()
+                        .unwrap_or(ProviderEntryYaml {
+                            provider_type: infer_provider_type(name),
+                            api_key: None,
+                            base_url: None,
+                            org_id: None,
+                            extra: HashMap::new(),
+                        }),
+                    None => return None,
+                };
             return Some((provider_name, provider, config.model.clone()));
         }
     }
@@ -242,8 +252,13 @@ fn provider_slug(provider: &LlmProvider) -> String {
     }
 }
 
-fn provider_key_env_names(provider_type: Option<&LlmProvider>, provider_name: &str) -> Vec<&'static str> {
-    let resolved = provider_type.cloned().or_else(|| infer_provider_type(provider_name));
+fn provider_key_env_names(
+    provider_type: Option<&LlmProvider>,
+    provider_name: &str,
+) -> Vec<&'static str> {
+    let resolved = provider_type
+        .cloned()
+        .or_else(|| infer_provider_type(provider_name));
     match resolved.as_ref() {
         Some(LlmProvider::OpenAi) => vec!["OPENAI_API_KEY"],
         Some(LlmProvider::Anthropic) => vec!["ANTHROPIC_API_KEY"],
@@ -276,7 +291,9 @@ providers:
             .expect("env vars should resolve without references");
 
         let env = runtime_env_vars(&config, "zeroclaw").expect("env vars should build");
-        assert!(env.iter().any(|(k, v)| k == "OPENAI_API_KEY" && v == "sk-test"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "OPENAI_API_KEY" && v == "sk-test"));
         assert!(env
             .iter()
             .any(|(k, v)| k == "CLAWDEN_LLM_MODEL" && v == "gpt-4o-mini"));

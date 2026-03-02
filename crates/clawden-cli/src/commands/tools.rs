@@ -109,18 +109,9 @@ fn exec_tools_info(tool_name: &str) -> Result<()> {
             .clone()
             .unwrap_or_else(|| "-".to_string())
     );
-    println!(
-        "Requires: {}",
-        join_or_dash(&manifest.requires)
-    );
-    println!(
-        "Conflicts: {}",
-        join_or_dash(&manifest.conflicts)
-    );
-    println!(
-        "Provides: {}",
-        join_or_dash(&manifest.provides)
-    );
+    println!("Requires: {}", join_or_dash(&manifest.requires));
+    println!("Conflicts: {}", join_or_dash(&manifest.conflicts));
+    println!("Provides: {}", join_or_dash(&manifest.provides));
 
     Ok(())
 }
@@ -171,8 +162,8 @@ fn discover_manifests() -> Result<Vec<(String, ToolManifest, bool)>> {
             continue;
         }
 
-        let entries = fs::read_dir(&root)
-            .with_context(|| format!("reading tool root {}", root.display()))?;
+        let entries =
+            fs::read_dir(&root).with_context(|| format!("reading tool root {}", root.display()))?;
 
         for dir_entry in entries {
             let dir_entry = dir_entry?;

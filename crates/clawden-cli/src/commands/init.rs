@@ -79,7 +79,10 @@ pub fn exec_init(options: InitOptions) -> Result<()> {
     Ok(())
 }
 
-fn load_existing_selection(yaml_path: &std::path::Path, options: &InitOptions) -> Result<WizardSelection> {
+fn load_existing_selection(
+    yaml_path: &std::path::Path,
+    options: &InitOptions,
+) -> Result<WizardSelection> {
     if options.reconfigure && yaml_path.exists() {
         let mut parsed = ClawDenYaml::from_file(yaml_path).map_err(anyhow::Error::msg)?;
         let _ = parsed.resolve_env_vars();
@@ -186,7 +189,10 @@ fn run_wizard(mut selection: WizardSelection) -> Result<WizardSelection> {
         _ => None,
     };
     if selection.provider.is_some()
-        && prompt_confirm("Store provider API key in local encrypted vault now?", false)?
+        && prompt_confirm(
+            "Store provider API key in local encrypted vault now?",
+            false,
+        )?
     {
         print!("Enter API key (input hidden): ");
         io::stdout().flush()?;
@@ -200,7 +206,14 @@ fn run_wizard(mut selection: WizardSelection) -> Result<WizardSelection> {
     println!("\nStep 5/5 - Tools");
     selection.tools = prompt_multiselect(
         "Select built-in tools (comma-separated numbers)",
-        &["git", "http", "core-utils", "python", "code-tools", "database"],
+        &[
+            "git",
+            "http",
+            "core-utils",
+            "python",
+            "code-tools",
+            "database",
+        ],
         &selection.tools,
     )?;
     if selection.tools.is_empty() {
@@ -212,7 +225,8 @@ fn run_wizard(mut selection: WizardSelection) -> Result<WizardSelection> {
 }
 
 fn render_wizard_yaml(selection: &WizardSelection) -> String {
-    let mut yaml = String::from("# ClawDen config\n# Docs: https://github.com/codervisor/clawden\n\n");
+    let mut yaml =
+        String::from("# ClawDen config\n# Docs: https://github.com/codervisor/clawden\n\n");
 
     if selection.multi {
         yaml.push_str("channels:\n");
@@ -226,7 +240,9 @@ fn render_wizard_yaml(selection: &WizardSelection) -> String {
                     "slack" => "SLACK_BOT_TOKEN",
                     _ => "CHANNEL_TOKEN",
                 };
-                yaml.push_str(&format!("  {ch}:\n    type: {ch}\n    token: ${env_name}\n"));
+                yaml.push_str(&format!(
+                    "  {ch}:\n    type: {ch}\n    token: ${env_name}\n"
+                ));
             }
         }
 
@@ -244,7 +260,10 @@ fn render_wizard_yaml(selection: &WizardSelection) -> String {
         if selection.channels.is_empty() {
             yaml.push_str("    channels: []\n");
         } else {
-            yaml.push_str(&format!("    channels: [{}]\n", selection.channels.join(", ")));
+            yaml.push_str(&format!(
+                "    channels: [{}]\n",
+                selection.channels.join(", ")
+            ));
         }
         yaml.push_str(&format!("    tools: [{}]\n", selection.tools.join(", ")));
         if let Some(provider) = &selection.provider {
@@ -266,7 +285,9 @@ fn render_wizard_yaml(selection: &WizardSelection) -> String {
                     "slack" => "SLACK_BOT_TOKEN",
                     _ => "CHANNEL_TOKEN",
                 };
-                yaml.push_str(&format!("  {ch}:\n    type: {ch}\n    token: ${env_name}\n"));
+                yaml.push_str(&format!(
+                    "  {ch}:\n    type: {ch}\n    token: ${env_name}\n"
+                ));
             }
             yaml.push('\n');
         }
@@ -371,7 +392,10 @@ fn ensure_env_file(
         required.insert("DISCORD_BOT_TOKEN".to_string());
         required.insert("OPENAI_API_KEY".to_string());
     }
-    if matches!(template, Some(TemplateKind::ApiOnly | TemplateKind::MultiRuntime)) {
+    if matches!(
+        template,
+        Some(TemplateKind::ApiOnly | TemplateKind::MultiRuntime)
+    ) {
         required.insert("OPENAI_API_KEY".to_string());
     }
 

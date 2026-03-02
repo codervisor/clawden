@@ -25,7 +25,13 @@ fn init_non_interactive_generates_valid_config_and_env() {
 
     let status = Command::new(binary_path())
         .current_dir(&dir)
-        .args(["init", "--non-interactive", "--force", "--runtime", "zeroclaw"])
+        .args([
+            "init",
+            "--non-interactive",
+            "--force",
+            "--runtime",
+            "zeroclaw",
+        ])
         .status()
         .expect("init command should run");
     assert!(status.success());
@@ -96,7 +102,13 @@ fn init_reconfigure_keeps_existing_runtime_settings() {
 
     let first = Command::new(binary_path())
         .current_dir(&dir)
-        .args(["init", "--non-interactive", "--force", "--runtime", "zeroclaw"])
+        .args([
+            "init",
+            "--non-interactive",
+            "--force",
+            "--runtime",
+            "zeroclaw",
+        ])
         .status()
         .expect("initial init should run");
     assert!(first.success());

@@ -24,7 +24,9 @@ fn list_providers() -> Result<()> {
     }
 
     let mut config = ClawDenYaml::from_file(&yaml_path).map_err(anyhow::Error::msg)?;
-    config.resolve_env_vars().map_err(|errs| anyhow::anyhow!(errs.join("\n")))?;
+    config
+        .resolve_env_vars()
+        .map_err(|errs| anyhow::anyhow!(errs.join("\n")))?;
 
     if config.providers.is_empty() {
         println!("No providers configured in clawden.yaml");
@@ -35,7 +37,8 @@ fn list_providers() -> Result<()> {
     }
 
     for (name, provider) in config.providers {
-        let status = if provider.api_key.is_some() || get_provider_key_from_vault(&name)?.is_some() {
+        let status = if provider.api_key.is_some() || get_provider_key_from_vault(&name)?.is_some()
+        {
             "configured"
         } else {
             "missing_api_key"
@@ -53,7 +56,9 @@ async fn test_providers(only: Option<String>) -> Result<()> {
     }
 
     let mut config = ClawDenYaml::from_file(&yaml_path).map_err(anyhow::Error::msg)?;
-    config.resolve_env_vars().map_err(|errs| anyhow::anyhow!(errs.join("\n")))?;
+    config
+        .resolve_env_vars()
+        .map_err(|errs| anyhow::anyhow!(errs.join("\n")))?;
 
     let mut any = false;
     for (name, provider) in &config.providers {
@@ -77,8 +82,8 @@ async fn test_providers(only: Option<String>) -> Result<()> {
             continue;
         }
         match test_provider_endpoint(name, &base_url, &api_key).await {
-                Ok(()) => println!("provider={name}\ttest=ok"),
-                Err(err) => println!("provider={name}\ttest=fail\terror={err}"),
+            Ok(()) => println!("provider={name}\ttest=ok"),
+            Err(err) => println!("provider={name}\ttest=fail\terror={err}"),
         }
     }
 
@@ -129,7 +134,9 @@ fn set_provider_key(provider: &str) -> Result<()> {
     let env_name = provider_env_var(provider)
         .ok_or_else(|| anyhow::anyhow!("unknown provider '{provider}'"))?;
 
-    print!("Enter API key for {provider} (stored in local vault; .env keeps placeholder {env_name}): ");
+    print!(
+        "Enter API key for {provider} (stored in local vault; .env keeps placeholder {env_name}): "
+    );
     io::stdout().flush()?;
     let key = rpassword::read_password()?.trim().to_string();
     if key.is_empty() {
@@ -144,7 +151,9 @@ fn set_provider_key(provider: &str) -> Result<()> {
     } else {
         HashMap::new()
     };
-    entries.entry(env_name.to_string()).or_insert_with(String::new);
+    entries
+        .entry(env_name.to_string())
+        .or_insert_with(String::new);
 
     let mut lines = vec!["# ClawDen environment variables".to_string()];
     let mut keys: Vec<_> = entries.keys().cloned().collect();
