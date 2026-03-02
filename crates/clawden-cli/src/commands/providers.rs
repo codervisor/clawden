@@ -6,6 +6,7 @@ use std::io::{self, IsTerminal, Write};
 use std::time::Duration;
 
 use crate::cli::ProviderCommand;
+use crate::util::{get_provider_key_from_vault, store_provider_key_in_vault};
 
 pub fn exec_providers(command: Option<ProviderCommand>) -> Result<()> {
     match command {
@@ -34,7 +35,7 @@ fn list_providers() -> Result<()> {
     }
 
     for (name, provider) in config.providers {
-        let status = if provider.api_key.is_some() {
+        let status = if provider.api_key.is_some() || get_provider_key_from_vault(&name)?.is_some() {
             "configured"
         } else {
             "missing_api_key"
@@ -66,12 +67,18 @@ fn test_providers(only: Option<String>) -> Result<()> {
             .base_url
             .clone()
             .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-        match provider.api_key.as_deref() {
-            Some(api_key) => match test_provider_endpoint(name, &base_url, api_key) {
+        let api_key = provider
+            .api_key
+            .clone()
+            .or(get_provider_key_from_vault(name)?)
+            .unwrap_or_default();
+        if api_key.is_empty() {
+            println!("provider={name}\ttest=fail\terror=missing api_key");
+            continue;
+        }
+        match test_provider_endpoint(name, &base_url, &api_key) {
                 Ok(()) => println!("provider={name}\ttest=ok"),
                 Err(err) => println!("provider={name}\ttest=fail\terror={err}"),
-            },
-            None => println!("provider={name}\ttest=fail\terror=missing api_key"),
         }
     }
 
@@ -122,14 +129,14 @@ fn set_provider_key(provider: &str) -> Result<()> {
     let env_name = provider_env_var(provider)
         .ok_or_else(|| anyhow::anyhow!("unknown provider '{provider}'"))?;
 
-    print!("Enter API key for {provider} (stored in .env as {env_name}): ");
+    print!("Enter API key for {provider} (stored in local vault; .env keeps placeholder {env_name}): ");
     io::stdout().flush()?;
-    let mut key = String::new();
-    io::stdin().read_line(&mut key)?;
-    let key = key.trim();
+    let key = rpassword::read_password()?.trim().to_string();
     if key.is_empty() {
         anyhow::bail!("API key cannot be empty");
     }
+
+    let vault_path = store_provider_key_in_vault(provider, &key)?;
 
     let env_path = std::env::current_dir()?.join(".env");
     let mut entries = if env_path.exists() {
@@ -137,7 +144,7 @@ fn set_provider_key(provider: &str) -> Result<()> {
     } else {
         HashMap::new()
     };
-    entries.insert(env_name.to_string(), key.to_string());
+    entries.entry(env_name.to_string()).or_insert_with(String::new);
 
     let mut lines = vec!["# ClawDen environment variables".to_string()];
     let mut keys: Vec<_> = entries.keys().cloned().collect();
@@ -149,7 +156,8 @@ fn set_provider_key(provider: &str) -> Result<()> {
     }
     std::fs::write(&env_path, format!("{}\n", lines.join("\n")))?;
 
-    println!("Stored key in {}", env_path.display());
+    println!("Stored encrypted key in {}", vault_path.display());
+    println!("Ensured placeholder in {}", env_path.display());
     Ok(())
 }
 

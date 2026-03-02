@@ -4,6 +4,24 @@ Unified orchestration platform for heterogeneous claw runtimes.
 
 ## Quick start
 
+### Guided onboarding
+
+1. Initialize a project with the setup wizard:
+	- `cargo run -p clawden-cli -- init`
+2. For CI or scripts, use non-interactive mode:
+	- `cargo run -p clawden-cli -- init --yes --runtime zeroclaw`
+3. Use a starter template when needed:
+	- `cargo run -p clawden-cli -- init --template telegram-bot --yes`
+4. Validate local setup before startup:
+	- `cargo run -p clawden-cli -- doctor`
+5. Start runtimes:
+	- `cargo run -p clawden-cli -- up`
+
+Provider key management:
+	- List configured providers: `cargo run -p clawden-cli -- providers`
+	- Test provider credentials: `cargo run -p clawden-cli -- providers test`
+	- Store a key in local encrypted vault: `cargo run -p clawden-cli -- providers set-key openai`
+
 ### Rust backend and CLI
 
 - Build: `cargo build`

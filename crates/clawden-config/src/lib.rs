@@ -898,6 +898,36 @@ impl SecretVault {
         names
     }
 
+    /// Export encrypted entries so callers can persist them to disk without
+    /// exposing plaintext values.
+    pub fn export_encrypted_hex(&self) -> HashMap<String, String> {
+        self.store
+            .iter()
+            .map(|(name, bytes)| (name.clone(), hex_encode(bytes)))
+            .collect()
+    }
+
+    /// Rebuild a vault from previously exported encrypted entries.
+    pub fn from_encrypted_hex(
+        key: &[u8],
+        entries: &HashMap<String, String>,
+    ) -> Result<Self, String> {
+        if key.is_empty() {
+            return Err("vault key must not be empty".to_string());
+        }
+
+        let mut store = HashMap::new();
+        for (name, value) in entries {
+            let decoded = hex_decode(value)?;
+            store.insert(name.clone(), decoded);
+        }
+
+        Ok(Self {
+            store,
+            key: key.to_vec(),
+        })
+    }
+
     /// Resolve all `api_key_ref` values in a config by injecting from the vault.
     /// Returns a new config with the `api_key_ref` field replaced by the actual
     /// secret value. This is intended for deploy-time injection only; the result
@@ -919,6 +949,27 @@ impl SecretVault {
             .map(|(i, byte)| byte ^ key[i % key.len()])
             .collect()
     }
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+fn hex_decode(value: &str) -> Result<Vec<u8>, String> {
+    if !value.len().is_multiple_of(2) {
+        return Err("invalid hex length".to_string());
+    }
+    let mut out = Vec::with_capacity(value.len() / 2);
+    for idx in (0..value.len()).step_by(2) {
+        let part = &value[idx..idx + 2];
+        let byte = u8::from_str_radix(part, 16).map_err(|_| "invalid hex byte".to_string())?;
+        out.push(byte);
+    }
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -1229,6 +1280,18 @@ mod tests {
             resolved.agent.model.api_key_ref.as_deref(),
             Some("sk-real-key-123")
         );
+    }
+
+    #[test]
+    fn secret_vault_export_import_roundtrip() {
+        let mut vault = SecretVault::new(b"persist-key");
+        vault.put("provider/openai", "sk-secret");
+
+        let exported = vault.export_encrypted_hex();
+        let reloaded = SecretVault::from_encrypted_hex(b"persist-key", &exported)
+            .expect("vault should reload from encrypted map");
+
+        assert_eq!(reloaded.get("provider/openai").as_deref(), Some("sk-secret"));
     }
 
     #[test]

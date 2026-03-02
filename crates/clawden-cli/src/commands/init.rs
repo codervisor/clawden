@@ -1,9 +1,9 @@
 use anyhow::Result;
 use clawden_config::{ClawDenYaml, ProviderRefYaml};
 use std::collections::BTreeSet;
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 
-use crate::util::{append_audit_file, parse_runtime};
+use crate::util::{append_audit_file, parse_runtime, store_provider_key_in_vault};
 
 #[derive(Debug, Clone)]
 pub struct InitOptions {
@@ -29,6 +29,7 @@ struct WizardSelection {
     runtime: String,
     multi: bool,
     provider: Option<String>,
+    provider_key: Option<String>,
     model: Option<String>,
     channels: Vec<String>,
     tools: Vec<String>,
@@ -49,7 +50,7 @@ pub fn exec_init(options: InitOptions) -> Result<()> {
         .transpose()?;
 
     let mut selection = load_existing_selection(&yaml_path, &options)?;
-    let interactive = !options.non_interactive && !options.yes && io::stdin().is_terminal();
+    let interactive = !options.non_interactive && !options.yes;
 
     if interactive && template.is_none() {
         selection = run_wizard(selection)?;
@@ -66,6 +67,13 @@ pub fn exec_init(options: InitOptions) -> Result<()> {
 
     let env_path = yaml_path.parent().unwrap().join(".env");
     ensure_env_file(&env_path, template, &selection)?;
+
+    if let (Some(provider), Some(key)) = (&selection.provider, &selection.provider_key) {
+        if !key.is_empty() {
+            let path = store_provider_key_in_vault(provider, key)?;
+            println!("Stored encrypted provider key in {}", path.display());
+        }
+    }
 
     append_audit_file("project.init", &selection.runtime, "ok")?;
     Ok(())
@@ -114,6 +122,7 @@ fn load_existing_selection(yaml_path: &std::path::Path, options: &InitOptions) -
             runtime,
             multi,
             provider,
+            provider_key: None,
             model,
             channels,
             tools,
@@ -124,6 +133,7 @@ fn load_existing_selection(yaml_path: &std::path::Path, options: &InitOptions) -
         runtime: options.runtime.clone(),
         multi: options.multi,
         provider: Some("openai".to_string()),
+        provider_key: None,
         model: Some("gpt-4o-mini".to_string()),
         channels: Vec::new(),
         tools: vec!["git".to_string(), "http".to_string()],
@@ -175,6 +185,17 @@ fn run_wizard(mut selection: WizardSelection) -> Result<WizardSelection> {
         4 => Some("local-llm".to_string()),
         _ => None,
     };
+    if selection.provider.is_some()
+        && prompt_confirm("Store provider API key in local encrypted vault now?", false)?
+    {
+        print!("Enter API key (input hidden): ");
+        io::stdout().flush()?;
+        let key = rpassword::read_password()?;
+        let trimmed = key.trim();
+        if !trimmed.is_empty() {
+            selection.provider_key = Some(trimmed.to_string());
+        }
+    }
 
     println!("\nStep 5/5 - Tools");
     selection.tools = prompt_multiselect(

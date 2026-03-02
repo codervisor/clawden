@@ -1,4 +1,5 @@
 use anyhow::Result;
+use clawden_config::SecretVault;
 use clawden_core::{ClawRuntime, RuntimeInstaller};
 use std::fs::OpenOptions;
 use std::io::{self, IsTerminal, Write};
@@ -86,4 +87,68 @@ pub fn prompt_yes_no(question: &str, default_yes: bool) -> Result<bool> {
         return Ok(default_yes);
     }
     Ok(matches!(normalized.as_str(), "y" | "yes"))
+}
+
+pub fn store_provider_key_in_vault(provider: &str, key: &str) -> Result<PathBuf> {
+    let path = vault_file_path()?;
+    let mut vault = load_vault()?;
+    vault.put(&provider_secret_name(provider), key);
+    save_vault(&vault, &path)?;
+    Ok(path)
+}
+
+pub fn get_provider_key_from_vault(provider: &str) -> Result<Option<String>> {
+    let vault = load_vault()?;
+    Ok(vault.get(&provider_secret_name(provider)))
+}
+
+fn provider_secret_name(provider: &str) -> String {
+    format!("provider/{}", provider.to_ascii_lowercase())
+}
+
+fn vault_key() -> Vec<u8> {
+    std::env::var("CLAWDEN_VAULT_KEY")
+        .unwrap_or_else(|_| "clawden-local-vault-key".to_string())
+        .into_bytes()
+}
+
+fn vault_file_path() -> Result<PathBuf> {
+    let home = std::env::var("HOME")?;
+    Ok(PathBuf::from(home).join(".clawden").join("secrets.vault"))
+}
+
+fn load_vault() -> Result<SecretVault> {
+    let path = vault_file_path()?;
+    let key = vault_key();
+    if !path.exists() {
+        return Ok(SecretVault::new(&key));
+    }
+
+    let mut data = std::collections::HashMap::new();
+    let content = std::fs::read_to_string(path)?;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some((name, encrypted)) = trimmed.split_once('=') {
+            data.insert(name.trim().to_string(), encrypted.trim().to_string());
+        }
+    }
+
+    SecretVault::from_encrypted_hex(&key, &data).map_err(anyhow::Error::msg)
+}
+
+fn save_vault(vault: &SecretVault, path: &PathBuf) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut lines = vec!["# ClawDen encrypted provider key vault".to_string()];
+    let mut entries: Vec<_> = vault.export_encrypted_hex().into_iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    for (name, encrypted) in entries {
+        lines.push(format!("{name}={encrypted}"));
+    }
+    std::fs::write(path, format!("{}\n", lines.join("\n")))?;
+    Ok(())
 }

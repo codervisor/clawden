@@ -186,11 +186,11 @@ Each template pre-fills the YAML with a known-good configuration and annotates w
 - [x] Add `--template <name>` flag with bundled templates
 - [x] Add `--reconfigure` flag for additive config updates
 - [x] Extend `doctor` command with config validation section
-- [ ] Extend `doctor` command with credential testing (lightweight auth pings)
+- [x] Extend `doctor` command with credential testing (lightweight auth pings)
 - [x] Extend `doctor` command with runtime availability checks
 - [x] Add first-run detection to `up` and `run` commands
 - [x] Add quick-start templates (telegram-bot, discord-bot, api-only, multi-runtime)
-- [ ] Write integration tests for wizard flow (simulated stdin)
+- [x] Write integration tests for wizard flow (simulated stdin)
 - [ ] Update README with getting-started walkthrough referencing `clawden init`
 
 ## Test
@@ -198,10 +198,10 @@ Each template pre-fills the YAML with a known-good configuration and annotates w
 - [x] `clawden init` in empty directory launches interactive wizard and produces valid `clawden.yaml` + `.env`
 - [x] `clawden init --yes` produces config non-interactively (CI-safe)
 - [x] `clawden init --template telegram-bot` generates correct template with placeholder env vars
-- [ ] `clawden init --reconfigure` on existing project merges without data loss
+- [x] `clawden init --reconfigure` on existing project merges without data loss
 - [x] `clawden doctor` reports config errors and credential issues with actionable messages
 - [x] `clawden up` with no config triggers first-run prompt
-- [ ] Wizard masks credential input (no plaintext API keys on screen)
+- [x] Wizard masks credential input (no plaintext API keys on screen)
 
 ## Notes
 

@@ -1,8 +1,10 @@
 use anyhow::Result;
 use clawden_config::ClawDenYaml;
 use clawden_core::{ProcessManager, RuntimeInstaller};
+use reqwest::blocking::Client;
+use std::time::Duration;
 
-use crate::util::command_exists;
+use crate::util::{command_exists, get_provider_key_from_vault};
 
 pub fn exec_doctor(installer: &RuntimeInstaller) -> Result<()> {
     println!("Prerequisites");
@@ -44,12 +46,27 @@ pub fn exec_doctor(installer: &RuntimeInstaller) -> Result<()> {
             println!("  providers ............ none configured");
         } else {
             for (name, provider) in &config.providers {
-                let key_state = if provider.api_key.is_some() {
+                let provider_key = provider
+                    .api_key
+                    .clone()
+                    .or(get_provider_key_from_vault(name)?);
+                let key_state = if provider_key.is_some() {
                     "ok"
                 } else {
                     "missing api_key"
                 };
                 println!("  provider.{name} ....... {key_state}");
+
+                if let Some(api_key) = provider_key {
+                    let base_url = provider
+                        .base_url
+                        .clone()
+                        .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+                    match probe_provider(name, &base_url, &api_key) {
+                        Ok(()) => println!("    credential_probe ..... ok"),
+                        Err(err) => println!("    credential_probe ..... fail ({err})"),
+                    }
+                }
             }
         }
     } else {
@@ -65,6 +82,34 @@ pub fn exec_doctor(installer: &RuntimeInstaller) -> Result<()> {
         println!("  {} ............. {}", row.runtime, row.version);
     }
     Ok(())
+}
+
+fn probe_provider(provider: &str, base_url: &str, api_key: &str) -> Result<()> {
+    let endpoint = if provider == "anthropic" {
+        format!("{}/v1/models", base_url.trim_end_matches('/'))
+    } else {
+        format!("{}/models", base_url.trim_end_matches('/'))
+    };
+
+    let client = Client::builder().timeout(Duration::from_secs(6)).build()?;
+    let mut request = client.get(endpoint);
+    match provider {
+        "anthropic" => {
+            request = request
+                .header("x-api-key", api_key)
+                .header("anthropic-version", "2023-06-01");
+        }
+        _ => {
+            request = request.bearer_auth(api_key);
+        }
+    }
+
+    let response = request.send()?;
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        anyhow::bail!("http_status={}", response.status());
+    }
 }
 
 fn yes_no(value: bool) -> &'static str {

@@ -215,7 +215,7 @@ The Runtime Instance Manager (spec 021) should show provider + model per runtime
 - [x] Ensure all four Phase 1 translators consistently map provider credentials + model
 - [x] Add `clawden providers` CLI command (list providers + status)
 - [x] Add `clawden providers test` CLI command (validate keys via lightweight API call)
-- [ ] Add `clawden providers set-key <provider>` CLI command (interactive, stores in vault)
+- [x] Add `clawden providers set-key <provider>` CLI command (interactive, stores in vault)
 - [ ] Update dashboard config editor to support `providers` section with masked keys
 - [x] Add unit tests: YAML parsing, env-var resolution, provider defaults, translator output
 - [ ] Add integration test: end-to-end provider config → runtime receives correct key
