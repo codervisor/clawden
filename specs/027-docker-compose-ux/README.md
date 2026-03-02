@@ -58,9 +58,9 @@ clawden up [RUNTIMES...] [-d|--detach] [--no-log-prefix] [--timeout N]
 clawden down [RUNTIMES...] [--timeout N] [--remove-orphans]
 ```
 
-- Stops all runtimes started by `up`
+- Stops all runtimes started by `up` **that belong to the current project** (scoped by config-path hash stored in each PID file at start time)
 - Cleans up PID files and stale state
-- `--remove-orphans` — stop runtimes not in current clawden.yaml
+- `--remove-orphans` — stop runtimes owned by this project but no longer listed in its clawden.yaml (never touches runtimes owned by other projects/sessions)
 
 #### `clawden run` (one-off, foreground)
 
@@ -106,8 +106,13 @@ clawden start [RUNTIMES...]
 pub fn stream_logs(&self, runtimes: &[String]) -> Result<LogStream>;
 
 pub struct LogStream {
-    receiver: tokio::sync::mpsc::UnboundedReceiver<LogLine>,
+    receiver: tokio::sync::mpsc::Receiver<LogLine>,  // bounded (capacity: 4096)
 }
+
+// Back-pressure policy: when the channel is full, the oldest unread line
+// is dropped and a per-runtime `dropped_lines` counter is incremented.
+// The counter is printed as a warning when the consumer catches up:
+//   "zeroclaw | ⚠ 12 log lines dropped (slow consumer)"
 
 pub struct LogLine {
     pub runtime: String,
@@ -141,12 +146,14 @@ On **second** Ctrl+C during shutdown: immediate SIGKILL all.
 - [ ] Implement color-coded log multiplexer in `clawden-cli`
 - [ ] Rewrite `clawden up` — foreground streaming default, add `-d`/`--detach`
 - [ ] Implement double-Ctrl+C shutdown (graceful then forced)
-- [ ] Add `clawden down` command with PID cleanup and `--remove-orphans`
+- [ ] Add `clawden down` command with PID cleanup and `--remove-orphans` (project-scoped via config-path hash)
 - [ ] Rewrite `clawden run` — foreground streaming default, add `--detach`
 - [ ] Enhance `clawden logs` — add `-f`/`--follow`, multi-runtime mux, `--timestamps`
 - [ ] Add `clawden restart` command
 - [ ] Add `clawden start` command
 - [ ] Add `--timeout` flag to `stop`, `down`, `restart`, `up`
+- [ ] Store project ownership (config-path hash) in PID files at start time; use for `down`/orphan scoping
+- [ ] Audit-log all new lifecycle events: `runtime.down`, `runtime.restart`, `runtime.start`, `runtime.force_kill`
 - [ ] Update CLI help text and clap command descriptions
 
 ## Test
@@ -163,4 +170,8 @@ On **second** Ctrl+C during shutdown: immediate SIGKILL all.
 - [ ] `clawden restart` stops then re-starts specified runtimes
 - [ ] Log lines are color-coded per runtime when multiple are active
 - [ ] `--timeout` is respected during shutdown
-- [ ] `clawden down --remove-orphans` removes runtimes not in clawden.yaml
+- [ ] `clawden down --remove-orphans` removes runtimes not in clawden.yaml but owned by this project
+- [ ] `clawden down --remove-orphans` does NOT stop runtimes owned by other projects
+- [ ] All lifecycle commands (`up`, `down`, `start`, `restart`) emit audit log entries
+- [ ] Forced-kill after timeout emits `runtime.force_kill` audit entry
+- [ ] Log stream drops oldest lines under back-pressure and prints dropped-line warning
