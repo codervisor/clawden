@@ -17,7 +17,6 @@ transitions:
 - status: in-progress
   at: 2026-03-02T09:04:49.604493321Z
 ---
-
 # Docker Mode Config Injection — Channel & Env Passthrough
 
 ## Overview
@@ -122,13 +121,13 @@ Apply the same fix to `clawden run` Docker mode — it has the same gap.
 - [x] Update `ZeroClawAdapter::start()` to forward env vars and channels to the container
 - [x] Update other Phase 1 adapters (OpenClaw, PicoClaw, NanoClaw) similarly
 - [x] Apply the same config injection fix to `clawden run` Docker mode path
-- [ ] Add integration test: `clawden up` in Docker mode with telegram channel configured → runtime receives `TELEGRAM_BOT_TOKEN` env var
+- [x] Add integration test: `clawden up` in Docker mode with telegram channel configured → runtime receives `TELEGRAM_BOT_TOKEN` env var
 
 ## Test
 
-- [ ] `clawden up` in Docker mode with `channels.telegram.token` in `clawden.yaml` → runtime starts with Telegram channel active (not "No real-time channels configured")
+- [x] `clawden up` in Docker mode with `channels.telegram.token` in `clawden.yaml` → runtime starts with Telegram channel active (not "No real-time channels configured")
 - [ ] `clawden up` in Docker mode with `provider` and `model` in `clawden.yaml` → runtime receives provider API key and model env vars
-- [ ] `clawden up` in Docker mode with `tools: [git, http]` → container's `TOOLS` env var is set to `git,http`
-- [ ] `clawden run zeroclaw` in Docker mode passes channel and provider config to the container
+- [x] `clawden up` in Docker mode with `tools: [git, http]` → container's `TOOLS` env var is set to `git,http`
+- [x] `clawden run zeroclaw` in Docker mode passes channel and provider config to the container
 - [ ] Direct mode behavior is unchanged (no regression)
 - [ ] Missing env var references (e.g. `$UNSET_VAR`) produce a clear error at startup, not a silent empty value
