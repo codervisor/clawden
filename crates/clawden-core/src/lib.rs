@@ -21,7 +21,10 @@ pub use discovery::{DiscoveredEndpoint, DiscoveryMethod, DiscoveryService};
 pub use install::{InstallOutcome, InstalledRuntime, RuntimeInstaller};
 pub use lifecycle::AgentState;
 pub use manager::{AgentRecord, LifecycleManager};
-pub use process::{ExecutionMode, ProcessInfo, ProcessManager, RuntimeProcessStatus};
+pub use process::{
+    ExecutionMode, LogLine, LogStream, ProcessInfo, ProcessManager, RuntimeProcessStatus,
+    StopOutcome,
+};
 pub use swarm::{SwarmCoordinator, SwarmMember, SwarmRole};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

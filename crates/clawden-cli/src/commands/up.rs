@@ -4,21 +4,29 @@ use clawden_config::{
 };
 use clawden_core::{ExecutionMode, LifecycleManager, ProcessManager, RuntimeInstaller};
 use std::collections::HashMap;
+use std::time::Duration;
 
 use crate::commands::InitOptions;
 use crate::util::{
-    append_audit_file, ensure_installed, env_no_docker_enabled, get_provider_key_from_vault,
-    is_first_run_context, parse_runtime, prompt_yes_no,
+    append_audit_file, ensure_installed_runtime, env_no_docker_enabled,
+    get_provider_key_from_vault, is_first_run_context, parse_runtime, project_hash, prompt_yes_no,
 };
 
+pub struct UpOptions {
+    pub runtimes: Vec<String>,
+    pub detach: bool,
+    pub no_log_prefix: bool,
+    pub timeout: u64,
+}
+
 pub async fn exec_up(
-    runtimes: Vec<String>,
+    opts: UpOptions,
     no_docker: bool,
     installer: &RuntimeInstaller,
     process_manager: &ProcessManager,
     manager: &mut LifecycleManager,
 ) -> Result<()> {
-    if runtimes.is_empty() && is_first_run_context(installer)? {
+    if opts.runtimes.is_empty() && is_first_run_context(installer)? {
         let run_wizard = prompt_yes_no(
             "No clawden.yaml found and no installed runtimes. Run setup wizard now?",
             true,
@@ -40,44 +48,9 @@ pub async fn exec_up(
     }
 
     let mode = process_manager.resolve_mode(no_docker || env_no_docker_enabled());
-
-    let yaml_path = std::env::current_dir()?.join("clawden.yaml");
-    let config = if yaml_path.exists() {
-        let mut cfg = ClawDenYaml::from_file(&yaml_path).map_err(|e| anyhow::anyhow!("{}", e))?;
-        if let Err(errs) = cfg.resolve_env_vars() {
-            anyhow::bail!(
-                "failed to resolve environment variables in clawden.yaml:\n{}",
-                errs.join("\n")
-            );
-        }
-        if let Err(errs) = cfg.validate() {
-            anyhow::bail!("clawden.yaml validation failed:\n{}", errs.join("\n"));
-        }
-        Some(cfg)
-    } else {
-        None
-    };
-
-    // Determine target runtimes: CLI args > clawden.yaml > installed runtimes
-    let target_runtimes = if !runtimes.is_empty() {
-        runtimes
-    } else if let Some(cfg) = config.as_ref() {
-        let from_config = runtimes_from_config(cfg);
-        if from_config.is_empty() {
-            anyhow::bail!("clawden.yaml does not define any runtimes");
-        }
-        println!(
-            "Using runtimes from clawden.yaml: {}",
-            from_config.join(", ")
-        );
-        from_config
-    } else {
-        installer
-            .list_installed()?
-            .into_iter()
-            .map(|row| row.runtime)
-            .collect::<Vec<_>>()
-    };
+    let config = load_config()?;
+    let target_runtimes =
+        resolve_target_runtimes(opts.runtimes.clone(), config.as_ref(), installer)?;
 
     if target_runtimes.is_empty() {
         println!("No runtimes to start. Create a clawden.yaml with 'clawden init' or install one with 'clawden install zeroclaw'");
@@ -85,7 +58,6 @@ pub async fn exec_up(
     }
 
     let mut started_runtimes = Vec::new();
-    let mut started_pids = Vec::new();
 
     for runtime in target_runtimes {
         match mode {
@@ -105,7 +77,7 @@ pub async fn exec_up(
                 started_runtimes.push(runtime.clone());
             }
             ExecutionMode::Direct | ExecutionMode::Auto => {
-                let executable = ensure_installed(installer, &runtime)?;
+                let installed = ensure_installed_runtime(installer, &runtime)?;
                 let env_vars = if let Some(cfg) = config.as_ref() {
                     build_runtime_env_vars(cfg, &runtime)?
                 } else {
@@ -118,32 +90,82 @@ pub async fn exec_up(
                     Vec::new()
                 };
 
-                let mut args = vec!["daemon".to_string()];
+                let mut args = installed.start_args.clone();
                 if !channels.is_empty() {
                     args.push(format!("--channels={}", channels.join(",")));
                 }
 
-                let info = process_manager.start_direct_with_env(
+                let info = process_manager.start_direct_with_env_and_project(
                     &runtime,
-                    &executable,
+                    &installed.executable,
                     &args,
                     &env_vars,
+                    Some(project_hash()?),
                 )?;
                 append_audit_file("runtime.start", &runtime, "ok")?;
                 println!("Started {runtime} (pid {})", info.pid);
                 started_runtimes.push(runtime.clone());
-                started_pids.push(info.pid);
             }
         }
     }
 
-    if !started_runtimes.is_empty() {
-        println!("All runtimes started. Press Ctrl+C to stop.");
-        wait_for_shutdown_or_exit(&started_pids).await;
-        println!("Shutting down...");
-        for runtime in &started_runtimes {
-            if let Err(e) = process_manager.stop(runtime) {
-                eprintln!("Warning: failed to stop {runtime}: {e}");
+    if opts.detach {
+        print_status_table(process_manager)?;
+        return Ok(());
+    }
+
+    if started_runtimes.is_empty() {
+        return Ok(());
+    }
+
+    println!("Attaching logs. Press Ctrl+C to stop.");
+    let stream = process_manager.stream_logs(&started_runtimes)?;
+    let mut tick = tokio::time::interval(Duration::from_millis(150));
+    let ctrl_c = tokio::signal::ctrl_c();
+    tokio::pin!(ctrl_c);
+
+    loop {
+        tokio::select! {
+            _ = &mut ctrl_c => {
+                println!("Gracefully stopping...");
+                let to_stop = started_runtimes.clone();
+                let timeout = opts.timeout;
+                let stop_task = tokio::task::spawn_blocking(move || {
+                    let pm = ProcessManager::new(ExecutionMode::Auto)?;
+                    for runtime in &to_stop {
+                        if let Ok(outcome) = pm.stop_with_timeout(runtime, timeout) {
+                            if outcome.forced {
+                                let _ = append_audit_file("runtime.force_kill", runtime, "ok");
+                            }
+                            let _ = append_audit_file("runtime.stop", runtime, "ok");
+                        }
+                    }
+                    Ok::<(), anyhow::Error>(())
+                });
+
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {
+                        println!("Force stopping...");
+                        for runtime in &started_runtimes {
+                            if process_manager.force_kill(runtime)? {
+                                append_audit_file("runtime.force_kill", runtime, "ok")?;
+                            }
+                        }
+                    }
+                    result = stop_task => {
+                        result.map_err(|e| anyhow::anyhow!("shutdown task failed: {e}"))??;
+                    }
+                }
+                break;
+            }
+            _ = tick.tick() => {
+                while let Ok(line) = stream.receiver.try_recv() {
+                    println!("{}", render_log_line(&line.runtime, &line.text, !opts.no_log_prefix, false));
+                }
+
+                if started_runtimes.iter().all(|runtime| !runtime_running(process_manager, runtime)) {
+                    break;
+                }
             }
         }
     }
@@ -151,49 +173,125 @@ pub async fn exec_up(
     Ok(())
 }
 
-/// Wait until Ctrl+C is received or all runtime processes have exited.
-async fn wait_for_shutdown_or_exit(pids: &[u32]) {
-    let ctrl_c = tokio::signal::ctrl_c();
-    tokio::pin!(ctrl_c);
-
-    if pids.is_empty() {
-        // No local PIDs to monitor (e.g. docker mode) — just wait for Ctrl+C.
-        let _ = ctrl_c.as_mut().await;
-        return;
+fn print_status_table(process_manager: &ProcessManager) -> Result<()> {
+    let statuses = process_manager.list_statuses()?;
+    if statuses.is_empty() {
+        println!("No running runtimes");
+        return Ok(());
     }
 
-    let mut check_interval = tokio::time::interval(std::time::Duration::from_secs(2));
-    // Skip the first immediate tick
-    check_interval.tick().await;
+    println!(
+        "{:<14} {:<8} {:<10} {:<10}",
+        "RUNTIME", "PID", "STATE", "HEALTH"
+    );
+    for status in statuses {
+        println!(
+            "{:<14} {:<8} {:<10} {:<10}",
+            status.runtime,
+            status
+                .pid
+                .map(|pid| pid.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            if status.running { "running" } else { "stopped" },
+            status.health,
+        );
+    }
+    Ok(())
+}
 
-    loop {
-        tokio::select! {
-            _ = &mut ctrl_c => break,
-            _ = check_interval.tick() => {
-                if pids.iter().all(|pid| !is_process_alive(*pid)) {
-                    break;
-                }
-            }
-        }
+fn runtime_running(process_manager: &ProcessManager, runtime: &str) -> bool {
+    process_manager
+        .list_statuses()
+        .ok()
+        .and_then(|rows| {
+            rows.into_iter()
+                .find(|row| row.runtime == runtime)
+                .map(|row| row.running)
+        })
+        .unwrap_or(false)
+}
+
+pub(crate) fn render_log_line(
+    runtime: &str,
+    text: &str,
+    use_prefix: bool,
+    timestamps: bool,
+) -> String {
+    let mut body = String::new();
+    if timestamps {
+        body.push_str(&format!("[{}] ", now_timestamp_secs()));
+    }
+
+    if use_prefix {
+        body.push_str(color_prefix(runtime).as_str());
+        body.push_str(text);
+        body
+    } else {
+        body.push_str(text);
+        body
     }
 }
 
-/// Check if a process is alive (not a zombie) by inspecting /proc/<pid>/status.
-fn is_process_alive(pid: u32) -> bool {
-    let status_path = format!("/proc/{pid}/status");
-    match std::fs::read_to_string(status_path) {
-        Ok(content) => {
-            // A zombie process has "State:\tZ" — treat zombies as dead.
-            !content
-                .lines()
-                .any(|line| line.starts_with("State:") && line.contains('Z'))
-        }
-        Err(_) => false, // process no longer exists
+fn color_prefix(runtime: &str) -> String {
+    const COLORS: [&str; 6] = ["36", "33", "32", "35", "34", "31"];
+    let mut hash = 0usize;
+    for b in runtime.as_bytes() {
+        hash = hash.wrapping_add(*b as usize);
     }
+    let color = COLORS[hash % COLORS.len()];
+    format!("\x1b[{color}m{:<10} |\x1b[0m ", runtime)
+}
+
+fn now_timestamp_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time before unix epoch")
+        .as_secs()
+}
+
+pub(crate) fn load_config() -> Result<Option<ClawDenYaml>> {
+    let yaml_path = std::env::current_dir()?.join("clawden.yaml");
+    if !yaml_path.exists() {
+        return Ok(None);
+    }
+
+    let mut cfg = ClawDenYaml::from_file(&yaml_path).map_err(|e| anyhow::anyhow!("{}", e))?;
+    if let Err(errs) = cfg.resolve_env_vars() {
+        anyhow::bail!(
+            "failed to resolve environment variables in clawden.yaml:\n{}",
+            errs.join("\n")
+        );
+    }
+    if let Err(errs) = cfg.validate() {
+        anyhow::bail!("clawden.yaml validation failed:\n{}", errs.join("\n"));
+    }
+    Ok(Some(cfg))
+}
+
+pub fn resolve_target_runtimes(
+    runtimes: Vec<String>,
+    config: Option<&ClawDenYaml>,
+    installer: &RuntimeInstaller,
+) -> Result<Vec<String>> {
+    let mut resolved = if !runtimes.is_empty() {
+        runtimes
+    } else if let Some(cfg) = config {
+        runtimes_from_config(cfg)
+    } else {
+        installer
+            .list_installed()?
+            .into_iter()
+            .map(|row| row.runtime)
+            .collect::<Vec<_>>()
+    };
+
+    resolved.sort();
+    resolved.dedup();
+    Ok(resolved)
 }
 
 /// Extract runtime names from a parsed clawden.yaml config.
-fn runtimes_from_config(config: &ClawDenYaml) -> Vec<String> {
+pub fn runtimes_from_config(config: &ClawDenYaml) -> Vec<String> {
     if let Some(rt) = &config.runtime {
         vec![rt.clone()]
     } else {

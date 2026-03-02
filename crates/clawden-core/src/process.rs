@@ -1,9 +1,11 @@
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -23,6 +25,8 @@ pub struct ProcessInfo {
     pub log_path: PathBuf,
     pub restart_policy: Option<String>,
     pub health_url: Option<String>,
+    #[serde(default)]
+    pub project_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -33,6 +37,22 @@ pub struct RuntimeProcessStatus {
     pub mode: ExecutionMode,
     pub log_path: PathBuf,
     pub health: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct StopOutcome {
+    pub forced: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct LogLine {
+    pub runtime: String,
+    pub timestamp_ms: u64,
+    pub text: String,
+}
+
+pub struct LogStream {
+    pub receiver: mpsc::Receiver<LogLine>,
 }
 
 pub struct ProcessManager {
@@ -106,6 +126,17 @@ impl ProcessManager {
         args: &[String],
         env_vars: &[(String, String)],
     ) -> Result<ProcessInfo> {
+        self.start_direct_with_env_and_project(runtime, executable, args, env_vars, None)
+    }
+
+    pub fn start_direct_with_env_and_project(
+        &self,
+        runtime: &str,
+        executable: &Path,
+        args: &[String],
+        env_vars: &[(String, String)],
+        project_hash: Option<String>,
+    ) -> Result<ProcessInfo> {
         if !executable.exists() {
             return Err(anyhow!(
                 "runtime executable not found: {}",
@@ -115,9 +146,8 @@ impl ProcessManager {
 
         let log_path = self.log_dir.join(format!("{runtime}.log"));
         let (runtime_args, restart_policy) = split_restart_policy(args);
-        let health_url = runtime_health_url(runtime);
 
-        let mut command = if restart_policy.as_deref() == Some("on-failure") {
+        if restart_policy.as_deref() == Some("on-failure") {
             let script_path = self.state_dir.join(format!("{runtime}.supervisor.sh"));
             let audit_path = self.log_dir.join("audit.log");
             let script = build_restart_supervisor_script();
@@ -131,75 +161,90 @@ impl ProcessManager {
                 fs::set_permissions(&script_path, perms)?;
             }
 
-            let mut cmd = Command::new("sh");
-            cmd.arg(script_path)
+            let mut command = Command::new("sh");
+            command
+                .arg(script_path)
                 .arg(executable)
                 .arg(&log_path)
                 .arg(audit_path)
                 .arg(runtime);
-            cmd.args(&runtime_args);
-            cmd.envs(env_vars.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-            cmd.stdout(Stdio::null());
-            cmd.stderr(Stdio::null());
-            cmd
-        } else {
-            let stdout = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&log_path)
-                .with_context(|| format!("opening runtime log file {}", log_path.display()))?;
-            let stderr = stdout.try_clone()?;
+            command.args(&runtime_args);
+            command.envs(env_vars.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+            command.stdout(Stdio::null());
+            command.stderr(Stdio::null());
 
-            let mut cmd = Command::new(executable);
-            cmd.args(&runtime_args);
-            cmd.envs(env_vars.iter().map(|(k, v)| (k.as_str(), v.as_str())));
-            cmd.stdout(Stdio::from(stdout));
-            cmd.stderr(Stdio::from(stderr));
-            cmd
-        };
+            let child = command
+                .spawn()
+                .with_context(|| format!("failed to spawn {}", executable.display()))?;
+            return self.finish_start(runtime, child.id(), log_path, restart_policy, project_hash);
+        }
 
-        let child = command
+        let stdout_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .with_context(|| format!("opening runtime log file {}", log_path.display()))?;
+        let stderr_file = stdout_file.try_clone()?;
+
+        let mut command = Command::new(executable);
+        command.args(&runtime_args);
+        command.envs(env_vars.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        let mut child = command
             .spawn()
             .with_context(|| format!("failed to spawn {}", executable.display()))?;
 
-        let info = ProcessInfo {
-            runtime: runtime.to_string(),
-            pid: child.id(),
-            started_at_unix_ms: now_ms(),
-            mode: ExecutionMode::Direct,
-            log_path: log_path.clone(),
-            restart_policy,
-            health_url,
-        };
+        if let Some(out) = child.stdout.take() {
+            tee_reader_to_log(out, Arc::new(Mutex::new(stdout_file)));
+        }
+        if let Some(err) = child.stderr.take() {
+            tee_reader_to_log(err, Arc::new(Mutex::new(stderr_file)));
+        }
 
-        self.write_pid_file(runtime, &info)?;
-        Ok(info)
+        self.finish_start(runtime, child.id(), log_path, restart_policy, project_hash)
     }
 
     pub fn stop(&self, runtime: &str) -> Result<()> {
+        let _ = self.stop_with_timeout(runtime, 2)?;
+        Ok(())
+    }
+
+    pub fn stop_with_timeout(&self, runtime: &str, timeout_secs: u64) -> Result<StopOutcome> {
         let Some(info) = self.read_pid_file(runtime)? else {
-            return Ok(());
+            return Ok(StopOutcome { forced: false });
         };
 
         let pid = info.pid.to_string();
         let _ = Command::new("kill").args(["-TERM", &pid]).status();
-        for _ in 0..20 {
+        for _ in 0..(timeout_secs.saturating_mul(10).max(1)) {
             if !is_pid_running(info.pid) {
                 self.remove_pid_file(runtime)?;
-                return Ok(());
+                return Ok(StopOutcome { forced: false });
             }
             thread::sleep(Duration::from_millis(100));
         }
 
         let _ = Command::new("kill").args(["-KILL", &pid]).status();
         self.remove_pid_file(runtime)?;
-        Ok(())
+        Ok(StopOutcome { forced: true })
     }
 
-    pub fn list_statuses(&self) -> Result<Vec<RuntimeProcessStatus>> {
-        let mut statuses = Vec::new();
+    pub fn force_kill(&self, runtime: &str) -> Result<bool> {
+        let Some(info) = self.read_pid_file(runtime)? else {
+            return Ok(false);
+        };
+        let pid = info.pid.to_string();
+        let _ = Command::new("kill").args(["-KILL", &pid]).status();
+        self.remove_pid_file(runtime)?;
+        Ok(true)
+    }
+
+    pub fn list_processes(&self) -> Result<Vec<ProcessInfo>> {
+        let mut infos = Vec::new();
         if !self.state_dir.exists() {
-            return Ok(statuses);
+            return Ok(infos);
         }
 
         for entry in fs::read_dir(&self.state_dir)? {
@@ -209,33 +254,43 @@ impl ProcessManager {
                 continue;
             }
 
-            let runtime = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown")
-                .to_string();
+            let body = fs::read_to_string(path)?;
+            let info: ProcessInfo = serde_json::from_str(&body)?;
+            infos.push(info);
+        }
 
-            if let Some(info) = self.read_pid_file(&runtime)? {
-                let health = if !is_pid_running(info.pid) {
-                    "stopped".to_string()
-                } else if let Some(url) = &info.health_url {
-                    if health_check_ok(url) {
-                        "healthy".to_string()
-                    } else {
-                        "unhealthy".to_string()
-                    }
+        infos.sort_by(|a, b| a.runtime.cmp(&b.runtime));
+        Ok(infos)
+    }
+
+    pub fn list_statuses(&self) -> Result<Vec<RuntimeProcessStatus>> {
+        let mut statuses = Vec::new();
+        if !self.state_dir.exists() {
+            return Ok(statuses);
+        }
+
+        for info in self.list_processes()? {
+            let running = is_pid_running(info.pid);
+            let health = if !running {
+                "stopped".to_string()
+            } else if let Some(url) = &info.health_url {
+                if health_check_ok(url) {
+                    "healthy".to_string()
                 } else {
-                    "unknown".to_string()
-                };
-                statuses.push(RuntimeProcessStatus {
-                    runtime,
-                    pid: Some(info.pid),
-                    running: is_pid_running(info.pid),
-                    mode: info.mode,
-                    log_path: info.log_path,
-                    health,
-                });
-            }
+                    "unhealthy".to_string()
+                }
+            } else {
+                "unknown".to_string()
+            };
+
+            statuses.push(RuntimeProcessStatus {
+                runtime: info.runtime,
+                pid: Some(info.pid),
+                running,
+                mode: info.mode,
+                log_path: info.log_path,
+                health,
+            });
         }
 
         statuses.sort_by(|a, b| a.runtime.cmp(&b.runtime));
@@ -251,6 +306,88 @@ impl ProcessManager {
         let rows: Vec<&str> = content.lines().collect();
         let start = rows.len().saturating_sub(lines);
         Ok(rows[start..].join("\n"))
+    }
+
+    pub fn stream_logs(&self, runtimes: &[String]) -> Result<LogStream> {
+        let selected = if runtimes.is_empty() {
+            self.list_statuses()?
+                .into_iter()
+                .map(|s| s.runtime)
+                .collect::<Vec<_>>()
+        } else {
+            runtimes.to_vec()
+        };
+
+        let mut watched = Vec::new();
+        for runtime in &selected {
+            watched.push((runtime.clone(), self.log_dir.join(format!("{runtime}.log"))));
+        }
+
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let mut offsets: HashMap<String, usize> = HashMap::new();
+            loop {
+                let mut any_sent = false;
+                for (runtime, log_path) in &watched {
+                    let Ok(content) = fs::read_to_string(log_path) else {
+                        continue;
+                    };
+
+                    let offset = offsets.entry(runtime.clone()).or_insert(0usize);
+                    if *offset > content.len() {
+                        *offset = 0;
+                    }
+                    if *offset == content.len() {
+                        continue;
+                    }
+
+                    let chunk = &content[*offset..];
+                    for line in chunk.lines() {
+                        if sender
+                            .send(LogLine {
+                                runtime: runtime.clone(),
+                                timestamp_ms: now_ms(),
+                                text: line.to_string(),
+                            })
+                            .is_err()
+                        {
+                            return;
+                        }
+                        any_sent = true;
+                    }
+                    *offset = content.len();
+                }
+
+                if !any_sent {
+                    thread::sleep(Duration::from_millis(200));
+                }
+            }
+        });
+
+        Ok(LogStream { receiver })
+    }
+
+    fn finish_start(
+        &self,
+        runtime: &str,
+        pid: u32,
+        log_path: PathBuf,
+        restart_policy: Option<String>,
+        project_hash: Option<String>,
+    ) -> Result<ProcessInfo> {
+        let info = ProcessInfo {
+            runtime: runtime.to_string(),
+            pid,
+            started_at_unix_ms: now_ms(),
+            mode: ExecutionMode::Direct,
+            log_path,
+            restart_policy,
+            health_url: runtime_health_url(runtime),
+            project_hash,
+        };
+
+        self.write_pid_file(runtime, &info)?;
+        Ok(info)
     }
 
     fn write_pid_file(&self, runtime: &str, info: &ProcessInfo) -> Result<()> {
@@ -282,6 +419,27 @@ impl ProcessManager {
     fn pid_file(&self, runtime: &str) -> PathBuf {
         self.state_dir.join(format!("{runtime}.pid"))
     }
+}
+
+fn tee_reader_to_log<R: std::io::Read + Send + 'static>(reader: R, file: Arc<Mutex<File>>) {
+    thread::spawn(move || {
+        let mut reader = BufReader::new(reader);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            let Ok(read) = reader.read_line(&mut line) else {
+                return;
+            };
+            if read == 0 {
+                return;
+            }
+
+            if let Ok(mut log_file) = file.lock() {
+                let _ = log_file.write_all(line.as_bytes());
+                let _ = log_file.flush();
+            }
+        }
+    });
 }
 
 fn is_pid_running(pid: u32) -> bool {

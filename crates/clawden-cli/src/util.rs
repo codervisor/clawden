@@ -1,7 +1,9 @@
 use anyhow::Result;
 use clawden_config::SecretVault;
-use clawden_core::{ClawRuntime, RuntimeInstaller};
+use clawden_core::{ClawRuntime, InstalledRuntime, RuntimeInstaller};
+use std::collections::hash_map::DefaultHasher;
 use std::fs::OpenOptions;
+use std::hash::{Hash, Hasher};
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -35,15 +37,42 @@ pub fn env_no_docker_enabled() -> bool {
         .unwrap_or(false)
 }
 
-/// Return the executable for a runtime, auto-installing it if missing.
-pub fn ensure_installed(installer: &RuntimeInstaller, runtime: &str) -> Result<PathBuf> {
+pub fn ensure_installed_runtime(
+    installer: &RuntimeInstaller,
+    runtime: &str,
+) -> Result<InstalledRuntime> {
     if let Some(exe) = installer.runtime_executable(runtime) {
-        return Ok(exe);
+        let start_args = installer
+            .list_installed()?
+            .into_iter()
+            .find(|row| row.runtime == runtime)
+            .map(|row| row.start_args)
+            .unwrap_or_default();
+        return Ok(InstalledRuntime {
+            runtime: runtime.to_string(),
+            version: "current".to_string(),
+            executable: exe,
+            start_args,
+        });
     }
     println!("Runtime '{runtime}' not installed. Installing...");
     let installed = installer.install_runtime(runtime, None)?;
     println!("Installed {}@{}", installed.runtime, installed.version);
-    Ok(installed.executable)
+    Ok(installed)
+}
+
+pub fn project_hash() -> Result<String> {
+    let cwd = std::env::current_dir()?;
+    let config_path = cwd.join("clawden.yaml");
+    let root = if config_path.exists() {
+        std::fs::canonicalize(config_path)?
+    } else {
+        std::fs::canonicalize(cwd)?
+    };
+
+    let mut hasher = DefaultHasher::new();
+    root.to_string_lossy().hash(&mut hasher);
+    Ok(format!("{:016x}", hasher.finish()))
 }
 
 pub fn append_audit_file(action: &str, runtime: &str, outcome: &str) -> Result<()> {

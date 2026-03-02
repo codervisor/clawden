@@ -50,19 +50,61 @@ pub enum Commands {
     Up {
         /// Specific runtimes to start (starts all if empty)
         runtimes: Vec<String>,
+        /// Run in background and return immediately
+        #[arg(short = 'd', long, default_value_t = false)]
+        detach: bool,
+        /// Disable runtime name prefixes in attached log output
+        #[arg(long, default_value_t = false)]
+        no_log_prefix: bool,
+        /// Graceful shutdown timeout in seconds
+        #[arg(long, default_value_t = 10)]
+        timeout: u64,
+    },
+    /// Start previously configured runtimes without attaching logs
+    Start {
+        /// Specific runtimes to start (starts all if empty)
+        runtimes: Vec<String>,
+    },
+    /// Stop all project runtimes and clean up state
+    Down {
+        /// Specific runtimes to stop (stops all project runtimes if empty)
+        runtimes: Vec<String>,
+        /// Graceful shutdown timeout in seconds
+        #[arg(long, default_value_t = 10)]
+        timeout: u64,
+        /// Stop project-owned stale runtimes no longer declared in clawden.yaml
+        #[arg(long, default_value_t = false)]
+        remove_orphans: bool,
+    },
+    /// Restart runtimes
+    Restart {
+        /// Specific runtimes to restart (restarts all if empty)
+        runtimes: Vec<String>,
+        /// Graceful shutdown timeout in seconds
+        #[arg(long, default_value_t = 10)]
+        timeout: u64,
     },
     /// Run a single runtime
     Run {
-        runtime: Option<String>,
+        runtime: String,
         /// Channels to connect
         #[arg(long)]
         channel: Vec<String>,
         /// Tools to enable
         #[arg(long = "with")]
         tools: Option<String>,
+        /// Remove one-off state after exit
+        #[arg(long, default_value_t = false)]
+        rm: bool,
+        /// Run in background and return immediately
+        #[arg(short = 'd', long, default_value_t = false)]
+        detach: bool,
         /// Restart on failure policy.
         #[arg(long)]
         restart: Option<String>,
+        /// Extra args forwarded to the runtime process
+        #[arg(last = true)]
+        args: Vec<String>,
     },
     /// Show running runtimes
     Ps,
@@ -70,12 +112,23 @@ pub enum Commands {
     Stop {
         /// Specific runtime to stop (stops all if empty)
         runtime: Option<String>,
+        /// Graceful shutdown timeout in seconds
+        #[arg(long, default_value_t = 10)]
+        timeout: u64,
     },
-    /// Tail runtime log files.
+    /// Tail or follow runtime log files.
     Logs {
-        runtime: String,
-        #[arg(long, default_value_t = 50)]
-        lines: usize,
+        /// Follow log output
+        #[arg(short = 'f', long, default_value_t = false)]
+        follow: bool,
+        /// Number of lines to show from end of file
+        #[arg(long = "tail", default_value_t = 50)]
+        tail: usize,
+        /// Prefix each line with a timestamp
+        #[arg(long, default_value_t = false)]
+        timestamps: bool,
+        /// Optional list of runtimes (defaults to all running)
+        runtimes: Vec<String>,
     },
     /// Start local dashboard server and open browser.
     Dashboard {

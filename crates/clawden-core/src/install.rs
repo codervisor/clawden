@@ -10,6 +10,7 @@ pub struct InstalledRuntime {
     pub runtime: String,
     pub version: String,
     pub executable: PathBuf,
+    pub start_args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -92,6 +93,7 @@ impl RuntimeInstaller {
             runtime: runtime.to_string(),
             version: version.to_string(),
             executable: final_dir.join(runtime),
+            start_args: runtime_start_args(runtime),
         })
     }
 
@@ -132,10 +134,12 @@ impl RuntimeInstaller {
             let version = version_path.to_string_lossy().to_string();
             let executable = entry.path().join(&version).join(&runtime);
             if executable.exists() {
+                let start_args = runtime_start_args(&runtime);
                 rows.push(InstalledRuntime {
                     runtime,
                     version,
                     executable,
+                    start_args,
                 });
             }
         }
@@ -389,6 +393,15 @@ impl RuntimeInstaller {
 
     pub fn root_dir(&self) -> &Path {
         &self.root_dir
+    }
+}
+
+fn runtime_start_args(runtime: &str) -> Vec<String> {
+    match runtime {
+        "zeroclaw" => vec!["daemon".to_string()],
+        "picoclaw" => vec!["gateway".to_string()],
+        "nullclaw" => vec!["daemon".to_string()],
+        _ => Vec::new(),
     }
 }
 

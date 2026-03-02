@@ -1,18 +1,20 @@
 use anyhow::Result;
-use clawden_config::ClawDenYaml;
 use clawden_core::{ExecutionMode, LifecycleManager, ProcessManager, RuntimeInstaller};
+use std::time::Duration;
 
-use crate::commands::InitOptions;
+use crate::commands::up::{build_runtime_env_vars, load_config, render_log_line};
 use crate::util::{
-    append_audit_file, ensure_installed, env_no_docker_enabled, is_first_run_context,
-    parse_runtime, prompt_yes_no,
+    append_audit_file, ensure_installed_runtime, env_no_docker_enabled, parse_runtime, project_hash,
 };
 
 pub struct RunOptions {
-    pub runtime: Option<String>,
+    pub runtime: String,
     pub channel: Vec<String>,
     pub tools: Option<String>,
     pub restart: Option<String>,
+    pub detach: bool,
+    pub rm: bool,
+    pub extra_args: Vec<String>,
     pub no_docker: bool,
 }
 
@@ -22,68 +24,21 @@ pub async fn exec_run(
     process_manager: &ProcessManager,
     manager: &mut LifecycleManager,
 ) -> Result<()> {
-    let RunOptions {
-        runtime,
-        channel,
-        tools,
-        restart,
-        no_docker,
-    } = opts;
-    if runtime.is_none() && is_first_run_context(installer)? {
-        let run_wizard = prompt_yes_no(
-            "No project config found. Run setup wizard before starting a runtime?",
-            true,
-        )?;
-        if run_wizard {
-            super::exec_init(InitOptions {
-                runtime: "zeroclaw".to_string(),
-                multi: false,
-                template: None,
-                reconfigure: false,
-                non_interactive: false,
-                yes: false,
-                force: false,
-            })?;
-        }
-    }
-
-    let rt = runtime.unwrap_or_else(|| "zeroclaw".to_string());
-    let tools_list = tools
+    let tools_list = opts
+        .tools
+        .clone()
         .map(|t| {
             t.split(',')
                 .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
 
-    // Load clawden.yaml if available for config/env enrichment
-    let yaml_path = std::env::current_dir()?.join("clawden.yaml");
-    let config = if yaml_path.exists() {
-        let mut cfg = ClawDenYaml::from_file(&yaml_path).map_err(|e| anyhow::anyhow!("{}", e))?;
-        let _ = cfg.resolve_env_vars();
-        Some(cfg)
-    } else {
-        None
-    };
-
-    // Resolve channels: CLI args > clawden.yaml
-    let resolved_channels = if !channel.is_empty() {
-        channel
-    } else if let Some(cfg) = config.as_ref() {
-        cfg.channels.keys().cloned().collect()
-    } else {
-        Vec::new()
-    };
-
-    println!(
-        "Running {} with channels {:?} and tools {:?}",
-        rt, resolved_channels, tools_list
-    );
-
-    let mode = process_manager.resolve_mode(no_docker || env_no_docker_enabled());
+    let mode = process_manager.resolve_mode(opts.no_docker || env_no_docker_enabled());
     match mode {
         ExecutionMode::Docker => {
-            let runtime = parse_runtime(&rt)?;
+            let runtime = parse_runtime(&opts.runtime)?;
             let record = manager.register_agent(
                 format!("{}-default", runtime.as_slug()),
                 runtime,
@@ -95,39 +50,95 @@ pub async fn exec_run(
                 .map_err(anyhow::Error::msg)?;
             println!(
                 "Started {} via core adapter path (docker available, server not required)",
-                rt
+                opts.runtime
             );
+            return Ok(());
         }
-        ExecutionMode::Direct | ExecutionMode::Auto => {
-            let executable = ensure_installed(installer, &rt)?;
+        ExecutionMode::Direct | ExecutionMode::Auto => {}
+    }
 
-            let mut args = vec!["daemon".to_string()];
-            if !resolved_channels.is_empty() {
-                args.push(format!("--channels={}", resolved_channels.join(",")));
-            }
-            if !tools_list.is_empty() {
-                args.push(format!("--tools={}", tools_list.join(",")));
-            }
-            if let Some(policy) = restart {
-                args.push(format!("--restart={policy}"));
-            }
+    let config = load_config()?;
+    let installed = ensure_installed_runtime(installer, &opts.runtime)?;
 
-            // Build env vars from clawden.yaml (channel creds + provider config)
-            let env_vars = if let Some(cfg) = config.as_ref() {
-                super::up::build_runtime_env_vars(cfg, &rt)?
-            } else {
-                Vec::new()
-            };
+    let resolved_channels = if !opts.channel.is_empty() {
+        opts.channel.clone()
+    } else if let Some(cfg) = config.as_ref() {
+        cfg.channels.keys().cloned().collect()
+    } else {
+        Vec::new()
+    };
 
-            let info = process_manager.start_direct_with_env(&rt, &executable, &args, &env_vars)?;
-            append_audit_file("runtime.start", &rt, "ok")?;
-            println!(
-                "Started {} in direct mode (pid {}, logs: {})",
-                rt,
-                info.pid,
-                info.log_path.display()
-            );
+    let mut args = installed.start_args.clone();
+    if !resolved_channels.is_empty() {
+        args.push(format!("--channels={}", resolved_channels.join(",")));
+    }
+    if !tools_list.is_empty() {
+        args.push(format!("--tools={}", tools_list.join(",")));
+    }
+    if let Some(policy) = &opts.restart {
+        args.push(format!("--restart={policy}"));
+    }
+    args.extend(opts.extra_args.clone());
+
+    let env_vars = if let Some(cfg) = config.as_ref() {
+        build_runtime_env_vars(cfg, &opts.runtime)?
+    } else {
+        Vec::new()
+    };
+
+    let info = process_manager.start_direct_with_env_and_project(
+        &opts.runtime,
+        &installed.executable,
+        &args,
+        &env_vars,
+        Some(project_hash()?),
+    )?;
+    append_audit_file("runtime.start", &opts.runtime, "ok")?;
+
+    if opts.detach {
+        println!(
+            "Started {} in direct mode (pid {}, logs: {})",
+            opts.runtime,
+            info.pid,
+            info.log_path.display()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "Running {} in foreground. Press Ctrl+C to stop.",
+        opts.runtime
+    );
+    let stream = process_manager.stream_logs(&[opts.runtime.clone()])?;
+    let mut tick = tokio::time::interval(Duration::from_millis(150));
+    let ctrl_c = tokio::signal::ctrl_c();
+    tokio::pin!(ctrl_c);
+
+    loop {
+        tokio::select! {
+            _ = &mut ctrl_c => {
+                let outcome = process_manager.stop_with_timeout(&opts.runtime, 10)?;
+                if outcome.forced {
+                    append_audit_file("runtime.force_kill", &opts.runtime, "ok")?;
+                }
+                append_audit_file("runtime.stop", &opts.runtime, "ok")?;
+                break;
+            }
+            _ = tick.tick() => {
+                while let Ok(line) = stream.receiver.try_recv() {
+                    println!("{}", render_log_line(&line.runtime, &line.text, true, false));
+                }
+
+                let status = process_manager.list_statuses()?.into_iter().find(|s| s.runtime == opts.runtime);
+                if !status.map(|s| s.running).unwrap_or(false) {
+                    break;
+                }
+            }
         }
+    }
+
+    if opts.rm {
+        let _ = process_manager.stop_with_timeout(&opts.runtime, 1)?;
     }
 
     Ok(())
