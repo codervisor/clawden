@@ -74,6 +74,7 @@ async fn main() -> Result<()> {
         Commands::Doctor => commands::exec_doctor(&installer)?,
         Commands::Channels { command } => commands::exec_channels(command, &mut manager)?,
         Commands::Providers { command } => commands::exec_providers(command).await?,
+        Commands::Tools { command } => commands::exec_tools(command)?,
     }
 
     Ok(())

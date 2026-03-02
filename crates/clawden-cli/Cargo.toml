@@ -12,4 +12,5 @@ clawden-config = {path = "../clawden-config"}
 clawden-core = {path = "../clawden-core"}
 reqwest.workspace = true
 rpassword = "7.3"
+serde_json.workspace = true
 tokio.workspace = true

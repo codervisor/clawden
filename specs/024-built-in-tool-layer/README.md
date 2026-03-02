@@ -343,13 +343,13 @@ Each variant is an additive layer on the previous. Layers 2–3 change infrequen
 - [x] Add `CLAWDEN_TOOLS` summary env var export
 
 ### Phase 2: Standard Tools
-- [ ] Create `python` tool (Python 3.12, pip, venv)
-- [ ] Create `code-tools` tool (ripgrep, fd-find, bat)
-- [ ] Create `database` tool (SQLite 3)
-- [ ] Create `network` tool (netcat, socat, dnsutils)
-- [ ] Create `sandbox` tool (bubblewrap + `clawden-sandbox` wrapper)
-- [ ] Add standard tools to Dockerfile as separate layer
-- [ ] Implement `clawden tools list` and `clawden tools info` CLI commands
+- [x] Create `python` tool (Python 3.12, pip, venv)
+- [x] Create `code-tools` tool (ripgrep, fd-find, bat)
+- [x] Create `database` tool (SQLite 3)
+- [x] Create `network` tool (netcat, socat, dnsutils)
+- [x] Create `sandbox` tool (bubblewrap + `clawden-sandbox` wrapper)
+- [x] Add standard tools to Dockerfile as separate layer
+- [x] Implement `clawden tools list` and `clawden tools info` CLI commands
 
 ### Phase 3: Extended Tools & Use-Case Variants
 - [ ] Create `browser` tool (Chromium + Playwright + persistent server)

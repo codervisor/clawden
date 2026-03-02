@@ -96,6 +96,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: Option<ProviderCommand>,
     },
+    /// Built-in tool management
+    Tools {
+        #[command(subcommand)]
+        command: ToolCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -118,5 +123,20 @@ pub enum ProviderCommand {
     SetKey {
         /// Provider name (e.g. openai, anthropic, google)
         provider: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ToolCommand {
+    /// List available built-in tools
+    List {
+        /// Show only installed or activated tools
+        #[arg(long, default_value_t = false)]
+        installed: bool,
+    },
+    /// Show detailed metadata for one tool
+    Info {
+        /// Tool name
+        tool: String,
     },
 }

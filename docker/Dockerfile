@@ -54,10 +54,31 @@ RUN groupadd -g 10000 clawden && \
 RUN mkdir -p /opt/clawden/tools/git \
              /opt/clawden/tools/core-utils \
              /opt/clawden/tools/http \
+             /opt/clawden/tools/python \
+             /opt/clawden/tools/code-tools \
+             /opt/clawden/tools/database \
+             /opt/clawden/tools/network \
+             /opt/clawden/tools/sandbox \
              /opt/clawden/tools/browser \
              /opt/clawden/tools/gui \
              /home/clawden/workspace \
     && chown -R clawden:clawden /opt/clawden /home/clawden
+
+# Standard tool layer (spec 024 phase 2)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    ripgrep \
+    fd-find \
+    bat \
+    sqlite3 \
+    netcat-openbsd \
+    socat \
+    traceroute \
+    bubblewrap \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy entrypoint and tool setup scripts
 COPY docker/entrypoint.sh /opt/clawden/entrypoint.sh

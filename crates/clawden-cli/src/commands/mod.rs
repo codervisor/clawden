@@ -8,6 +8,7 @@ mod ps;
 mod providers;
 mod run;
 mod stop;
+mod tools;
 mod up;
 
 pub use channels::exec_channels;
@@ -20,4 +21,5 @@ pub use ps::exec_ps;
 pub use providers::exec_providers;
 pub use run::exec_run;
 pub use stop::exec_stop;
+pub use tools::exec_tools;
 pub use up::exec_up;
