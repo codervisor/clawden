@@ -215,6 +215,7 @@ dependencies = [
  "anyhow",
  "clap",
  "clawden-adapters",
+ "clawden-config",
  "clawden-core",
  "tokio",
 ]

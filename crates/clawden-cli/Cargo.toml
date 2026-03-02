@@ -8,5 +8,6 @@ version.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 clawden-adapters = {path = "../clawden-adapters"}
+clawden-config = {path = "../clawden-config"}
 clawden-core = {path = "../clawden-core"}
 tokio.workspace = true
