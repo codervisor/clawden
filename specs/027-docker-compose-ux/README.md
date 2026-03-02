@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-03-02
 priority: high
 tags:
@@ -10,11 +10,15 @@ depends_on:
 - 023-cli-direct-architecture
 parent: 009-orchestration-platform
 created_at: 2026-03-02T07:28:51.120244947Z
-updated_at: 2026-03-02T07:39:53.249540900Z
+updated_at: 2026-03-02T08:00:56.641712012Z
+completed_at: 2026-03-02T08:00:56.641712012Z
 transitions:
 - status: in-progress
   at: 2026-03-02T07:39:53.249540900Z
+- status: complete
+  at: 2026-03-02T08:00:56.641712012Z
 ---
+
 # Docker Compose UX — CLI Command Overhaul
 
 ## Overview
@@ -177,20 +181,20 @@ On **second** Ctrl+C during shutdown: immediate SIGKILL all.
 
 ## Test
 
-- [ ] `clawden up` streams runtime logs to stdout in foreground mode
-- [ ] `clawden up -d` starts runtimes and returns immediately with status table
-- [ ] Ctrl+C during `up` sends SIGTERM and waits for graceful shutdown
-- [ ] Double Ctrl+C during shutdown triggers immediate SIGKILL
-- [ ] `clawden down` stops all runtimes and cleans up PID files
-- [ ] `clawden run zeroclaw` blocks and streams output until exit
-- [ ] `clawden run -d zeroclaw` starts in background, returns pid
-- [ ] `clawden logs -f` streams live logs from all running runtimes
-- [ ] `clawden logs -f zeroclaw nanoclaw` multiplexes with color prefixes
-- [ ] `clawden restart` stops then re-starts specified runtimes
-- [ ] Log lines are color-coded per runtime when multiple are active
+- [x] `clawden up` streams runtime logs to stdout in foreground mode
+- [x] `clawden up -d` starts runtimes and returns immediately with status table
+- [x] Ctrl+C during `up` sends SIGTERM and waits for graceful shutdown
+- [x] Double Ctrl+C during shutdown triggers immediate SIGKILL
+- [x] `clawden down` stops all runtimes and cleans up PID files
+- [x] `clawden run zeroclaw` blocks and streams output until exit
+- [x] `clawden run -d zeroclaw` starts in background, returns pid
+- [x] `clawden logs -f` streams live logs from all running runtimes
+- [x] `clawden logs -f zeroclaw nanoclaw` multiplexes with color prefixes
+- [x] `clawden restart` stops then re-starts specified runtimes
+- [x] Log lines are color-coded per runtime when multiple are active
 - [x] `--timeout` is respected during shutdown
-- [ ] `clawden down --remove-orphans` removes runtimes not in clawden.yaml but owned by this project
-- [ ] `clawden down --remove-orphans` does NOT stop runtimes owned by other projects
+- [x] `clawden down --remove-orphans` removes runtimes not in clawden.yaml but owned by this project
+- [x] `clawden down --remove-orphans` does NOT stop runtimes owned by other projects
 - [x] All lifecycle commands (`up`, `down`, `start`, `restart`) emit audit log entries
 - [x] Forced-kill after timeout emits `runtime.force_kill` audit entry
 - [x] Log stream drops oldest lines under back-pressure and prints dropped-line warning
