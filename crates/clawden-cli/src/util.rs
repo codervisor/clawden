@@ -1,6 +1,8 @@
 use anyhow::Result;
 use clawden_config::SecretVault;
-use clawden_core::{ClawRuntime, InstalledRuntime, RuntimeInstaller};
+use clawden_core::{
+    runtime_start_args, version_satisfies, ClawRuntime, InstalledRuntime, RuntimeInstaller,
+};
 use std::collections::hash_map::DefaultHasher;
 use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
@@ -40,14 +42,28 @@ pub fn env_no_docker_enabled() -> bool {
 pub fn ensure_installed_runtime(
     installer: &RuntimeInstaller,
     runtime: &str,
+    pinned_version: Option<&str>,
 ) -> Result<InstalledRuntime> {
     if let Some(exe) = installer.runtime_executable(runtime) {
+        if let Some(pin) = pinned_version {
+            if let Some(installed_version) = installer.installed_version(runtime)? {
+                if !version_satisfies(&installed_version, pin) {
+                    println!(
+                        "Runtime '{runtime}' installed at {installed_version} but clawden.yaml requires {pin}. Installing compatible version..."
+                    );
+                    let installed = installer.install_runtime(runtime, Some(pin))?;
+                    println!("Installed {}@{}", installed.runtime, installed.version);
+                    return Ok(installed);
+                }
+            }
+        }
+
         let start_args = installer
             .list_installed()?
             .into_iter()
             .find(|row| row.runtime == runtime)
             .map(|row| row.start_args)
-            .unwrap_or_default();
+            .unwrap_or_else(|| runtime_start_args(runtime));
         return Ok(InstalledRuntime {
             runtime: runtime.to_string(),
             version: "current".to_string(),
@@ -55,8 +71,9 @@ pub fn ensure_installed_runtime(
             start_args,
         });
     }
-    println!("Runtime '{runtime}' not installed. Installing...");
-    let installed = installer.install_runtime(runtime, None)?;
+    let requested = pinned_version.unwrap_or("latest");
+    println!("Runtime '{runtime}' not installed. Installing {requested}...");
+    let installed = installer.install_runtime(runtime, Some(requested))?;
     println!("Installed {}@{}", installed.runtime, installed.version);
     Ok(installed)
 }

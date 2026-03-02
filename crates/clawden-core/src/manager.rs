@@ -27,6 +27,7 @@ pub struct LifecycleManager {
     adapters: HashMap<ClawRuntime, Arc<dyn ClawAdapter>>,
     agents: HashMap<String, AgentRecord>,
     handles: HashMap<String, AgentHandle>,
+    configs: HashMap<String, AgentConfig>,
     next_id: AtomicU64,
     round_robin_index: usize,
 }
@@ -37,6 +38,7 @@ impl LifecycleManager {
             adapters,
             agents: HashMap::new(),
             handles: HashMap::new(),
+            configs: HashMap::new(),
             next_id: AtomicU64::new(1),
             round_robin_index: 0,
         }
@@ -47,6 +49,24 @@ impl LifecycleManager {
         name: String,
         runtime: ClawRuntime,
         capabilities: Vec<String>,
+    ) -> AgentRecord {
+        let config = AgentConfig {
+            name: name.clone(),
+            runtime: runtime.clone(),
+            model: None,
+            env_vars: Vec::new(),
+            channels: Vec::new(),
+            tools: Vec::new(),
+        };
+        self.register_agent_with_config(name, runtime, capabilities, config)
+    }
+
+    pub fn register_agent_with_config(
+        &mut self,
+        name: String,
+        runtime: ClawRuntime,
+        capabilities: Vec<String>,
+        config: AgentConfig,
     ) -> AgentRecord {
         let id = format!("agent-{}", self.next_id.fetch_add(1, Ordering::Relaxed));
         let record = AgentRecord {
@@ -61,6 +81,7 @@ impl LifecycleManager {
             last_health_check_unix_ms: None,
             next_recovery_attempt_unix_ms: None,
         };
+        self.configs.insert(id.clone(), config);
         self.agents.insert(id, record.clone());
         record
     }
@@ -132,11 +153,18 @@ impl LifecycleManager {
             ));
         }
 
-        let config = AgentConfig {
-            name: record.name.clone(),
-            runtime: record.runtime.clone(),
-            model: None,
-        };
+        let config = self
+            .configs
+            .get(agent_id)
+            .cloned()
+            .unwrap_or_else(|| AgentConfig {
+                name: record.name.clone(),
+                runtime: record.runtime.clone(),
+                model: None,
+                env_vars: Vec::new(),
+                channels: Vec::new(),
+                tools: Vec::new(),
+            });
 
         let handle = adapter
             .start(&config)
@@ -255,11 +283,18 @@ impl LifecycleManager {
             let restart_result = if let Some(handle) = self.handles.get(&id) {
                 adapter.restart(handle).await
             } else {
-                let config = AgentConfig {
-                    name,
-                    runtime: runtime.clone(),
-                    model: None,
-                };
+                let config = self
+                    .configs
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| AgentConfig {
+                        name,
+                        runtime: runtime.clone(),
+                        model: None,
+                        env_vars: Vec::new(),
+                        channels: Vec::new(),
+                        tools: Vec::new(),
+                    });
 
                 match adapter.start(&config).await {
                     Ok(handle) => {

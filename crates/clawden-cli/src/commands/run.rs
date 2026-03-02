@@ -2,7 +2,10 @@ use anyhow::Result;
 use clawden_core::{ExecutionMode, LifecycleManager, ProcessManager, RuntimeInstaller};
 use std::time::Duration;
 
-use crate::commands::up::{build_runtime_env_vars, load_config, render_log_line};
+use crate::commands::up::{
+    build_runtime_env_vars, channels_for_runtime, load_config, pinned_version_for_runtime,
+    render_log_line, tools_for_runtime,
+};
 use crate::util::{
     append_audit_file, ensure_installed_runtime, env_no_docker_enabled, parse_runtime, project_hash,
 };
@@ -36,13 +39,55 @@ pub async fn exec_run(
         .unwrap_or_default();
 
     let mode = process_manager.resolve_mode(opts.no_docker || env_no_docker_enabled());
+    let config = load_config()?;
+    let env_vars = if let Some(cfg) = config.as_ref() {
+        build_runtime_env_vars(cfg, &opts.runtime)?
+    } else {
+        Vec::new()
+    };
+
+    let default_channels = if let Some(cfg) = config.as_ref() {
+        channels_for_runtime(cfg, &opts.runtime)
+    } else {
+        Vec::new()
+    };
+
+    let default_tools = if let Some(cfg) = config.as_ref() {
+        tools_for_runtime(cfg, &opts.runtime)
+    } else {
+        Vec::new()
+    };
+
+    let resolved_channels = if !opts.channel.is_empty() {
+        opts.channel.clone()
+    } else {
+        default_channels
+    };
+    let effective_tools = if !tools_list.is_empty() {
+        tools_list.clone()
+    } else {
+        default_tools.clone()
+    };
+
+    let pinned_version = config
+        .as_ref()
+        .and_then(|cfg| pinned_version_for_runtime(cfg, &opts.runtime));
+
     match mode {
         ExecutionMode::Docker => {
             let runtime = parse_runtime(&opts.runtime)?;
-            let record = manager.register_agent(
+            let record = manager.register_agent_with_config(
                 format!("{}-default", runtime.as_slug()),
-                runtime,
+                runtime.clone(),
                 vec!["chat".to_string()],
+                clawden_core::AgentConfig {
+                    name: format!("{}-default", runtime.as_slug()),
+                    runtime,
+                    model: None,
+                    env_vars: env_vars.clone(),
+                    channels: resolved_channels.clone(),
+                    tools: effective_tools,
+                },
             );
             manager
                 .start_agent(&record.id)
@@ -57,34 +102,19 @@ pub async fn exec_run(
         ExecutionMode::Direct | ExecutionMode::Auto => {}
     }
 
-    let config = load_config()?;
-    let installed = ensure_installed_runtime(installer, &opts.runtime)?;
-
-    let resolved_channels = if !opts.channel.is_empty() {
-        opts.channel.clone()
-    } else if let Some(cfg) = config.as_ref() {
-        cfg.channels.keys().cloned().collect()
-    } else {
-        Vec::new()
-    };
+    let installed = ensure_installed_runtime(installer, &opts.runtime, pinned_version)?;
 
     let mut args = installed.start_args.clone();
     if !resolved_channels.is_empty() {
         args.push(format!("--channels={}", resolved_channels.join(",")));
     }
-    if !tools_list.is_empty() {
-        args.push(format!("--tools={}", tools_list.join(",")));
+    if !effective_tools.is_empty() {
+        args.push(format!("--tools={}", effective_tools.join(",")));
     }
     if let Some(policy) = &opts.restart {
         args.push(format!("--restart={policy}"));
     }
     args.extend(opts.extra_args.clone());
-
-    let env_vars = if let Some(cfg) = config.as_ref() {
-        build_runtime_env_vars(cfg, &opts.runtime)?
-    } else {
-        Vec::new()
-    };
 
     let info = process_manager.start_direct_with_env_and_project(
         &opts.runtime,

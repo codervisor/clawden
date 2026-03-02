@@ -180,6 +180,14 @@ impl ProcessManager {
         }
 
         let log_path = self.log_dir.join(format!("{runtime}.log"));
+        // Start each launch session with a fresh log file to avoid replaying stale output.
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&log_path)
+            .with_context(|| format!("preparing runtime log file {}", log_path.display()))?;
+
         let (runtime_args, restart_policy) = split_restart_policy(args);
 
         if restart_policy.as_deref() == Some("on-failure") {
@@ -365,7 +373,15 @@ impl ProcessManager {
 
         let stream_inner = Arc::clone(&inner);
         thread::spawn(move || {
-            let mut offsets: HashMap<String, usize> = HashMap::new();
+            let mut offsets: HashMap<String, usize> = watched
+                .iter()
+                .map(|(runtime, path)| {
+                    let offset = fs::metadata(path)
+                        .map(|meta| meta.len() as usize)
+                        .unwrap_or(0);
+                    (runtime.clone(), offset)
+                })
+                .collect();
             loop {
                 let mut any_sent = false;
                 for (runtime, log_path) in &watched {
@@ -616,4 +632,73 @@ done
 fn clawden_root_dir() -> Result<PathBuf> {
     let home = std::env::var("HOME").context("HOME environment variable is not set")?;
     Ok(PathBuf::from(home).join(".clawden"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ExecutionMode, ProcessManager};
+    use std::fs;
+    use std::io::Write;
+    use std::sync::{Mutex, OnceLock};
+    use std::thread;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn stream_logs_skips_preexisting_content() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let original_home = std::env::var("HOME").ok();
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after UNIX_EPOCH")
+            .as_nanos();
+        let tmp_home = std::env::temp_dir().join(format!("clawden-process-test-{unique}"));
+        fs::create_dir_all(&tmp_home).expect("failed to create temporary HOME dir");
+        std::env::set_var("HOME", &tmp_home);
+
+        let manager = ProcessManager::new(ExecutionMode::Direct).expect("process manager init");
+        let runtime = "zeroclaw".to_string();
+        let log_path = manager.log_dir().join("zeroclaw.log");
+        fs::write(&log_path, "stale line\n").expect("seed stale log line");
+
+        let stream = manager
+            .stream_logs(std::slice::from_ref(&runtime))
+            .expect("create log stream");
+
+        thread::sleep(Duration::from_millis(250));
+        assert!(
+            stream.drain().is_empty(),
+            "stale line should not be replayed"
+        );
+
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&log_path)
+            .expect("open log for append")
+            .write_all(b"fresh line\n")
+            .expect("append fresh line");
+
+        thread::sleep(Duration::from_millis(300));
+        let drained = stream.drain();
+        assert!(
+            drained.iter().any(|line| line.text == "fresh line"),
+            "expected freshly appended line in stream"
+        );
+        assert!(
+            drained.iter().all(|line| line.text != "stale line"),
+            "stale line must never appear"
+        );
+
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        let _ = fs::remove_dir_all(tmp_home);
+    }
 }

@@ -18,7 +18,10 @@ pub use channels::{
     ChannelHealthEntry, ChannelStore, ChannelTypeSummary, MatrixRow,
 };
 pub use discovery::{DiscoveredEndpoint, DiscoveryMethod, DiscoveryService};
-pub use install::{InstallOutcome, InstalledRuntime, RuntimeInstaller};
+pub use install::{
+    runtime_start_args, version_satisfies, InstallOutcome, InstalledRuntime, RuntimeInstaller,
+    VersionCheck,
+};
 pub use lifecycle::AgentState;
 pub use manager::{AgentRecord, LifecycleManager};
 pub use process::{
@@ -240,6 +243,12 @@ pub struct AgentConfig {
     pub name: String,
     pub runtime: ClawRuntime,
     pub model: Option<String>,
+    #[serde(default)]
+    pub env_vars: Vec<(String, String)>,
+    #[serde(default)]
+    pub channels: Vec<String>,
+    #[serde(default)]
+    pub tools: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

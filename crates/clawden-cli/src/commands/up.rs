@@ -60,13 +60,43 @@ pub async fn exec_up(
     let mut started_runtimes = Vec::new();
 
     for runtime in target_runtimes {
+        let env_vars = if let Some(cfg) = config.as_ref() {
+            build_runtime_env_vars(cfg, &runtime)?
+        } else {
+            Vec::new()
+        };
+
+        let channels = if let Some(cfg) = config.as_ref() {
+            channels_for_runtime(cfg, &runtime)
+        } else {
+            Vec::new()
+        };
+
+        let tools = if let Some(cfg) = config.as_ref() {
+            tools_for_runtime(cfg, &runtime)
+        } else {
+            Vec::new()
+        };
+
+        let pinned_version = config
+            .as_ref()
+            .and_then(|cfg| pinned_version_for_runtime(cfg, &runtime));
+
         match mode {
             ExecutionMode::Docker => {
                 let rt = parse_runtime(&runtime)?;
-                let record = manager.register_agent(
+                let record = manager.register_agent_with_config(
                     format!("{}-default", rt.as_slug()),
-                    rt,
+                    rt.clone(),
                     vec!["chat".to_string()],
+                    clawden_core::AgentConfig {
+                        name: format!("{}-default", rt.as_slug()),
+                        runtime: rt,
+                        model: None,
+                        env_vars: env_vars.clone(),
+                        channels: channels.clone(),
+                        tools: tools.clone(),
+                    },
                 );
                 manager
                     .start_agent(&record.id)
@@ -77,22 +107,14 @@ pub async fn exec_up(
                 started_runtimes.push(runtime.clone());
             }
             ExecutionMode::Direct | ExecutionMode::Auto => {
-                let installed = ensure_installed_runtime(installer, &runtime)?;
-                let env_vars = if let Some(cfg) = config.as_ref() {
-                    build_runtime_env_vars(cfg, &runtime)?
-                } else {
-                    Vec::new()
-                };
-
-                let channels = if let Some(cfg) = config.as_ref() {
-                    channels_for_runtime(cfg, &runtime)
-                } else {
-                    Vec::new()
-                };
+                let installed = ensure_installed_runtime(installer, &runtime, pinned_version)?;
 
                 let mut args = installed.start_args.clone();
                 if !channels.is_empty() {
                     args.push(format!("--channels={}", channels.join(",")));
+                }
+                if !tools.is_empty() {
+                    args.push(format!("--tools={}", tools.join(",")));
                 }
 
                 let info = process_manager.start_direct_with_env_and_project(
@@ -304,7 +326,7 @@ pub fn runtimes_from_config(config: &ClawDenYaml) -> Vec<String> {
 }
 
 /// Extract channel names relevant to a specific runtime from clawden.yaml.
-fn channels_for_runtime(config: &ClawDenYaml, runtime: &str) -> Vec<String> {
+pub(crate) fn channels_for_runtime(config: &ClawDenYaml, runtime: &str) -> Vec<String> {
     // Single-runtime shorthand: all channels belong to this runtime
     if config.runtime.as_deref() == Some(runtime) {
         return config.channels.keys().cloned().collect();
@@ -314,6 +336,32 @@ fn channels_for_runtime(config: &ClawDenYaml, runtime: &str) -> Vec<String> {
         return entry.channels.clone();
     }
     Vec::new()
+}
+
+pub(crate) fn pinned_version_for_runtime<'a>(
+    config: &'a ClawDenYaml,
+    runtime: &str,
+) -> Option<&'a str> {
+    if config.runtime.as_deref() == Some(runtime) {
+        return config.version.as_deref();
+    }
+    config
+        .runtimes
+        .iter()
+        .find(|entry| entry.name == runtime)
+        .and_then(|entry| entry.version.as_deref())
+}
+
+pub(crate) fn tools_for_runtime(config: &ClawDenYaml, runtime: &str) -> Vec<String> {
+    if config.runtime.as_deref() == Some(runtime) {
+        return config.tools.clone();
+    }
+    config
+        .runtimes
+        .iter()
+        .find(|entry| entry.name == runtime)
+        .map(|entry| entry.tools.clone())
+        .unwrap_or_default()
 }
 
 /// Build all env vars a runtime needs: LLM provider config + channel credentials.

@@ -43,6 +43,10 @@ pub enum Commands {
         all: bool,
         #[arg(long)]
         list: bool,
+        #[arg(long, short = 'U')]
+        upgrade: bool,
+        #[arg(long)]
+        outdated: bool,
     },
     /// Remove a directly installed runtime.
     Uninstall { runtime: String },

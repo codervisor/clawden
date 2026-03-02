@@ -33,9 +33,13 @@ async fn main() -> Result<()> {
             yes,
             force,
         })?,
-        Commands::Install { runtime, all, list } => {
-            commands::exec_install(&installer, runtime, all, list)?
-        }
+        Commands::Install {
+            runtime,
+            all,
+            list,
+            upgrade,
+            outdated,
+        } => commands::exec_install(&installer, runtime, all, list, upgrade, outdated)?,
         Commands::Uninstall { runtime } => commands::exec_uninstall(&installer, runtime)?,
         Commands::Up {
             runtimes,

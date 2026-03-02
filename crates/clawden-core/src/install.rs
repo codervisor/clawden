@@ -1,4 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
+use semver::{Version, VersionReq};
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -17,6 +18,14 @@ pub struct InstalledRuntime {
 pub enum InstallOutcome {
     Installed(InstalledRuntime),
     Uninstalled { runtime: String },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VersionCheck {
+    pub runtime: String,
+    pub installed: String,
+    pub latest: String,
+    pub update_available: bool,
 }
 
 pub struct RuntimeInstaller {
@@ -54,10 +63,10 @@ impl RuntimeInstaller {
         ensure_runtime_supported(runtime)?;
         let _lock = InstallLock::acquire(&self.lock_path)?;
 
-        let version = requested_version.unwrap_or("latest");
+        let version = self.resolve_requested_version(runtime, requested_version)?;
         let runtime_dir = self.runtimes_dir.join(runtime);
         let tmp_dir = runtime_dir.join(format!(".{version}.tmp"));
-        let final_dir = runtime_dir.join(version);
+        let final_dir = runtime_dir.join(&version);
 
         if tmp_dir.exists() {
             fs::remove_dir_all(&tmp_dir)?;
@@ -65,10 +74,10 @@ impl RuntimeInstaller {
 
         fs::create_dir_all(&tmp_dir)?;
         let executable = match runtime {
-            "zeroclaw" => self.install_zeroclaw(version, &tmp_dir)?,
-            "picoclaw" => self.install_picoclaw(version, &tmp_dir)?,
-            "openclaw" => self.install_openclaw(version, &tmp_dir)?,
-            "nanoclaw" => self.install_nanoclaw(version, &tmp_dir)?,
+            "zeroclaw" => self.install_zeroclaw(&version, &tmp_dir)?,
+            "picoclaw" => self.install_picoclaw(&version, &tmp_dir)?,
+            "openclaw" => self.install_openclaw(&version, &tmp_dir)?,
+            "nanoclaw" => self.install_nanoclaw(&version, &tmp_dir)?,
             _ => unreachable!("validated by ensure_runtime_supported"),
         };
         validate_runtime_artifact(runtime, &executable)?;
@@ -84,17 +93,50 @@ impl RuntimeInstaller {
             let _ = fs::remove_file(&current_link);
             let _ = fs::remove_dir_all(&current_link);
         }
-        std::os::unix::fs::symlink(version, &current_link)
+        std::os::unix::fs::symlink(&version, &current_link)
             .with_context(|| format!("updating current symlink for {runtime}"))?;
 
         self.append_audit("runtime.install", runtime, "ok")?;
 
         Ok(InstalledRuntime {
             runtime: runtime.to_string(),
-            version: version.to_string(),
+            version: version.clone(),
             executable: final_dir.join(runtime),
             start_args: runtime_start_args(runtime),
         })
+    }
+
+    fn resolve_requested_version(
+        &self,
+        runtime: &str,
+        requested_version: Option<&str>,
+    ) -> Result<String> {
+        let Some(requested) = requested_version.map(str::trim).filter(|v| !v.is_empty()) else {
+            return self.query_latest_version(runtime);
+        };
+
+        if requested.eq_ignore_ascii_case("latest") {
+            return self.query_latest_version(runtime);
+        }
+
+        if is_version_constraint(requested) {
+            let latest = self.query_latest_version(runtime)?;
+            if version_satisfies(&latest, requested) {
+                return Ok(latest);
+            }
+            if let Some(installed) = self.installed_version(runtime)? {
+                if version_satisfies(&installed, requested) {
+                    return Ok(installed);
+                }
+            }
+            bail!(
+                "unable to resolve a runtime version for '{}' that satisfies constraint '{}'",
+                runtime,
+                requested
+            );
+        }
+
+        Ok(normalize_version(requested))
     }
 
     pub fn install_all(&self) -> Result<Vec<InstalledRuntime>> {
@@ -103,6 +145,44 @@ impl RuntimeInstaller {
             installed.push(self.install_runtime(runtime, None)?);
         }
         Ok(installed)
+    }
+
+    pub fn installed_version(&self, runtime: &str) -> Result<Option<String>> {
+        Ok(self
+            .list_installed()?
+            .into_iter()
+            .find(|row| row.runtime == runtime)
+            .map(|row| row.version))
+    }
+
+    pub fn query_latest_version(&self, runtime: &str) -> Result<String> {
+        ensure_runtime_supported(runtime)?;
+        match runtime {
+            "zeroclaw" => Ok(normalize_version(
+                &github_release_assets("zeroclaw-labs", "zeroclaw", "latest")?.tag,
+            )),
+            "picoclaw" => Ok(normalize_version(
+                &github_release_assets("picoclaw-labs", "picoclaw", "latest")?.tag,
+            )),
+            "openclaw" => query_latest_openclaw_version(),
+            "nanoclaw" => query_nanoclaw_head_branch(),
+            _ => unreachable!("validated by ensure_runtime_supported"),
+        }
+    }
+
+    pub fn check_for_updates(&self) -> Result<Vec<VersionCheck>> {
+        let mut checks = Vec::new();
+        for installed in self.list_installed()? {
+            let latest = self.query_latest_version(&installed.runtime)?;
+            checks.push(VersionCheck {
+                runtime: installed.runtime,
+                installed: installed.version.clone(),
+                update_available: update_available(&installed.version, &latest),
+                latest,
+            });
+        }
+        checks.sort_by(|a, b| a.runtime.cmp(&b.runtime));
+        Ok(checks)
     }
 
     pub fn uninstall_runtime(&self, runtime: &str) -> Result<()> {
@@ -396,13 +476,56 @@ impl RuntimeInstaller {
     }
 }
 
-fn runtime_start_args(runtime: &str) -> Vec<String> {
+pub fn runtime_start_args(runtime: &str) -> Vec<String> {
     match runtime {
         "zeroclaw" => vec!["daemon".to_string()],
         "picoclaw" => vec!["gateway".to_string()],
         "nullclaw" => vec!["daemon".to_string()],
         _ => Vec::new(),
     }
+}
+
+pub fn version_satisfies(installed: &str, constraint: &str) -> bool {
+    let normalized_constraint = constraint.trim();
+    if normalized_constraint.is_empty() || normalized_constraint.eq_ignore_ascii_case("latest") {
+        return true;
+    }
+
+    if let Some(prefix) = normalized_constraint
+        .strip_suffix(".x")
+        .or_else(|| normalized_constraint.strip_suffix(".*"))
+    {
+        let mut parts = prefix.split('.').filter(|part| !part.is_empty());
+        let Some(major) = parts.next().and_then(|v| v.parse::<u64>().ok()) else {
+            return false;
+        };
+        let Some(minor) = parts.next().and_then(|v| v.parse::<u64>().ok()) else {
+            return false;
+        };
+        if parts.next().is_some() {
+            return false;
+        }
+
+        let Some(installed_version) = parse_semver(installed) else {
+            return false;
+        };
+        return installed_version.major == major && installed_version.minor == minor;
+    }
+
+    if normalized_constraint.starts_with('>')
+        || normalized_constraint.starts_with('<')
+        || normalized_constraint.starts_with('=')
+    {
+        let Ok(req) = VersionReq::parse(normalized_constraint) else {
+            return false;
+        };
+        let Some(installed_version) = parse_semver(installed) else {
+            return false;
+        };
+        return req.matches(&installed_version);
+    }
+
+    normalize_version(installed) == normalize_version(normalized_constraint)
 }
 
 struct GithubRelease {
@@ -582,6 +705,75 @@ fn normalize_version(version: &str) -> String {
     version.trim_start_matches('v').to_string()
 }
 
+fn is_version_constraint(raw: &str) -> bool {
+    let value = raw.trim();
+    value.ends_with(".x")
+        || value.ends_with(".*")
+        || value.starts_with('>')
+        || value.starts_with('<')
+        || value.starts_with('=')
+}
+
+fn query_latest_openclaw_version() -> Result<String> {
+    ensure_command_available("npm", "npm")?;
+    let output = Command::new("npm")
+        .args(["view", "openclaw", "version", "--json"])
+        .output()
+        .context("failed to query npm for openclaw latest version")?;
+    if !output.status.success() {
+        bail!(
+            "npm view openclaw version failed with status {}",
+            output.status
+        );
+    }
+
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .context("npm returned invalid JSON for openclaw latest version")?;
+    if let Some(version) = parsed.as_str() {
+        return Ok(normalize_version(version));
+    }
+    bail!("npm returned unexpected latest version payload for openclaw")
+}
+
+fn query_nanoclaw_head_branch() -> Result<String> {
+    ensure_command_available("git", "git")?;
+    let output = Command::new("git")
+        .args([
+            "ls-remote",
+            "--symref",
+            "https://github.com/qwibitai/nanoclaw.git",
+            "HEAD",
+        ])
+        .output()
+        .context("failed to query nanoclaw remote HEAD")?;
+    if !output.status.success() {
+        bail!(
+            "git ls-remote for nanoclaw failed with status {}",
+            output.status
+        );
+    }
+
+    let body = String::from_utf8_lossy(&output.stdout);
+    for line in body.lines() {
+        if let Some(ref_name) = line.strip_prefix("ref: refs/heads/") {
+            let branch = ref_name.split_whitespace().next().unwrap_or("main");
+            return Ok(branch.to_string());
+        }
+    }
+    Ok("main".to_string())
+}
+
+fn parse_semver(raw: &str) -> Option<Version> {
+    Version::parse(raw.trim().trim_start_matches('v')).ok()
+}
+
+fn update_available(installed: &str, latest: &str) -> bool {
+    match (parse_semver(installed), parse_semver(latest)) {
+        (Some(installed_ver), Some(latest_ver)) => latest_ver > installed_ver,
+        _ => normalize_version(installed) != normalize_version(latest),
+    }
+}
+
 fn ensure_command_available(command: &str, install_hint: &str) -> Result<()> {
     let status = Command::new("which")
         .arg(command)
@@ -649,4 +841,19 @@ fn make_executable(path: &Path) -> Result<()> {
     perms.set_mode(0o755);
     fs::set_permissions(path, perms)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::version_satisfies;
+
+    #[test]
+    fn version_constraints_support_exact_wildcard_range_and_latest() {
+        assert!(version_satisfies("0.2.1", "0.2.1"));
+        assert!(version_satisfies("v0.2.5", "0.2.x"));
+        assert!(version_satisfies("0.3.0", ">=0.2.1"));
+        assert!(version_satisfies("main", "latest"));
+        assert!(!version_satisfies("0.3.0", "0.2.x"));
+        assert!(!version_satisfies("main", ">=0.2.1"));
+    }
 }

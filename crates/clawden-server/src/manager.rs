@@ -103,6 +103,9 @@ impl LifecycleManager {
             name: record.name.clone(),
             runtime: record.runtime.clone(),
             model: None,
+            env_vars: Vec::new(),
+            channels: Vec::new(),
+            tools: Vec::new(),
         };
 
         let handle = adapter
@@ -226,6 +229,9 @@ impl LifecycleManager {
                     name,
                     runtime: runtime.clone(),
                     model: None,
+                    env_vars: Vec::new(),
+                    channels: Vec::new(),
+                    tools: Vec::new(),
                 };
 
                 match adapter.start(&config).await {

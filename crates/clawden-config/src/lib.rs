@@ -1,4 +1,5 @@
 use clawden_core::ClawRuntime;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -62,6 +63,10 @@ pub struct ClawDenYaml {
     /// Single-runtime model shorthand.
     #[serde(default)]
     pub model: Option<String>,
+
+    /// Single-runtime version constraint shorthand.
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 /// A channel instance entry in `clawden.yaml`.
@@ -116,6 +121,8 @@ pub struct ChannelInstanceYaml {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeEntryYaml {
     pub name: String,
+    #[serde(default)]
+    pub version: Option<String>,
     #[serde(default)]
     pub channels: Vec<String>,
     #[serde(default)]
@@ -390,6 +397,24 @@ impl ClawDenYaml {
                     ));
                 }
             }
+
+            if let Some(version) = rt.version.as_deref() {
+                if !valid_version_constraint(version) {
+                    errors.push(format!(
+                        "Runtime '{}' has invalid version constraint '{}'",
+                        rt.name, version
+                    ));
+                }
+            }
+        }
+
+        if let Some(version) = self.version.as_deref() {
+            if !valid_version_constraint(version) {
+                errors.push(format!(
+                    "Top-level 'version' has invalid constraint '{}'",
+                    version
+                ));
+            }
         }
 
         if errors.is_empty() {
@@ -499,6 +524,39 @@ impl ClawDenYaml {
             }
         })
     }
+}
+
+fn valid_version_constraint(raw: &str) -> bool {
+    let value = raw.trim();
+    if value.is_empty() {
+        return false;
+    }
+    if value.eq_ignore_ascii_case("latest") {
+        return true;
+    }
+
+    if let Some(prefix) = value
+        .strip_suffix(".x")
+        .or_else(|| value.strip_suffix(".*"))
+    {
+        let mut parts = prefix.split('.').filter(|p| !p.is_empty());
+        let Some(major) = parts.next() else {
+            return false;
+        };
+        let Some(minor) = parts.next() else {
+            return false;
+        };
+        if parts.next().is_some() {
+            return false;
+        }
+        return major.parse::<u64>().is_ok() && minor.parse::<u64>().is_ok();
+    }
+
+    if value.starts_with('>') || value.starts_with('<') || value.starts_with('=') {
+        return VersionReq::parse(value).is_ok();
+    }
+
+    Version::parse(value.trim_start_matches('v')).is_ok()
 }
 
 /// Resolve a single `$ENV_VAR` field in-place.
