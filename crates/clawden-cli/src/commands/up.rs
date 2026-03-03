@@ -47,8 +47,13 @@ pub async fn exec_up(
         }
     }
 
-    let mode = process_manager.resolve_mode(no_docker || env_no_docker_enabled());
     let config = load_config()?;
+    let config_mode_is_direct = config
+        .as_ref()
+        .and_then(|c| c.mode.as_deref())
+        .is_some_and(|m| m.eq_ignore_ascii_case("direct"));
+    let mode =
+        process_manager.resolve_mode(no_docker || env_no_docker_enabled() || config_mode_is_direct);
     let target_runtimes =
         resolve_target_runtimes(opts.runtimes.clone(), config.as_ref(), installer)?;
 
@@ -427,6 +432,22 @@ pub fn build_runtime_env_vars(
         if let Some(ch_instance) = config.channels.get(ch_name) {
             let ch_type = ClawDenYaml::resolve_channel_type(ch_name, ch_instance)
                 .unwrap_or_else(|| ch_name.clone());
+
+            // Pass through canonical channel token env vars so runtimes that
+            // read the standard names (e.g. TELEGRAM_BOT_TOKEN) also work,
+            // especially in Docker mode where host env is not inherited.
+            if let Some(token) = &ch_instance.token {
+                let canonical = format!("{}_BOT_TOKEN", ch_type.to_uppercase());
+                env.entry(canonical).or_insert_with(|| token.clone());
+            }
+            if let Some(bt) = &ch_instance.bot_token {
+                let canonical = format!("{}_BOT_TOKEN", ch_type.to_uppercase());
+                env.entry(canonical).or_insert_with(|| bt.clone());
+            }
+            if let Some(at) = &ch_instance.app_token {
+                let canonical = format!("{}_APP_TOKEN", ch_type.to_uppercase());
+                env.entry(canonical).or_insert_with(|| at.clone());
+            }
 
             // Use runtime-specific env var mappers where available
             let channel_vars = match runtime_slug.as_str() {

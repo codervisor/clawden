@@ -67,6 +67,10 @@ pub struct ClawDenYaml {
     /// Single-runtime version constraint shorthand.
     #[serde(default)]
     pub version: Option<String>,
+
+    /// Execution mode: "docker" or "direct". Omitted defaults to auto-detect.
+    #[serde(default)]
+    pub mode: Option<String>,
 }
 
 /// A channel instance entry in `clawden.yaml`.

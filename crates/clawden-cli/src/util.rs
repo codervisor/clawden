@@ -118,16 +118,10 @@ pub fn prompt_yes_no(question: &str, default_yes: bool) -> Result<bool> {
     if !io::stdin().is_terminal() {
         return Ok(false);
     }
-    let suffix = if default_yes { "[Y/n]" } else { "[y/N]" };
-    print!("{question} {suffix} ");
-    io::stdout().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let normalized = input.trim().to_ascii_lowercase();
-    if normalized.is_empty() {
-        return Ok(default_yes);
-    }
-    Ok(matches!(normalized.as_str(), "y" | "yes"))
+    Ok(dialoguer::Confirm::new()
+        .with_prompt(question)
+        .default(default_yes)
+        .interact()?)
 }
 
 pub fn store_provider_key_in_vault(provider: &str, key: &str) -> Result<PathBuf> {
