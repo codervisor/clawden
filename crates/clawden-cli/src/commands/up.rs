@@ -747,6 +747,7 @@ mod tests {
     use crate::commands::test_env_lock;
     use clawden_core::{ExecutionMode, ProcessManager};
     use std::fs;
+    use std::net::TcpListener;
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -922,10 +923,103 @@ channels:
         let _ = fs::remove_dir_all(tmp_home);
     }
 
+    #[test]
+    fn startup_check_handles_openfang_and_zeroclaw_independently() {
+        let _guard = test_env_lock().lock().expect("env lock poisoned");
+        let original_home = std::env::var("HOME").ok();
+        let original_zero_url = std::env::var("CLAWDEN_HEALTH_URL_ZEROCLAW").ok();
+        let original_openfang_url = std::env::var("CLAWDEN_HEALTH_URL_OPENFANG").ok();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let tmp_home = std::env::temp_dir().join(format!("clawden-up-test-multi-{unique}"));
+        fs::create_dir_all(&tmp_home).expect("tmp home");
+        std::env::set_var("HOME", &tmp_home);
+
+        let zeroclaw_port = reserve_local_port();
+        let openfang_port = reserve_local_port();
+
+        std::env::set_var(
+            "CLAWDEN_HEALTH_URL_ZEROCLAW",
+            format!("http://127.0.0.1:{zeroclaw_port}/health"),
+        );
+        std::env::set_var(
+            "CLAWDEN_HEALTH_URL_OPENFANG",
+            format!("http://127.0.0.1:{openfang_port}/health"),
+        );
+
+        let manager = ProcessManager::new(ExecutionMode::Direct).expect("process manager");
+
+        let zeroclaw_script = tmp_home.join("zeroclaw-health.py");
+        let zeroclaw_body = format!(
+            "#!/usr/bin/env python3\nimport http.server\nimport socketserver\n\nclass H(http.server.BaseHTTPRequestHandler):\n    def do_GET(self):\n        if self.path == '/health':\n            self.send_response(200)\n            self.end_headers()\n            self.wfile.write(b'ok')\n        else:\n            self.send_response(404)\n            self.end_headers()\n    def log_message(self, format, *args):\n        return\n\nwith socketserver.TCPServer(('127.0.0.1', {zeroclaw_port}), H) as s:\n    s.serve_forever()\n"
+        );
+        write_executable(&zeroclaw_script, &zeroclaw_body);
+
+        let openfang_script = tmp_home.join("openfang-health.py");
+        let openfang_body = format!(
+            "#!/usr/bin/env python3\nimport http.server\nimport socketserver\n\nclass H(http.server.BaseHTTPRequestHandler):\n    def do_GET(self):\n        if self.path == '/health':\n            self.send_response(200)\n            self.end_headers()\n            self.wfile.write(b'ok')\n        else:\n            self.send_response(404)\n            self.end_headers()\n    def log_message(self, format, *args):\n        return\n\nwith socketserver.TCPServer(('127.0.0.1', {openfang_port}), H) as s:\n    s.serve_forever()\n"
+        );
+        write_executable(&openfang_script, &openfang_body);
+
+        let zero_info = manager
+            .start_direct_with_env_and_project(
+                "zeroclaw",
+                &zeroclaw_script,
+                &[],
+                &[],
+                Some("multi-ph".into()),
+            )
+            .expect("zeroclaw should start");
+        verify_runtime_startup(&manager, "zeroclaw", &zero_info)
+            .expect("zeroclaw health check should pass");
+
+        let openfang_info = manager
+            .start_direct_with_env_and_project(
+                "openfang",
+                &openfang_script,
+                &[],
+                &[],
+                Some("multi-ph".into()),
+            )
+            .expect("openfang should start");
+        verify_runtime_startup(&manager, "openfang", &openfang_info)
+            .expect("openfang health check should pass");
+
+        let _ = manager.stop_with_timeout("zeroclaw", 1);
+        let _ = manager.stop_with_timeout("openfang", 1);
+
+        if let Some(url) = original_zero_url {
+            std::env::set_var("CLAWDEN_HEALTH_URL_ZEROCLAW", url);
+        } else {
+            std::env::remove_var("CLAWDEN_HEALTH_URL_ZEROCLAW");
+        }
+        if let Some(url) = original_openfang_url {
+            std::env::set_var("CLAWDEN_HEALTH_URL_OPENFANG", url);
+        } else {
+            std::env::remove_var("CLAWDEN_HEALTH_URL_OPENFANG");
+        }
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        let _ = fs::remove_dir_all(tmp_home);
+    }
+
     fn write_executable(path: &Path, body: &str) {
         fs::write(path, body).expect("script should be written");
         let mut perms = fs::metadata(path).expect("metadata").permissions();
         perms.set_mode(0o755);
         fs::set_permissions(path, perms).expect("chmod");
+    }
+
+    fn reserve_local_port() -> u16 {
+        TcpListener::bind("127.0.0.1:0")
+            .expect("bind ephemeral port")
+            .local_addr()
+            .expect("local addr")
+            .port()
     }
 }

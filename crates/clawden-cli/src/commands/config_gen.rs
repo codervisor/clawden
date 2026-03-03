@@ -22,7 +22,7 @@ pub(crate) fn generate_config_dir(
     fs::create_dir_all(&dir)?;
 
     match runtime {
-        "zeroclaw" | "nullclaw" => {
+        "zeroclaw" | "nullclaw" | "openfang" => {
             let body = generate_toml_config(config, runtime);
             fs::write(dir.join("config.toml"), toml::to_string_pretty(&body)?)?;
         }
@@ -475,6 +475,80 @@ channels:
         assert!(generated_body.contains("fresh-token"));
         assert!(!generated_body.contains("stale-token"));
         assert!(stale_body.contains("stale-token"));
+
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        let _ = fs::remove_dir_all(tmp_home);
+    }
+
+    #[test]
+    fn generates_openfang_toml_and_injects_config_dir() {
+        let _guard = test_env_lock().lock().expect("env lock");
+        let original_home = std::env::var("HOME").ok();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let tmp_home = std::env::temp_dir().join(format!("clawden-openfang-config-{unique}"));
+        fs::create_dir_all(&tmp_home).expect("tmp home");
+        std::env::set_var("HOME", &tmp_home);
+
+        let yaml = r#"
+runtime: openfang
+provider: openrouter
+model: anthropic/claude-sonnet-4-6
+providers:
+  openrouter:
+    api_key: sk-openfang-test
+channels:
+  ops-tg:
+    type: telegram
+    token: tg-openfang-token
+config:
+  dashboard:
+    enabled: true
+"#;
+        let mut config = ClawDenYaml::parse_yaml(yaml).expect("yaml parse");
+        config.resolve_env_vars().expect("resolve env");
+
+        let dir = generate_config_dir(&config, "openfang", "openfang-ph")
+            .expect("config dir")
+            .expect("supported runtime");
+        let body = fs::read_to_string(dir.join("config.toml")).expect("read config");
+        let parsed: toml::Value = body.parse().expect("valid toml");
+
+        assert_eq!(
+            parsed.get("default_provider").and_then(toml::Value::as_str),
+            Some("openrouter")
+        );
+        assert_eq!(
+            parsed.get("default_model").and_then(toml::Value::as_str),
+            Some("anthropic/claude-sonnet-4-6")
+        );
+        assert_eq!(
+            parsed
+                .get("channels_config")
+                .and_then(|v| v.get("telegram"))
+                .and_then(|v| v.get("bot_token"))
+                .and_then(toml::Value::as_str),
+            Some("tg-openfang-token")
+        );
+        assert_eq!(
+            parsed
+                .get("dashboard")
+                .and_then(|v| v.get("enabled"))
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
+
+        let mut args = vec!["daemon".to_string()];
+        inject_config_dir_arg("openfang", &mut args, &dir);
+        assert!(args
+            .windows(2)
+            .any(|w| { w[0] == "--config-dir" && w[1] == dir.to_string_lossy() }));
 
         if let Some(home) = original_home {
             std::env::set_var("HOME", home);

@@ -555,7 +555,7 @@ pub fn runtime_supported_extra_args(runtime: &str) -> &'static [&'static str] {
     match runtime {
         "zeroclaw" => &["--config-dir", "--port", "--host"],
         "picoclaw" => &["--config-dir", "--port", "--host"],
-        "openfang" => &["--port", "--host"],
+        "openfang" => &["--config-dir", "--port", "--host"],
         "nullclaw" => &["--config-dir", "--port", "--host"],
         _ => &[],
     }

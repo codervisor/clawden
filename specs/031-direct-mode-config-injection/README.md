@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-03-03
 priority: high
 tags:
@@ -13,7 +13,7 @@ depends_on:
 - 029-docker-mode-config-injection
 - 032-openfang-runtime-adapter
 created_at: 2026-03-03T03:09:07.295096Z
-updated_at: 2026-03-03T06:59:43.779696Z
+updated_at: 2026-03-03T08:39:00.321454Z
 transitions:
 - status: in-progress
   at: 2026-03-03T06:59:43.779696Z
@@ -251,11 +251,11 @@ Error: channel 'telegram' is enabled but TELEGRAM_BOT_TOKEN is empty.
 - [x] `clawden down` removes the generated config directory
 - [x] Runtimes without `--config-dir` (openclaw, nanoclaw) still work via env vars only
 - [x] `config` overrides from clawden.yaml are merged into the generated config file
-- [ ] `clawden up` with openfang runtime → config.toml is generated with correct TOML structure and provider/channel fields
+- [x] `clawden up` with openfang runtime → config.toml is generated with correct TOML structure and provider/channel fields
 - [x] `clawden up` detects a runtime that crashes immediately and prints the log tail with a clear error
 - [x] `clawden up` reports `✓ <runtime> ready` when the health endpoint responds within the polling window
 - [x] `clawden up` warns (non-fatal) when health endpoint is not responding but process is alive
 - [x] `clawden up` with an empty `TELEGRAM_BOT_TOKEN=` in .env → prints actionable error before starting the runtime
 - [x] `clawden up` with a provider configured but no API key → prints actionable error before starting the runtime
-- [ ] `clawden up` with openfang in multi-runtime config alongside zeroclaw → both start and receive independent health checks
+- [x] `clawden up` with openfang in multi-runtime config alongside zeroclaw → both start and receive independent health checks
 - [x] Works alongside env var passthrough (no regression for Docker mode)
