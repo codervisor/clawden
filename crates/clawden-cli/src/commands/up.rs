@@ -36,7 +36,6 @@ pub async fn exec_up(
                 runtime: "zeroclaw".to_string(),
                 multi: false,
                 template: None,
-                reconfigure: false,
                 non_interactive: false,
                 yes: false,
                 force: false,

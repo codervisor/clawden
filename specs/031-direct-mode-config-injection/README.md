@@ -11,9 +11,11 @@ tags:
 depends_on:
 - 013-config-management
 - 029-docker-mode-config-injection
+- 032-openfang-runtime-adapter
 created_at: 2026-03-03T03:09:07.295096Z
-updated_at: 2026-03-03T03:09:07.295096Z
+updated_at: 2026-03-03T06:38:08.254028Z
 ---
+
 # Direct Mode Config Injection — Config-Dir Translation
 
 ## Overview
@@ -37,45 +39,45 @@ Three runtimes (zeroclaw, picoclaw, nullclaw) already support `--config-dir` —
 
 ### Runtime Config Format Map
 
-| Runtime | Language | Config Format | Config File | `--config-dir` | Status |
-|---------|----------|--------------|-------------|----------------|--------|
-| zeroclaw | Rust | TOML | `~/.zeroclaw/config.toml` | ✅ Yes | Phase 1 |
-| picoclaw | Go | JSON | config dir-based | ✅ Yes | Phase 1 |
-| nullclaw | — | TOML | config dir-based | ✅ Yes | Phase 1 |
-| openclaw | TypeScript | JSON5 | env vars only | ❌ No | Env-only |
-| nanoclaw | TypeScript | Code/inline | env vars only | ❌ No | Env-only |
-| ironclaw | — | WASM caps | — | ❌ No | Phase 2 |
-| microclaw | — | YAML-like | — | ❌ No | Phase 2 |
-| openfang | Rust | TOML | — | ❌ Disabled | Disabled |
+| Runtime   | Language   | Config Format | Config File               | `--config-dir` | Status   |
+| --------- | ---------- | ------------- | ------------------------- | -------------- | -------- |
+| zeroclaw  | Rust       | TOML          | `~/.zeroclaw/config.toml` | ✅ Yes          | Phase 1  |
+| picoclaw  | Go         | JSON          | config dir-based          | ✅ Yes          | Phase 1  |
+| nullclaw  | —          | TOML          | config dir-based          | ✅ Yes          | Phase 1  |
+| openclaw  | TypeScript | JSON5         | env vars only             | ❌ No           | Env-only |
+| nanoclaw  | TypeScript | Code/inline   | env vars only             | ❌ No           | Env-only |
+| ironclaw  | —          | WASM caps     | —                         | ❌ No           | Phase 2  |
+| microclaw | —          | YAML-like     | —                         | ❌ No           | Phase 2  |
+| openfang  | Rust       | TOML          | `~/.openfang/config.toml` | ❌ No           | Phase 2  |
 
 ### clawden.yaml → Runtime Config Field Mapping
 
 #### ZeroClaw (TOML)
 
-| clawden.yaml | config.toml field | Notes |
-|---|---|---|
-| `provider` | `default_provider` | e.g. "openrouter" |
-| `model` | `default_model` | e.g. "anthropic/claude-sonnet-4-6" |
-| `providers.<name>.api_key` | `reliability.api_keys` | Array of `{provider, key}` |
-| `channels.telegram.token` | `[channels_config.telegram].bot_token` | |
-| `channels.telegram.allowed_users` | `[channels_config.telegram].allowed_users` | |
-| `channels.discord.token` | `[channels_config.discord].bot_token` | |
-| `channels.discord.guild` | `[channels_config.discord].guild_id` | |
-| `channels.slack.bot_token` | `[channels_config.slack].bot_token` | |
-| `channels.slack.app_token` | `[channels_config.slack].app_token` | |
-| `channels.signal.phone` | `[channels_config.signal].phone` | |
-| `channels.signal.token` | `[channels_config.signal].token` | |
-| `config.*` | Merged as-is into TOML root | Catch-all for runtime-specific overrides |
+| clawden.yaml                      | config.toml field                          | Notes                                    |
+| --------------------------------- | ------------------------------------------ | ---------------------------------------- |
+| `provider`                        | `default_provider`                         | e.g. "openrouter"                        |
+| `model`                           | `default_model`                            | e.g. "anthropic/claude-sonnet-4-6"       |
+| `providers.<name>.api_key`        | `reliability.api_keys`                     | Array of `{provider, key}`               |
+| `channels.telegram.token`         | `[channels_config.telegram].bot_token`     |                                          |
+| `channels.telegram.allowed_users` | `[channels_config.telegram].allowed_users` |                                          |
+| `channels.discord.token`          | `[channels_config.discord].bot_token`      |                                          |
+| `channels.discord.guild`          | `[channels_config.discord].guild_id`       |                                          |
+| `channels.slack.bot_token`        | `[channels_config.slack].bot_token`        |                                          |
+| `channels.slack.app_token`        | `[channels_config.slack].app_token`        |                                          |
+| `channels.signal.phone`           | `[channels_config.signal].phone`           |                                          |
+| `channels.signal.token`           | `[channels_config.signal].token`           |                                          |
+| `config.*`                        | Merged as-is into TOML root                | Catch-all for runtime-specific overrides |
 
 #### PicoClaw (JSON)
 
-| clawden.yaml | JSON field | Notes |
-|---|---|---|
-| `provider` | `llm.provider` | PicoClaw uses "llm" not "model" |
-| `model` | `llm.model` | |
-| `providers.<name>.api_key` | `llm.apiKeyRef` | |
-| `channels.<name>` | Per-channel JSON objects | Via `picoclaw_channel_config()` |
-| `config.*` | Merged into root | |
+| clawden.yaml               | JSON field               | Notes                           |
+| -------------------------- | ------------------------ | ------------------------------- |
+| `provider`                 | `llm.provider`           | PicoClaw uses "llm" not "model" |
+| `model`                    | `llm.model`              |                                 |
+| `providers.<name>.api_key` | `llm.apiKeyRef`          |                                 |
+| `channels.<name>`          | Per-channel JSON objects | Via `picoclaw_channel_config()` |
+| `config.*`                 | Merged into root         |                                 |
 
 #### OpenClaw (JSON5) — env-only for now
 
@@ -177,6 +179,47 @@ Continue passing env vars (via `build_runtime_env_vars`) since:
 
 Remove `~/.clawden/configs/<project_hash>/` when `clawden down` is run.
 
+### 8. `clawden up` Startup Validation
+
+After spawning each runtime, `clawden up` must verify it actually started successfully. Currently runtime processes are spawned and assumed healthy — a crashed or misconfigured runtime (wrong token, missing dependency, port conflict) is only noticed when the user inspects logs manually.
+
+#### 8.1 Known Health Endpoints per Runtime
+
+`runtime_health_url()` today only checks env overrides (`CLAWDEN_HEALTH_URL_*` / `CLAWDEN_HEALTH_PORT_*`). Add built-in defaults for runtimes with known gateway ports:
+
+| Runtime   | Default Health URL              | Source                            |
+| --------- | ------------------------------- | --------------------------------- |
+| zeroclaw  | `http://127.0.0.1:42617/health` | HTTP Gateway                      |
+| openclaw  | `http://127.0.0.1:18789/health` | WS Gateway                        |
+| picoclaw  | `http://127.0.0.1:8080/health`  | HTTP Gateway                      |
+| nullclaw  | `http://127.0.0.1:3000/health`  | HTTP Gateway                      |
+| openfang  | `http://127.0.0.1:4200/health`  | Dashboard port                    |
+| nanoclaw  | —                               | No HTTP gateway (Agent SDK)       |
+| ironclaw  | —                               | WASM/webhooks, no standard health |
+| microclaw | —                               | Web UI port TBD                   |
+| mimiclaw  | —                               | Embedded firmware (serial/MQTT)   |
+
+#### 8.2 Post-Start Readiness Check
+
+After `start_direct_with_env_and_project()` returns a pid, perform a readiness check:
+
+1. **Process alive check** — verify the pid is still running after a 500ms grace period. If the process exited, print the last N lines of the log file and bail with a clear error.
+2. **Health probe** (if health URL is known) — poll the health endpoint up to 5 times with 1s intervals. Report `✓ <runtime> ready` on success or `⚠ <runtime> started (pid N) but health check not responding` as a warning (non-fatal — some runtimes take longer or run without HTTP).
+3. **Early crash detection** — if the process exits within the first 2 seconds, capture stderr/log tail and report `✗ <runtime> crashed on startup` with the error output.
+
+#### 8.3 Config Validation Before Start
+
+Before spawning a runtime in direct mode, validate that:
+- The runtime binary exists and is executable (already done by `ensure_installed_runtime`)
+- Required channel tokens are non-empty (a blank `TELEGRAM_BOT_TOKEN=` causes silent failures)
+- Required provider API key is present when a provider is configured
+
+Print actionable errors like:
+```
+Error: channel 'telegram' is enabled but TELEGRAM_BOT_TOKEN is empty.
+  → Set it in .env or run: clawden init --reconfigure
+```
+
 ## Plan
 
 - [ ] Add `toml = "0.8"` to workspace deps and `clawden-cli` Cargo.toml
@@ -187,8 +230,16 @@ Remove `~/.clawden/configs/<project_hash>/` when `clawden down` is run.
 - [ ] Inject `--config-dir` into start args in `exec_up()` direct-mode branch
 - [ ] Apply the same pattern for `exec_run()` direct-mode branch
 - [ ] Clean up config dirs on `clawden down`
+- [ ] Add default health URLs to `runtime_health_url()` for zeroclaw, openclaw, picoclaw, nullclaw, openfang
+- [ ] Add post-start readiness check in `exec_up()`: process-alive check after 500ms grace
+- [ ] Add health probe polling (up to 5× at 1s intervals) for runtimes with known health endpoints
+- [ ] Add early crash detection — capture log tail if process exits within 2s
+- [ ] Add pre-start config validation: non-empty channel tokens, provider API key presence
+- [ ] Print actionable error messages for missing credentials before start
 - [ ] Add test: generated TOML matches expected zeroclaw config.toml format
 - [ ] Add test: `--config-dir` arg is injected for supported runtimes only
+- [ ] Add test: post-start readiness check detects crashed runtime
+- [ ] Add test: pre-start validation catches empty channel token
 
 ## Test
 
@@ -198,4 +249,11 @@ Remove `~/.clawden/configs/<project_hash>/` when `clawden down` is run.
 - [ ] `clawden down` removes the generated config directory
 - [ ] Runtimes without `--config-dir` (openclaw, nanoclaw) still work via env vars only
 - [ ] `config` overrides from clawden.yaml are merged into the generated config file
+- [ ] `clawden up` with openfang runtime → config.toml is generated with correct TOML structure and provider/channel fields
+- [ ] `clawden up` detects a runtime that crashes immediately and prints the log tail with a clear error
+- [ ] `clawden up` reports `✓ <runtime> ready` when the health endpoint responds within the polling window
+- [ ] `clawden up` warns (non-fatal) when health endpoint is not responding but process is alive
+- [ ] `clawden up` with an empty `TELEGRAM_BOT_TOKEN=` in .env → prints actionable error before starting the runtime
+- [ ] `clawden up` with a provider configured but no API key → prints actionable error before starting the runtime
+- [ ] `clawden up` with openfang in multi-runtime config alongside zeroclaw → both start and receive independent health checks
 - [ ] Works alongside env var passthrough (no regression for Docker mode)

@@ -97,8 +97,8 @@ fn init_interactive_accepts_stdin_flow() {
 }
 
 #[test]
-fn init_reconfigure_keeps_existing_runtime_settings() {
-    let dir = temp_dir("init-reconfigure");
+fn init_force_overwrites_existing_config() {
+    let dir = temp_dir("init-force-overwrite");
 
     let first = Command::new(binary_path())
         .current_dir(&dir)
@@ -115,13 +115,41 @@ fn init_reconfigure_keeps_existing_runtime_settings() {
 
     let second = Command::new(binary_path())
         .current_dir(&dir)
-        .args(["init", "--reconfigure", "--yes", "--runtime", "zeroclaw"])
+        .args(["init", "--force", "--yes", "--runtime", "zeroclaw"])
         .status()
-        .expect("reconfigure should run");
+        .expect("force overwrite should run");
     assert!(second.success());
 
     let yaml = fs::read_to_string(dir.join("clawden.yaml")).expect("yaml should exist");
     let parsed = ClawDenYaml::parse_yaml(&yaml).expect("yaml should parse");
     assert_eq!(parsed.runtime.as_deref(), Some("zeroclaw"));
     assert_eq!(parsed.model.as_deref(), Some("gpt-4o-mini"));
+}
+
+#[test]
+fn init_non_interactive_fails_when_yaml_exists_without_force() {
+    let dir = temp_dir("init-no-force");
+
+    let first = Command::new(binary_path())
+        .current_dir(&dir)
+        .args([
+            "init",
+            "--non-interactive",
+            "--force",
+            "--runtime",
+            "zeroclaw",
+        ])
+        .status()
+        .expect("initial init should run");
+    assert!(first.success());
+
+    let second = Command::new(binary_path())
+        .current_dir(&dir)
+        .args(["init", "--non-interactive", "--runtime", "zeroclaw"])
+        .status()
+        .expect("init should run");
+    assert!(
+        !second.success(),
+        "should fail when yaml exists without --force"
+    );
 }

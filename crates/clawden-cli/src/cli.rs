@@ -23,9 +23,6 @@ pub enum Commands {
         /// Use a named quick-start template
         #[arg(long)]
         template: Option<String>,
-        /// Reconfigure an existing project instead of failing when clawden.yaml exists
-        #[arg(long, default_value_t = false)]
-        reconfigure: bool,
         /// Skip interactive prompts and use defaults
         #[arg(long, default_value_t = false)]
         non_interactive: bool,

@@ -11,10 +11,17 @@ pub struct InitOptions {
     pub runtime: String,
     pub multi: bool,
     pub template: Option<String>,
-    pub reconfigure: bool,
     pub non_interactive: bool,
     pub yes: bool,
     pub force: bool,
+}
+
+/// What to do when clawden.yaml already exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConflictAction {
+    Reconfigure,
+    ForceOverwrite,
+    Skip,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -53,9 +60,26 @@ struct RuntimeOption {
 
 pub fn exec_init(options: InitOptions) -> Result<()> {
     let yaml_path = std::env::current_dir()?.join("clawden.yaml");
-    if yaml_path.exists() && !options.force && !options.reconfigure {
-        anyhow::bail!("clawden.yaml already exists. Use --reconfigure or --force.");
-    }
+    let interactive = !options.non_interactive && !options.yes && io::stdin().is_terminal();
+
+    // Resolve conflict when clawden.yaml already exists
+    let reconfigure = if yaml_path.exists() && !options.force {
+        if interactive {
+            let action = prompt_conflict_action()?;
+            match action {
+                ConflictAction::Skip => {
+                    println!("Init skipped.");
+                    return Ok(());
+                }
+                ConflictAction::ForceOverwrite => false,
+                ConflictAction::Reconfigure => true,
+            }
+        } else {
+            anyhow::bail!("clawden.yaml already exists. Use --force to overwrite.");
+        }
+    } else {
+        false
+    };
 
     let _ = parse_runtime(&options.runtime)?;
 
@@ -65,8 +89,7 @@ pub fn exec_init(options: InitOptions) -> Result<()> {
         .map(parse_template)
         .transpose()?;
 
-    let mut selection = load_existing_selection(&yaml_path, &options)?;
-    let interactive = !options.non_interactive && !options.yes && io::stdin().is_terminal();
+    let mut selection = load_existing_selection(&yaml_path, reconfigure, &options)?;
 
     if interactive && template.is_none() {
         selection = run_wizard(selection)?;
@@ -95,11 +118,30 @@ pub fn exec_init(options: InitOptions) -> Result<()> {
     Ok(())
 }
 
+fn prompt_conflict_action() -> Result<ConflictAction> {
+    let items = [
+        "Reconfigure  - keep existing settings as defaults",
+        "Overwrite    - start fresh with new defaults",
+        "Skip         - leave existing config unchanged",
+    ];
+    let idx = Select::new()
+        .with_prompt("clawden.yaml already exists. What would you like to do?")
+        .items(&items)
+        .default(0)
+        .interact()?;
+    Ok(match idx {
+        0 => ConflictAction::Reconfigure,
+        1 => ConflictAction::ForceOverwrite,
+        _ => ConflictAction::Skip,
+    })
+}
+
 fn load_existing_selection(
     yaml_path: &std::path::Path,
+    reconfigure: bool,
     options: &InitOptions,
 ) -> Result<WizardSelection> {
-    if options.reconfigure && yaml_path.exists() {
+    if reconfigure && yaml_path.exists() {
         let mut parsed = ClawDenYaml::from_file(yaml_path).map_err(anyhow::Error::msg)?;
         let _ = parsed.resolve_env_vars();
 
