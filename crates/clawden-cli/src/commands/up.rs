@@ -2,10 +2,13 @@ use anyhow::Result;
 use clawden_config::{
     ChannelCredentialMapper, ClawDenYaml, LlmProvider, ProviderEntryYaml, ProviderRefYaml,
 };
-use clawden_core::{AgentState, ExecutionMode, LifecycleManager, ProcessManager, RuntimeInstaller};
+use clawden_core::{
+    AgentState, ExecutionMode, LifecycleManager, ProcessInfo, ProcessManager, RuntimeInstaller,
+};
 use std::collections::HashMap;
 use std::time::Duration;
 
+use crate::commands::config_gen::{generate_config_dir, inject_config_dir_arg};
 use crate::commands::InitOptions;
 use crate::util::{
     append_audit_file, ensure_installed_runtime, env_no_docker_enabled,
@@ -60,6 +63,7 @@ pub async fn exec_up(
         println!("No runtimes to start. Create a clawden.yaml with 'clawden init' or install one with 'clawden install zeroclaw'");
         return Ok(());
     }
+    let current_project_hash = project_hash()?;
 
     let mut started_runtimes = Vec::new();
 
@@ -111,9 +115,19 @@ pub async fn exec_up(
                 started_runtimes.push(runtime.clone());
             }
             ExecutionMode::Direct | ExecutionMode::Auto => {
+                if let Some(cfg) = config.as_ref() {
+                    validate_direct_runtime_config(cfg, &runtime, &env_vars, &channels)?;
+                }
                 let installed = ensure_installed_runtime(installer, &runtime, pinned_version)?;
 
-                let args = installed.start_args.clone();
+                let mut args = installed.start_args.clone();
+                if let Some(cfg) = config.as_ref() {
+                    if let Some(config_dir) =
+                        generate_config_dir(cfg, &runtime, &current_project_hash)?
+                    {
+                        inject_config_dir_arg(&runtime, &mut args, &config_dir);
+                    }
+                }
 
                 // Channel and tool lists are passed via env vars — runtimes
                 // do NOT accept --channels / --tools CLI flags.
@@ -130,8 +144,9 @@ pub async fn exec_up(
                     &installed.executable,
                     &args,
                     &combined_env,
-                    Some(project_hash()?),
+                    Some(current_project_hash.clone()),
                 )?;
+                verify_runtime_startup(process_manager, &runtime, &info)?;
                 append_audit_file("runtime.start", &runtime, "ok")?;
                 println!("Started {runtime} (pid {})", info.pid);
                 started_runtimes.push(runtime.clone());
@@ -249,6 +264,167 @@ fn runtime_running(process_manager: &ProcessManager, runtime: &str) -> bool {
                 .find(|row| row.runtime == runtime)
                 .map(|row| row.running)
         })
+        .unwrap_or(false)
+}
+
+pub(crate) fn validate_direct_runtime_config(
+    config: &ClawDenYaml,
+    runtime: &str,
+    env_vars: &[(String, String)],
+    channels: &[String],
+) -> Result<()> {
+    if let Some((provider_name, _, _)) = runtime_provider_and_model(config, runtime) {
+        let has_provider_key = env_vars
+            .iter()
+            .any(|(k, v)| k == "CLAWDEN_LLM_API_KEY" && !v.trim().is_empty());
+        if !has_provider_key {
+            anyhow::bail!(
+                "Error: provider '{}' is configured for runtime '{}' but API key is missing.\n  → Set it in .env / clawden.yaml or run: clawden providers set {}",
+                provider_name,
+                runtime,
+                provider_name
+            );
+        }
+    }
+
+    for channel_name in channels {
+        let Some(channel) = config.channels.get(channel_name) else {
+            continue;
+        };
+        let channel_type = ClawDenYaml::resolve_channel_type(channel_name, channel)
+            .unwrap_or_else(|| channel_name.clone());
+
+        match channel_type.as_str() {
+            "telegram" => {
+                if channel
+                    .token
+                    .as_ref()
+                    .or(channel.bot_token.as_ref())
+                    .is_none_or(|v| v.trim().is_empty())
+                {
+                    anyhow::bail!(
+                        "Error: channel '{}' is enabled but TELEGRAM_BOT_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
+                        channel_name
+                    );
+                }
+            }
+            "discord" => {
+                if channel
+                    .token
+                    .as_ref()
+                    .or(channel.bot_token.as_ref())
+                    .is_none_or(|v| v.trim().is_empty())
+                {
+                    anyhow::bail!(
+                        "Error: channel '{}' is enabled but DISCORD_BOT_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
+                        channel_name
+                    );
+                }
+            }
+            "slack" => {
+                if channel
+                    .bot_token
+                    .as_ref()
+                    .is_none_or(|v| v.trim().is_empty())
+                {
+                    anyhow::bail!(
+                        "Error: channel '{}' is enabled but SLACK_BOT_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
+                        channel_name
+                    );
+                }
+                if channel
+                    .app_token
+                    .as_ref()
+                    .is_none_or(|v| v.trim().is_empty())
+                {
+                    anyhow::bail!(
+                        "Error: channel '{}' is enabled but SLACK_APP_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
+                        channel_name
+                    );
+                }
+            }
+            "signal" => {
+                if channel.phone.as_ref().is_none_or(|v| v.trim().is_empty()) {
+                    anyhow::bail!(
+                        "Error: channel '{}' is enabled but SIGNAL_PHONE is empty.\n  → Set it in .env or run: clawden init --reconfigure",
+                        channel_name
+                    );
+                }
+                if channel.token.as_ref().is_none_or(|v| v.trim().is_empty()) {
+                    anyhow::bail!(
+                        "Error: channel '{}' is enabled but SIGNAL_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
+                        channel_name
+                    );
+                }
+            }
+            _ => {
+                if channel
+                    .token
+                    .as_ref()
+                    .or(channel.bot_token.as_ref())
+                    .is_none_or(|v| v.trim().is_empty())
+                {
+                    anyhow::bail!(
+                        "Error: channel '{}' is enabled but token is empty.\n  → Set it in .env or run: clawden init --reconfigure",
+                        channel_name
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) fn verify_runtime_startup(
+    process_manager: &ProcessManager,
+    runtime: &str,
+    info: &ProcessInfo,
+) -> Result<()> {
+    std::thread::sleep(Duration::from_millis(500));
+    if !runtime_running(process_manager, runtime) {
+        let tail = process_manager.tail_logs(runtime, 50)?;
+        anyhow::bail!("✗ {} exited immediately after startup\n{}", runtime, tail);
+    }
+
+    for _ in 0..3 {
+        std::thread::sleep(Duration::from_millis(500));
+        if !runtime_running(process_manager, runtime) {
+            let tail = process_manager.tail_logs(runtime, 50)?;
+            anyhow::bail!("✗ {} crashed on startup\n{}", runtime, tail);
+        }
+    }
+
+    if let Some(url) = info.health_url.as_deref() {
+        for _ in 0..5 {
+            if health_probe_ok(url) {
+                println!("✓ {} ready", runtime);
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_secs(1));
+            if !runtime_running(process_manager, runtime) {
+                let tail = process_manager.tail_logs(runtime, 50)?;
+                anyhow::bail!("✗ {} crashed on startup\n{}", runtime, tail);
+            }
+        }
+        println!(
+            "⚠ {} started (pid {}) but health check not responding",
+            runtime, info.pid
+        );
+        return Ok(());
+    }
+
+    println!("✓ {} ready", runtime);
+    Ok(())
+}
+
+fn health_probe_ok(url: &str) -> bool {
+    std::process::Command::new("curl")
+        .args(["-fsS", "--max-time", "2", url])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
         .unwrap_or(false)
 }
 
@@ -463,7 +639,7 @@ pub fn build_runtime_env_vars(
     Ok(pairs)
 }
 
-fn runtime_provider_and_model(
+pub(crate) fn runtime_provider_and_model(
     config: &ClawDenYaml,
     runtime: &str,
 ) -> Option<(String, ProviderEntryYaml, Option<String>)> {
@@ -471,7 +647,13 @@ fn runtime_provider_and_model(
         if single_runtime == runtime {
             let provider_name = match config.provider.as_ref() {
                 Some(ProviderRefYaml::Name(name)) => name.clone(),
-                Some(ProviderRefYaml::Inline(_)) => "provider".to_string(),
+                Some(ProviderRefYaml::Inline(entry)) => config
+                    .providers
+                    .keys()
+                    .next()
+                    .cloned()
+                    .or_else(|| entry.provider_type.as_ref().map(provider_slug))
+                    .unwrap_or_else(|| "provider".to_string()),
                 None => return None,
             };
 
@@ -512,7 +694,7 @@ fn runtime_provider_and_model(
     Some((provider_name, provider, entry.model.clone()))
 }
 
-fn infer_provider_type(name: &str) -> Option<LlmProvider> {
+pub(crate) fn infer_provider_type(name: &str) -> Option<LlmProvider> {
     match name.to_ascii_lowercase().as_str() {
         "openai" => Some(LlmProvider::OpenAi),
         "anthropic" => Some(LlmProvider::Anthropic),
@@ -558,7 +740,21 @@ fn provider_key_env_names(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_runtime_env_vars, ClawDenYaml};
+    use super::{
+        build_runtime_env_vars, channels_for_runtime, validate_direct_runtime_config,
+        verify_runtime_startup, ClawDenYaml,
+    };
+    use clawden_core::{ExecutionMode, ProcessManager};
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn runtime_env_vars_include_provider_key_and_model() {
@@ -586,5 +782,65 @@ providers:
         assert!(env
             .iter()
             .any(|(k, v)| k == "ZEROCLAW_LLM_API_KEY" && v == "sk-test"));
+    }
+
+    #[test]
+    fn direct_validation_rejects_empty_channel_token() {
+        let yaml = r#"
+runtime: zeroclaw
+provider: openrouter
+providers:
+  openrouter:
+    api_key: sk-test
+channels:
+  support-tg:
+    type: telegram
+    token: ""
+"#;
+        let mut config = ClawDenYaml::parse_yaml(yaml).expect("yaml should parse");
+        config.resolve_env_vars().expect("env vars should resolve");
+        let channels = channels_for_runtime(&config, "zeroclaw");
+        let env = build_runtime_env_vars(&config, "zeroclaw").expect("env vars should build");
+        let err = validate_direct_runtime_config(&config, "zeroclaw", &env, &channels)
+            .expect_err("empty telegram token must fail");
+        assert!(err.to_string().contains("TELEGRAM_BOT_TOKEN is empty"));
+    }
+
+    #[test]
+    fn startup_check_detects_immediate_crash() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let original_home = std::env::var("HOME").ok();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let tmp_home = std::env::temp_dir().join(format!("clawden-up-test-{unique}"));
+        fs::create_dir_all(&tmp_home).expect("tmp home");
+        std::env::set_var("HOME", &tmp_home);
+
+        let manager = ProcessManager::new(ExecutionMode::Direct).expect("process manager");
+        let script = tmp_home.join("crash-runtime.sh");
+        write_executable(&script, "#!/usr/bin/env sh\necho boom\nexit 1\n");
+        let info = manager
+            .start_direct_with_env_and_project("testruntime", &script, &[], &[], Some("ph".into()))
+            .expect("runtime should start");
+        let err = verify_runtime_startup(&manager, "testruntime", &info)
+            .expect_err("startup checker should fail");
+        let msg = err.to_string();
+        assert!(msg.contains("crashed on startup") || msg.contains("exited immediately"));
+
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        let _ = fs::remove_dir_all(tmp_home);
+    }
+
+    fn write_executable(path: &Path, body: &str) {
+        fs::write(path, body).expect("script should be written");
+        let mut perms = fs::metadata(path).expect("metadata").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(path, perms).expect("chmod");
     }
 }

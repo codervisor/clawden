@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clawden_core::ProcessManager;
 
+use crate::commands::config_gen::cleanup_project_config_dir;
 use crate::commands::up::{load_config, runtimes_from_config};
 use crate::util::{append_audit_file, project_hash};
 
@@ -66,6 +67,7 @@ pub fn exec_down(
         append_audit_file("runtime.down", runtime, "ok")?;
         println!("Stopped {runtime}");
     }
+    cleanup_project_config_dir(&current_hash)?;
 
     Ok(())
 }

@@ -1,4 +1,5 @@
 mod channels;
+mod config_gen;
 mod dashboard;
 mod doctor;
 mod down;

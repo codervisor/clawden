@@ -518,6 +518,17 @@ fn is_pid_running(pid: u32) -> bool {
             }
         }
     }
+    if let Ok(output) = Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+    {
+        if output.status.success() {
+            let status = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if status.is_empty() || status.contains('Z') {
+                return false;
+            }
+        }
+    }
 
     Command::new("kill")
         .args(["-0", &pid.to_string()])
@@ -566,7 +577,14 @@ fn runtime_health_url(runtime: &str) -> Option<String> {
         }
     }
 
-    None
+    match runtime {
+        "zeroclaw" => Some("http://127.0.0.1:3000/health".to_string()),
+        "openclaw" => Some("http://127.0.0.1:3001/health".to_string()),
+        "picoclaw" => Some("http://127.0.0.1:8080/health".to_string()),
+        "nullclaw" => Some("http://127.0.0.1:3000/health".to_string()),
+        "openfang" => Some("http://127.0.0.1:4200/health".to_string()),
+        _ => None,
+    }
 }
 
 fn health_check_ok(url: &str) -> bool {

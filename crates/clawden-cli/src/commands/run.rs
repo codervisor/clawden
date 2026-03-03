@@ -4,9 +4,10 @@ use clawden_core::{
 };
 use std::time::Duration;
 
+use crate::commands::config_gen::{generate_config_dir, inject_config_dir_arg};
 use crate::commands::up::{
     build_runtime_env_vars, channels_for_runtime, load_config, pinned_version_for_runtime,
-    render_log_line, tools_for_runtime,
+    render_log_line, tools_for_runtime, validate_direct_runtime_config, verify_runtime_startup,
 };
 use crate::util::{
     append_audit_file, ensure_installed_runtime, env_no_docker_enabled, parse_runtime, project_hash,
@@ -104,11 +105,17 @@ pub async fn exec_run(
         ExecutionMode::Direct | ExecutionMode::Auto => {}
     }
 
+    let current_project_hash = project_hash()?;
     let installed = ensure_installed_runtime(installer, &opts.runtime, pinned_version)?;
 
     let mut args = installed.start_args.clone();
     if let Some(policy) = &opts.restart {
         args.push(format!("--restart={policy}"));
+    }
+    if let Some(cfg) = config.as_ref() {
+        if let Some(config_dir) = generate_config_dir(cfg, &opts.runtime, &current_project_hash)? {
+            inject_config_dir_arg(&opts.runtime, &mut args, &config_dir);
+        }
     }
     args.extend(opts.extra_args.clone());
 
@@ -124,6 +131,9 @@ pub async fn exec_run(
     // Channel and tool lists are passed via env vars — runtimes
     // do NOT accept --channels / --tools CLI flags.
     let mut combined_env = env_vars;
+    if let Some(cfg) = config.as_ref() {
+        validate_direct_runtime_config(cfg, &opts.runtime, &combined_env, &resolved_channels)?;
+    }
     if !resolved_channels.is_empty() {
         combined_env.push(("CLAWDEN_CHANNELS".to_string(), resolved_channels.join(",")));
     }
@@ -136,8 +146,9 @@ pub async fn exec_run(
         &installed.executable,
         &args,
         &combined_env,
-        Some(project_hash()?),
+        Some(current_project_hash),
     )?;
+    verify_runtime_startup(process_manager, &opts.runtime, &info)?;
     append_audit_file("runtime.start", &opts.runtime, "ok")?;
 
     if opts.detach {

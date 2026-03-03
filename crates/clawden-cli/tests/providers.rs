@@ -106,7 +106,7 @@ fn up_passes_provider_env_to_runtime_process() {
     let executable = runtime_dir.join("zeroclaw");
     fs::write(
         &executable,
-        "#!/usr/bin/env sh\nprintenv > \"$CLAWDEN_ENV_DUMP_FILE\"\nexit 0\n",
+        "#!/usr/bin/env sh\nprintenv > \"$CLAWDEN_ENV_DUMP_FILE\"\nsleep 8\nexit 0\n",
     )
     .expect("runtime script should be written");
 
