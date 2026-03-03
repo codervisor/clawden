@@ -661,7 +661,7 @@ mod tests {
     use std::path::Path;
     use std::sync::{Mutex, OnceLock};
     use std::thread;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -747,9 +747,18 @@ mod tests {
             .start_direct_with_env(runtime, &script, &[], &[])
             .expect("runtime should start");
 
-        thread::sleep(Duration::from_millis(250));
-        let content = fs::read_to_string(&log_path).expect("log file should be readable");
-        assert!(content.contains("fresh line"));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let content = loop {
+            let current = fs::read_to_string(&log_path).expect("log file should be readable");
+            if current.contains("fresh line") {
+                break current;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for fresh line; current log content: {current:?}"
+            );
+            thread::sleep(Duration::from_millis(25));
+        };
         assert!(!content.contains("stale line"));
 
         let _ = manager.stop_with_timeout(runtime, 1);
