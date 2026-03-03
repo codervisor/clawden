@@ -4,7 +4,7 @@
 # - NanoClaw (Node.js, code-driven, Claude Agent SDK)
 # - ZeroClaw (Rust binary, TOML + env vars)
 # - PicoClaw (Go binary, JSON config)
-# - OpenFang (Rust binary, Agent OS, TOML config, dashboard on port 4200) [DISABLED]
+# - OpenFang (Rust binary, Agent OS, TOML config, dashboard on port 4200)
 #
 # Targets:
 #   latest        -> core + standard tools (default)
@@ -20,7 +20,7 @@
 ARG ZEROCLAW_VERSION=0.1.7
 ARG PICOCLAW_VERSION=latest
 ARG OPENCLAW_VERSION=latest
-# ARG OPENFANG_VERSION=0.2.0  # DISABLED: OpenFang temporarily removed
+ARG OPENFANG_VERSION=0.3.4
 
 # --- Stage 1: Build the clawden CLI ---
 FROM rust:1-bookworm AS builder
@@ -104,10 +104,12 @@ ARG ZEROCLAW_VERSION
 ARG OPENCLAW_VERSION
 ARG PICOCLAW_VERSION
 ARG NANOCLAW_REF=main
+ARG OPENFANG_VERSION
 RUN clawden-cli install "zeroclaw@${ZEROCLAW_VERSION}" \
     && clawden-cli install "openclaw@${OPENCLAW_VERSION}" \
     && clawden-cli install picoclaw \
     && clawden-cli install nanoclaw \
+    && clawden-cli install "openfang@${OPENFANG_VERSION}" \
     && rm -rf /home/clawden/.clawden/cache
 
 # Switch back to root to clean up build-only deps, then back to clawden

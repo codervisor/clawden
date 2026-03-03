@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-03-03
 priority: medium
 tags:
@@ -10,7 +10,13 @@ tags:
 depends_on:
 - 010-claw-runtime-interface
 created_at: 2026-03-03T06:37:44.122195Z
-updated_at: 2026-03-03T06:38:05.022125Z
+updated_at: 2026-03-03T07:42:49.651246Z
+completed_at: 2026-03-03T07:42:49.651246Z
+transitions:
+- status: in-progress
+  at: 2026-03-03T07:37:37.670368Z
+- status: complete
+  at: 2026-03-03T07:42:49.651246Z
 ---
 
 # OpenFang Runtime Adapter — Full-Stack Integration
@@ -122,15 +128,15 @@ Add OpenFang to the download sources table in install registry (if binary distri
 
 ## Checklist
 
-- [ ] Create `crates/clawden-adapters/src/openfang.rs` with full `ClawAdapter` impl
-- [ ] Add `openfang` feature flag to `crates/clawden-adapters/Cargo.toml`
-- [ ] Wire adapter in `crates/clawden-adapters/src/lib.rs` registry
-- [ ] Add `runtime_start_args` case for openfang in `install.rs`
-- [ ] Add `runtime_supported_extra_args` case for openfang in `install.rs`
-- [ ] Add built-in health URL default in `process.rs`
-- [ ] Enable OpenFang in `docker/Dockerfile`
-- [ ] Add OpenFang case in `docker/entrypoint.sh`
-- [ ] Add adapter unit test (`start_persists_forwarded_runtime_config`)
-- [ ] `cargo build --features openfang` passes
-- [ ] `cargo test -p clawden-adapters` passes
-- [ ] `cargo clippy` clean
+- [x] Create `crates/clawden-adapters/src/openfang.rs` with full `ClawAdapter` impl
+- [x] Add `openfang` feature flag to `crates/clawden-adapters/Cargo.toml`
+- [x] Wire adapter in `crates/clawden-adapters/src/lib.rs` registry
+- [x] Add `runtime_start_args` case for openfang in `install.rs`
+- [x] Add `runtime_supported_extra_args` case for openfang in `install.rs`
+- [x] Add built-in health URL default in `process.rs`
+- [x] Enable OpenFang in `docker/Dockerfile`
+- [x] Add OpenFang case in `docker/entrypoint.sh`
+- [x] Add adapter unit test (`start_persists_forwarded_runtime_config`)
+- [x] `cargo build --features openfang` passes
+- [x] `cargo test -p clawden-adapters` passes
+- [x] `cargo clippy` clean

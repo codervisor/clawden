@@ -78,6 +78,7 @@ impl RuntimeInstaller {
             "picoclaw" => self.install_picoclaw(&version, &tmp_dir)?,
             "openclaw" => self.install_openclaw(&version, &tmp_dir)?,
             "nanoclaw" => self.install_nanoclaw(&version, &tmp_dir)?,
+            "openfang" => self.install_openfang(&version, &tmp_dir)?,
             _ => unreachable!("validated by ensure_runtime_supported"),
         };
         validate_runtime_artifact(runtime, &executable)?;
@@ -141,7 +142,7 @@ impl RuntimeInstaller {
 
     pub fn install_all(&self) -> Result<Vec<InstalledRuntime>> {
         let mut installed = Vec::new();
-        for runtime in ["zeroclaw", "openclaw", "picoclaw", "nanoclaw"] {
+        for runtime in ["zeroclaw", "openclaw", "picoclaw", "nanoclaw", "openfang"] {
             installed.push(self.install_runtime(runtime, None)?);
         }
         Ok(installed)
@@ -166,6 +167,9 @@ impl RuntimeInstaller {
             )),
             "openclaw" => query_latest_openclaw_version(),
             "nanoclaw" => query_nanoclaw_head_branch(),
+            "openfang" => Ok(normalize_version(
+                &github_release_assets("RightNow-AI", "openfang", "latest")?.tag,
+            )),
             _ => unreachable!("validated by ensure_runtime_supported"),
         }
     }
@@ -403,6 +407,63 @@ impl RuntimeInstaller {
         Ok(launcher)
     }
 
+    fn install_openfang(&self, version: &str, tmp_dir: &Path) -> Result<PathBuf> {
+        let (os, arch) = host_os_arch()?;
+        let release = github_release_assets("RightNow-AI", "openfang", version)?;
+
+        let mut patterns = Vec::new();
+        match (os, arch) {
+            ("linux", "x86_64") => {
+                patterns.push("x86_64-unknown-linux-gnu");
+                patterns.push("linux-x86_64");
+            }
+            ("linux", "aarch64") => {
+                patterns.push("aarch64-unknown-linux-gnu");
+                patterns.push("linux-aarch64");
+                patterns.push("linux-arm64");
+            }
+            ("darwin", "x86_64") => {
+                patterns.push("x86_64-apple-darwin");
+                patterns.push("darwin-x86_64");
+            }
+            ("darwin", "aarch64") => {
+                patterns.push("aarch64-apple-darwin");
+                patterns.push("darwin-aarch64");
+                patterns.push("darwin-arm64");
+            }
+            _ => {}
+        }
+
+        let asset = pick_asset(&release.assets, &patterns, ".tar.gz").ok_or_else(|| {
+            anyhow!(
+                "no openfang release asset matched platform {}-{} in {}",
+                os,
+                arch,
+                release.tag
+            )
+        })?;
+
+        let archive_path = self.download_to_cache(
+            "openfang",
+            release.tag.trim_start_matches('v'),
+            &asset.name,
+            &asset.url,
+        )?;
+        self.extract_tar_gz(&archive_path, tmp_dir)?;
+
+        let candidate = find_executable_by_name(tmp_dir, "openfang")?.ok_or_else(|| {
+            anyhow!(
+                "Download validation failed for {}: archive is missing expected runtime binary",
+                asset.name
+            )
+        })?;
+
+        let target = tmp_dir.join("openfang");
+        fs::rename(candidate, &target)?;
+        make_executable(&target)?;
+        Ok(target)
+    }
+
     fn download_to_cache(
         &self,
         runtime: &str,
@@ -480,6 +541,7 @@ pub fn runtime_start_args(runtime: &str) -> Vec<String> {
     match runtime {
         "zeroclaw" => vec!["daemon".to_string()],
         "picoclaw" => vec!["gateway".to_string()],
+        "openfang" => vec!["daemon".to_string()],
         "nullclaw" => vec!["daemon".to_string()],
         _ => Vec::new(),
     }
@@ -493,6 +555,7 @@ pub fn runtime_supported_extra_args(runtime: &str) -> &'static [&'static str] {
     match runtime {
         "zeroclaw" => &["--config-dir", "--port", "--host"],
         "picoclaw" => &["--config-dir", "--port", "--host"],
+        "openfang" => &["--port", "--host"],
         "nullclaw" => &["--config-dir", "--port", "--host"],
         _ => &[],
     }
@@ -648,7 +711,7 @@ fn validate_runtime_artifact(runtime: &str, executable: &Path) -> Result<()> {
 }
 
 fn ensure_runtime_supported(runtime: &str) -> Result<()> {
-    let allowed = ["zeroclaw", "openclaw", "picoclaw", "nanoclaw"];
+    let allowed = ["zeroclaw", "openclaw", "picoclaw", "nanoclaw", "openfang"];
     if allowed.contains(&runtime) {
         return Ok(());
     }

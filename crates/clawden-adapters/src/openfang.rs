@@ -12,7 +12,7 @@ use clawden_core::{
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-pub struct ZeroClawAdapter;
+pub struct OpenFangAdapter;
 
 fn config_store() -> &'static Mutex<HashMap<String, RuntimeConfig>> {
     static STORE: OnceLock<Mutex<HashMap<String, RuntimeConfig>>> = OnceLock::new();
@@ -20,31 +20,23 @@ fn config_store() -> &'static Mutex<HashMap<String, RuntimeConfig>> {
 }
 
 #[async_trait]
-impl ClawAdapter for ZeroClawAdapter {
+impl ClawAdapter for OpenFangAdapter {
     fn metadata(&self) -> RuntimeMetadata {
         let mut channel_support = HashMap::new();
         channel_support.insert(ChannelType::Telegram, ChannelSupport::Native);
         channel_support.insert(ChannelType::Discord, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Slack, ChannelSupport::Native);
+        channel_support.insert(ChannelType::Slack, ChannelSupport::Via("Cloud API".into()));
         channel_support.insert(
             ChannelType::Whatsapp,
-            ChannelSupport::Via("Meta Cloud API".into()),
+            ChannelSupport::Via("Socket Mode".into()),
         );
-        channel_support.insert(ChannelType::Signal, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Feishu, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Matrix, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Email, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Mattermost, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Irc, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Imessage, ChannelSupport::Native);
-        channel_support.insert(ChannelType::Nostr, ChannelSupport::Native);
 
         RuntimeMetadata {
-            runtime: ClawRuntime::ZeroClaw,
+            runtime: ClawRuntime::OpenFang,
             version: "unknown".to_string(),
             language: "rust".to_string(),
-            capabilities: vec!["chat".to_string(), "reasoning".to_string()],
-            default_port: Some(42617),
+            capabilities: vec!["chat".to_string(), "agents".to_string()],
+            default_port: Some(4200),
             config_format: Some("toml".to_string()),
             channel_support,
         }
@@ -55,17 +47,17 @@ impl ClawAdapter for ZeroClawAdapter {
     }
 
     async fn start(&self, config: &AgentConfig) -> Result<AgentHandle> {
-        let container_id = start_container(ClawRuntime::ZeroClaw, config)?;
+        let container_id = start_container(ClawRuntime::OpenFang, config)?;
         let handle = AgentHandle {
             id: container_id,
             name: config.name.clone(),
-            runtime: ClawRuntime::ZeroClaw,
+            runtime: ClawRuntime::OpenFang,
         };
 
         set_stored_config(
             config_store(),
             &handle.id,
-            runtime_config_values("zeroclaw", config),
+            runtime_config_values("openfang", config),
         );
 
         Ok(handle)
@@ -100,7 +92,7 @@ impl ClawAdapter for ZeroClawAdapter {
 
     async fn send(&self, _handle: &AgentHandle, message: &AgentMessage) -> Result<AgentResponse> {
         Ok(AgentResponse {
-            content: format!("ZeroClaw echo: {}", message.content),
+            content: format!("OpenFang echo: {}", message.content),
         })
     }
 
@@ -113,7 +105,7 @@ impl ClawAdapter for ZeroClawAdapter {
             return Ok(config);
         }
         Ok(RuntimeConfig {
-            values: serde_json::json!({ "runtime": "zeroclaw" }),
+            values: serde_json::json!({ "runtime": "openfang" }),
         })
     }
 
@@ -133,7 +125,7 @@ impl ClawAdapter for ZeroClawAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::ZeroClawAdapter;
+    use super::OpenFangAdapter;
     use clawden_core::{AgentConfig, ClawAdapter, ClawRuntime};
 
     #[test]
@@ -142,11 +134,11 @@ mod tests {
         std::env::set_var("CLAWDEN_ADAPTER_DRY_RUN", "1");
         let runtime = tokio::runtime::Runtime::new().expect("tokio runtime should initialize");
         runtime.block_on(async {
-            let adapter = ZeroClawAdapter;
+            let adapter = OpenFangAdapter;
             let handle = adapter
                 .start(&AgentConfig {
                     name: "test-agent".to_string(),
-                    runtime: ClawRuntime::ZeroClaw,
+                    runtime: ClawRuntime::OpenFang,
                     model: None,
                     env_vars: vec![("OPENAI_API_KEY".to_string(), "sk-test".to_string())],
                     channels: vec!["telegram".to_string()],

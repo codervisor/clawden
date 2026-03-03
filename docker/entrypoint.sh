@@ -16,7 +16,7 @@ RUNTIME="${RUNTIME:-}"
 TOOLS="${TOOLS:-}"
 
 if [ -z "$RUNTIME" ]; then
-    echo "Error: RUNTIME environment variable must be set (e.g., zeroclaw, picoclaw, openclaw, nanoclaw)" >&2
+    echo "Error: RUNTIME environment variable must be set (e.g., zeroclaw, picoclaw, openclaw, nanoclaw, openfang)" >&2
     exit 1
 fi
 
@@ -94,13 +94,14 @@ runtime_default_args() {
     case "$1" in
         zeroclaw)  echo "daemon" ;;
         picoclaw)  echo "gateway" ;;
+        openfang)  echo "daemon" ;;
         nullclaw)  echo "daemon" ;;
         *)         echo "" ;;
     esac
 }
 
 case "$RUNTIME" in
-    zeroclaw|picoclaw|openclaw|nanoclaw)
+    zeroclaw|picoclaw|openclaw|nanoclaw|openfang)
         LAUNCHER="${CLAWDEN_RUNTIMES}/${RUNTIME}/current/${RUNTIME}"
         if [ ! -x "$LAUNCHER" ]; then
             echo "Error: ${RUNTIME} not found at ${LAUNCHER}" >&2
@@ -115,18 +116,9 @@ case "$RUNTIME" in
         fi
         exec "$LAUNCHER" "$@"
         ;;
-    # DISABLED: OpenFang temporarily removed
-    # openfang)
-    #     BINARY="/opt/clawden/runtimes/openfang"
-    #     if [ ! -x "$BINARY" ]; then
-    #         echo "Error: OpenFang binary not found at ${BINARY}" >&2
-    #         exit 1
-    #     fi
-    #     exec "$BINARY" "$@"
-    #     ;;
     *)
         echo "Error: Unknown runtime '${RUNTIME}'" >&2
-        echo "Supported runtimes: zeroclaw, picoclaw, openclaw, nanoclaw" >&2
+        echo "Supported runtimes: zeroclaw, picoclaw, openclaw, nanoclaw, openfang" >&2
         exit 1
         ;;
 esac

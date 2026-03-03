@@ -1,20 +1,21 @@
 [package]
-name = "clawden-adapters"
-version.workspace = true
 edition.workspace = true
 license.workspace = true
+name = "clawden-adapters"
+version.workspace = true
 
 [features]
-default = ["openclaw", "zeroclaw", "picoclaw", "nanoclaw"]
-openclaw = []
-zeroclaw = []
-picoclaw = []
+default = ["openclaw", "zeroclaw", "picoclaw", "nanoclaw", "openfang"]
 nanoclaw = []
+openclaw = []
+openfang = []
+picoclaw = []
+zeroclaw = []
 
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-clawden-core = { path = "../clawden-core" }
+clawden-core = {path = "../clawden-core"}
 serde_json.workspace = true
 tracing.workspace = true
 
