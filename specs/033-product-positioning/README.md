@@ -10,7 +10,6 @@ tags:
 created_at: 2026-03-03T08:49:22.936640Z
 updated_at: 2026-03-03T08:49:22.936640Z
 ---
-
 # ClawDen Product Positioning — UX Shell, Runtime Manager, SDK Platform
 
 ## Overview
@@ -22,7 +21,64 @@ ClawDen has evolved beyond "orchestration platform" into three distinct, complem
 The current positioning — "unified orchestration platform" / "Kubernetes of claw agents" — is technically accurate but creates two issues:
 
 1. **Over-indexes on infra.** It frames ClawDen as ops tooling for fleet management, when most users are solo developers or hobbyists running 1–2 runtimes locally. The CLI-Direct architecture (023) already acknowledged this by eliminating the mandatory server.
-2. **Under-sells the UX/DX value.** ClawDen's biggest value isn't orchestration — it's that a user can `npm i -g clawden && clawden run zeroclaw --channel telegram` without understanding Docker, config formats, or runtime internals.
+2. **Under-sells the UX/DX value.** ClawDen's biggest value isn't orchestration — it's that a user can do `npx clawden run zeroclaw` and everything just works.
+
+### Unique Selling Point
+
+**ClawDen simplifies the UX/DX for xxxclaw deployment and usage.**
+
+Every claw runtime (OpenClaw, ZeroClaw, PicoClaw, etc.) has its own config format, deployment model, dependency chain, and startup ritual. ClawDen collapses all of that into a single command. The USP is not "orchestration" — it's that ClawDen makes claw runtimes **accessible to anyone**, regardless of infra expertise.
+
+### The `uv run` Model — One Command to Rule Them All
+
+The gold-standard UX is **one command from zero to running**:
+
+```bash
+npx clawden run zeroclaw
+```
+
+This single command should:
+1. **Install ClawDen** — `npx` handles this via the npm package (already works)
+2. **Install the runtime** — `ensure_installed_runtime()` auto-installs if missing (already works)
+3. **Prompt for credentials** — if no API key is configured, interactively ask for it (new)
+4. **Start the runtime** — launch and stream logs (already works)
+
+This is the `uv run` / `bunx` philosophy: resolve all dependencies on the fly, ask for what's needed, never make the user run prerequisite commands.
+
+#### What already works today
+
+| Step | Status | Implementation |
+|------|--------|----------------|
+| `npx` entry point | Done | `npm/clawden/package.json` bin + postinstall |
+| Auto-install runtime | Done | `ensure_installed_runtime()` in `util.rs` — installs on first `run` |
+| Version pinning from config | Done | Reads `clawden.yaml` for pinned versions |
+| Start + log streaming | Done | `ProcessManager::start_direct_with_env_and_project()` |
+| Provider key vault | Done | `providers set-key` stores encrypted keys |
+
+#### What's missing: interactive credential flow during `run`
+
+When a user runs `npx clawden run zeroclaw` with no config and no API key, the experience should be:
+
+```
+$ npx clawden run zeroclaw
+
+Runtime 'zeroclaw' not installed. Installing latest...
+Installed zeroclaw@0.8.1
+
+No LLM provider API key found.
+Which provider? [openai/anthropic/custom]: openai
+Enter your OpenAI API key: sk-••••••••
+✓ Key validated and saved to vault.
+
+Starting zeroclaw...
+```
+
+Key design decisions for the credential flow:
+- Only prompt when running interactively (detect `stdin.is_terminal()` — already used in `set_provider_key`)
+- In non-interactive/CI mode, fail with clear error: "Missing API key. Set OPENAI_API_KEY or run `clawden providers set-key openai`"
+- Validate the key before saving (reuse `test_provider_endpoint()`)
+- Store in encrypted vault (reuse `store_provider_key_in_vault()`)
+- Remember for subsequent runs — prompt only once ever
 
 ### The Three Roles
 
@@ -30,7 +86,7 @@ The current positioning — "unified orchestration platform" / "Kubernetes of cl
 
 ClawDen is the **unified command-line and dashboard experience** for the xxxclaw ecosystem. Like how `gh` wraps Git+GitHub into a cohesive workflow, ClawDen wraps heterogeneous claw runtimes behind a single, opinionated interface.
 
-**Analogy:** `gh` CLI / Homebrew / Docker Desktop
+**Analogy:** `uv` / `gh` CLI / Docker Desktop
 
 Key UX surfaces:
 - CLI commands: `run`, `up`, `ps`, `stop`, `channels`, `config`
@@ -50,16 +106,18 @@ ClawDen manages claw runtime **installations, versions, and updates** — exactl
 **Analogy:** nvm / rustup / pyenv
 
 Key capabilities:
-- `clawden pull zeroclaw` — download/install a runtime
-- `clawden pull zeroclaw@0.5.2` — pin a specific version
-- `clawden update` — check for and apply runtime updates (spec 028)
-- Runtime catalog — knows all available runtimes and their install methods
-- Channel management — Docker images vs. direct binaries vs. source builds
+- `clawden install zeroclaw` — download/install a runtime
+- `clawden install zeroclaw@0.5.2` — pin a specific version (planned)
+- `clawden install --upgrade` — update installed runtimes (spec 028)
+- `clawden install --list` — show installed runtimes
+- `clawden install --outdated` — check for available updates
+- `clawden uninstall zeroclaw` — remove a runtime
+- Auto-install on `run` — like `uv run`, resolves automatically
 
-What this means for decisions:
-- ClawDen must maintain a runtime registry/catalog (currently `RuntimeCatalog`)
-- Version resolution and caching are real product features, not implementation details
-- Offline support matters (pre-pulled runtimes should work without network)
+**Note on naming:** `install` is preferred over `pull` because:
+- Matches user mental model — you "install" software, you "pull" images
+- Consistent with `npm install`, `brew install`, `apt install`
+- `pull` implies Docker/Git semantics that don't apply to direct-install mode
 
 #### 3. SDK Platform (tertiary)
 
@@ -73,21 +131,16 @@ Key capabilities:
 - Adapter abstraction — skills don't know which runtime they're running on
 - (Future) Skill marketplace
 
-What this means for decisions:
-- SDK API stability is critical — breaking changes hurt ecosystem
-- Cross-runtime compatibility testing is a product feature
-- Skill authors are a distinct persona from runtime users
-
 ### Positioning Statement
 
-> **ClawDen** is the developer experience layer for the xxxclaw ecosystem. Install any claw runtime in one command, manage versions and updates automatically, and build skills that work everywhere — all through a single CLI and dashboard.
+> **ClawDen** simplifies xxxclaw deployment and usage. One command to install, configure, and run any claw runtime — plus a cross-runtime SDK for building skills that work everywhere.
 
 ### Elevator Pitches by Role
 
 | Role | One-liner |
 |------|-----------|
-| UX Shell | "One CLI to run any claw agent — no config files, no Docker knowledge required" |
-| Runtime Manager | "nvm for claw runtimes — install, switch, and update with one command" |
+| UX Shell | "`npx clawden run zeroclaw` — zero to running in one command" |
+| Runtime Manager | "nvm for claw runtimes — install, switch, and update automatically" |
 | SDK Platform | "Build once, run on any claw — cross-runtime skills with TypeScript" |
 
 ## Design
@@ -96,8 +149,8 @@ What this means for decisions:
 
 | Persona | Primary role used | Entry point |
 |---------|-------------------|-------------|
-| Hobbyist/student | UX Shell | `npm i -g clawden && clawden run zeroclaw` |
-| Solo developer | UX Shell + Runtime Manager | `clawden pull openclaw && clawden run openclaw --channel telegram` |
+| Hobbyist/student | UX Shell | `npx clawden run zeroclaw` |
+| Solo developer | UX Shell + Runtime Manager | `npx clawden init && clawden up` |
 | Skill author | SDK Platform | `clawden skill create my-skill` |
 | Team/enterprise | All three + fleet features | `clawden dashboard` + fleet orchestration |
 
@@ -108,32 +161,34 @@ This positioning reinforces several existing architectural decisions:
 - **Guided onboarding (026)**: Correct — first-run experience is critical for UX Shell role
 - **Runtime pull/update (028)**: Correct — this is core Runtime Manager functionality
 - **SDK package (015, 019)**: Correct — SDK is a distinct distribution concern
+- **npm distribution (019)**: Critical — `npx clawden` as zero-install entry point is the USP
 
-Potential gaps this positioning reveals:
-- **Runtime version pinning**: `clawden pull zeroclaw@0.5.2` not yet implemented
-- **Offline catalog**: Pre-pulled runtimes should work without network access
-- **Persona-aware docs**: README and docs should speak to the persona, not the architecture
-- **`clawden doctor`**: A diagnostic command to verify runtime health, versions, and config — common in UX-first tools
+Gaps this positioning reveals:
+- **Interactive credential prompt during `run`**: The biggest missing piece — auto-prompt for API keys on first run
+- **Runtime version pinning**: `clawden install zeroclaw@0.5.2` syntax (planned)
+- **Persona-aware docs**: README should lead with `npx clawden run zeroclaw`, not architecture
+- **`clawden doctor`**: Already exists — validates local setup before startup
 
 ### Documentation & Messaging Guidance
 
-- README should lead with the UX Shell pitch, not architecture diagrams
-- `--help` text should use plain language ("Run a claw agent" not "Invoke lifecycle management")
+- README should lead with: `npx clawden run zeroclaw` — one command, nothing else needed
+- Hero section: "Get a claw agent running in 10 seconds"
 - Error messages should suggest next steps, not expose internal state
-- Landing page structure: "Get started in 30 seconds" → "Manage your runtimes" → "Build skills"
+- `--help` text should use plain language ("Run a claw agent" not "Invoke lifecycle management")
 
 ## Plan
 
-- [ ] Update README.md to reflect UX Shell-first positioning
+- [ ] Add interactive credential prompt to `run` command when API key is missing
+- [ ] Update README.md hero section: `npx clawden run zeroclaw`
+- [ ] Refine README positioning: "simplifies UX/DX for xxxclaw deployment and usage"
 - [ ] Audit CLI `--help` text for plain-language clarity
-- [ ] Add `clawden doctor` diagnostic command
 - [ ] Implement runtime version pinning (`@version` syntax)
-- [ ] Write persona-aligned documentation sections
-- [ ] Review AGENTS.md description to align with new positioning
+- [ ] Review AGENTS.md and npm package description to align with new positioning
 
 ## Test
 
+- [ ] `npx clawden run zeroclaw` works from zero with interactive credential prompt
+- [ ] Non-interactive mode fails with clear error when API key is missing
 - [ ] README communicates value proposition in first 3 lines
 - [ ] `clawden --help` output is understandable by someone who has never seen ClawDen
 - [ ] Each persona can complete their entry-point workflow in under 60 seconds
-- [ ] Positioning language is consistent across CLI, dashboard, docs, and package descriptions
