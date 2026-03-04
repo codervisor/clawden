@@ -165,6 +165,11 @@ pub async fn exec_run(
         &combined_env,
         Some(current_project_hash),
     )?;
+    // Start capturing logs immediately after launch (while the log file is
+    // still near-empty) so that startup output is not lost.  Without this,
+    // stream_logs would begin from the current file size — after
+    // verify_runtime_startup has already consumed ~2 s of output.
+    let stream = process_manager.stream_logs(std::slice::from_ref(&opts.runtime))?;
     verify_runtime_startup(process_manager, &opts.runtime, &info)?;
     append_audit_file("runtime.start", &opts.runtime, "ok")?;
 
@@ -182,7 +187,6 @@ pub async fn exec_run(
         "Running {} in foreground. Press Ctrl+C to stop.",
         opts.runtime
     );
-    let stream = process_manager.stream_logs(std::slice::from_ref(&opts.runtime))?;
     let mut tick = tokio::time::interval(Duration::from_millis(150));
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::pin!(ctrl_c);
