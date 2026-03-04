@@ -301,138 +301,301 @@ pub(crate) fn validate_direct_runtime_config(
     env_vars: &[(String, String)],
     channels: &[String],
 ) -> Result<()> {
-    let mut missing = Vec::new();
-    let mut provider_name_for_summary = None;
-    if let Some((provider_name, _, _)) = runtime_provider_and_model(config, runtime) {
-        provider_name_for_summary = Some(provider_name.clone());
-        let has_provider_key = env_vars
+    let env_has = |key: &str| -> bool {
+        env_vars
             .iter()
-            .any(|(k, v)| k == "CLAWDEN_LLM_API_KEY" && !v.trim().is_empty());
-        if !has_provider_key {
-            missing.push((
-                "provider".to_string(),
-                provider_name,
-                "CLAWDEN_LLM_API_KEY".to_string(),
-            ));
-        }
+            .any(|(k, v)| k == key && !v.trim().is_empty())
+    };
+
+    // (scope, name, env_var, resolved, source)
+    let mut fields: Vec<(&str, String, String, bool, &str)> = Vec::new();
+
+    // --- Provider key check ---
+    if let Some((provider_name, _, _)) = runtime_provider_and_model(config, runtime) {
+        let resolved = env_has("CLAWDEN_LLM_API_KEY");
+        fields.push((
+            "provider",
+            provider_name,
+            "CLAWDEN_LLM_API_KEY".to_string(),
+            resolved,
+            if resolved { "provided" } else { "" },
+        ));
     }
 
+    // --- Channel credential checks (config struct AND env_vars) ---
     for channel_name in channels {
-        let Some(channel) = config.channels.get(channel_name) else {
-            continue;
-        };
-        let channel_type = ClawDenYaml::resolve_channel_type(channel_name, channel)
+        let channel = config.channels.get(channel_name);
+        let channel_type = channel
+            .and_then(|ch| ClawDenYaml::resolve_channel_type(channel_name, ch))
             .unwrap_or_else(|| channel_name.clone());
+
+        let config_has_token_or_bot = |ch: Option<&clawden_config::ChannelInstanceYaml>| -> bool {
+            ch.and_then(|c| c.token.as_ref().or(c.bot_token.as_ref()))
+                .is_some_and(|v| !v.trim().is_empty())
+        };
 
         match channel_type.as_str() {
             "telegram" => {
-                if channel
-                    .token
-                    .as_ref()
-                    .or(channel.bot_token.as_ref())
-                    .is_none_or(|v| v.trim().is_empty())
-                {
-                    missing.push((
-                        "channel".to_string(),
-                        channel_name.clone(),
-                        "TELEGRAM_BOT_TOKEN".to_string(),
-                    ));
-                }
+                let cfg_ok = config_has_token_or_bot(channel);
+                let env_ok = env_has("TELEGRAM_BOT_TOKEN");
+                let resolved = cfg_ok || env_ok;
+                let source = if cfg_ok {
+                    "clawden.yaml"
+                } else if env_ok {
+                    "provided"
+                } else {
+                    ""
+                };
+                fields.push((
+                    "channel",
+                    channel_name.clone(),
+                    "TELEGRAM_BOT_TOKEN".to_string(),
+                    resolved,
+                    source,
+                ));
             }
             "discord" => {
-                if channel
-                    .token
-                    .as_ref()
-                    .or(channel.bot_token.as_ref())
-                    .is_none_or(|v| v.trim().is_empty())
-                {
-                    missing.push((
-                        "channel".to_string(),
-                        channel_name.clone(),
-                        "DISCORD_BOT_TOKEN".to_string(),
-                    ));
-                }
+                let cfg_ok = config_has_token_or_bot(channel);
+                let env_ok = env_has("DISCORD_BOT_TOKEN");
+                let resolved = cfg_ok || env_ok;
+                let source = if cfg_ok {
+                    "clawden.yaml"
+                } else if env_ok {
+                    "provided"
+                } else {
+                    ""
+                };
+                fields.push((
+                    "channel",
+                    channel_name.clone(),
+                    "DISCORD_BOT_TOKEN".to_string(),
+                    resolved,
+                    source,
+                ));
             }
             "slack" => {
-                if channel
-                    .bot_token
-                    .as_ref()
-                    .is_none_or(|v| v.trim().is_empty())
-                {
-                    missing.push((
-                        "channel".to_string(),
-                        channel_name.clone(),
-                        "SLACK_BOT_TOKEN".to_string(),
-                    ));
-                }
-                if channel
-                    .app_token
-                    .as_ref()
-                    .is_none_or(|v| v.trim().is_empty())
-                {
-                    missing.push((
-                        "channel".to_string(),
-                        channel_name.clone(),
-                        "SLACK_APP_TOKEN".to_string(),
-                    ));
-                }
+                let cfg_bt = channel
+                    .and_then(|c| c.bot_token.as_ref())
+                    .is_some_and(|v| !v.trim().is_empty());
+                let env_bt = env_has("SLACK_BOT_TOKEN");
+                let r_bt = cfg_bt || env_bt;
+                fields.push((
+                    "channel",
+                    channel_name.clone(),
+                    "SLACK_BOT_TOKEN".to_string(),
+                    r_bt,
+                    if cfg_bt {
+                        "clawden.yaml"
+                    } else if env_bt {
+                        "provided"
+                    } else {
+                        ""
+                    },
+                ));
+
+                let cfg_at = channel
+                    .and_then(|c| c.app_token.as_ref())
+                    .is_some_and(|v| !v.trim().is_empty());
+                let env_at = env_has("SLACK_APP_TOKEN");
+                let r_at = cfg_at || env_at;
+                fields.push((
+                    "channel",
+                    channel_name.clone(),
+                    "SLACK_APP_TOKEN".to_string(),
+                    r_at,
+                    if cfg_at {
+                        "clawden.yaml"
+                    } else if env_at {
+                        "provided"
+                    } else {
+                        ""
+                    },
+                ));
             }
             "signal" => {
-                if channel.phone.as_ref().is_none_or(|v| v.trim().is_empty()) {
-                    missing.push((
-                        "channel".to_string(),
-                        channel_name.clone(),
-                        "SIGNAL_PHONE".to_string(),
-                    ));
-                }
-                if channel.token.as_ref().is_none_or(|v| v.trim().is_empty()) {
-                    missing.push((
-                        "channel".to_string(),
-                        channel_name.clone(),
-                        "SIGNAL_TOKEN".to_string(),
-                    ));
-                }
+                let cfg_p = channel
+                    .and_then(|c| c.phone.as_ref())
+                    .is_some_and(|v| !v.trim().is_empty());
+                let env_p = env_has("SIGNAL_PHONE");
+                let r_p = cfg_p || env_p;
+                fields.push((
+                    "channel",
+                    channel_name.clone(),
+                    "SIGNAL_PHONE".to_string(),
+                    r_p,
+                    if cfg_p {
+                        "clawden.yaml"
+                    } else if env_p {
+                        "provided"
+                    } else {
+                        ""
+                    },
+                ));
+
+                let cfg_t = channel
+                    .and_then(|c| c.token.as_ref())
+                    .is_some_and(|v| !v.trim().is_empty());
+                let env_t = env_has("SIGNAL_TOKEN");
+                let r_t = cfg_t || env_t;
+                fields.push((
+                    "channel",
+                    channel_name.clone(),
+                    "SIGNAL_TOKEN".to_string(),
+                    r_t,
+                    if cfg_t {
+                        "clawden.yaml"
+                    } else if env_t {
+                        "provided"
+                    } else {
+                        ""
+                    },
+                ));
             }
             _ => {
-                if channel
-                    .token
-                    .as_ref()
-                    .or(channel.bot_token.as_ref())
-                    .is_none_or(|v| v.trim().is_empty())
-                {
-                    missing.push((
-                        "channel".to_string(),
-                        channel_name.clone(),
-                        "CHANNEL_TOKEN".to_string(),
-                    ));
-                }
+                let env_var_name = format!(
+                    "{}_BOT_TOKEN",
+                    channel_type.to_ascii_uppercase().replace('-', "_")
+                );
+                let cfg_ok = config_has_token_or_bot(channel);
+                let env_ok = env_has(&env_var_name);
+                let resolved = cfg_ok || env_ok;
+                let source = if cfg_ok {
+                    "clawden.yaml"
+                } else if env_ok {
+                    "provided"
+                } else {
+                    ""
+                };
+                fields.push((
+                    "channel",
+                    channel_name.clone(),
+                    env_var_name,
+                    resolved,
+                    source,
+                ));
             }
         }
     }
 
-    if !missing.is_empty() {
-        let mut lines = vec!["Required fields for this run:".to_string()];
-        if let Some(provider_name) = provider_name_for_summary {
-            lines.push(format!("    provider: {provider_name}"));
-        }
-        for (scope, name, key) in missing {
-            lines.push(format!("    {scope}: {name}"));
-            lines.push(format!("        - {key} ...... missing"));
-        }
-        lines.push(String::new());
-        lines.push("How to continue:".to_string());
-        lines.push(
-            "    1) Provide missing fields now: --api-key ..., --token ..., -e KEY=VAL, or --env-file <path>"
-                .to_string(),
-        );
-        lines.push(
-            "    2) Skip credential validation for this run: --allow-missing-credentials"
-                .to_string(),
-        );
-        anyhow::bail!(lines.join("\n"));
+    let has_missing = fields.iter().any(|(_, _, _, resolved, _)| !resolved);
+    if !has_missing {
+        return Ok(());
     }
 
-    Ok(())
+    // --- Generate improved error message ---
+    let mut lines = vec!["Required fields for this run:".to_string()];
+    let mut last_scope = "";
+    let mut last_name = String::new();
+    for (scope, name, env_var, resolved, source) in &fields {
+        if *scope != last_scope || *name != last_name {
+            lines.push(format!("    {scope}: {name}"));
+            last_scope = scope;
+            last_name = name.clone();
+        }
+        let dots = ".".repeat(24usize.saturating_sub(env_var.len()));
+        if *resolved {
+            lines.push(format!("        - {env_var} {dots} \u{2713} ({source})"));
+        } else {
+            lines.push(format!("        - {env_var} {dots} \u{2717} missing"));
+        }
+    }
+
+    // Host env hints for missing provider
+    let provider_missing = fields.iter().any(|(s, _, _, r, _)| *s == "provider" && !r);
+    let no_provider = !fields.iter().any(|(s, _, _, _, _)| *s == "provider");
+    if provider_missing || no_provider {
+        let candidates: &[(&str, &str)] = &[
+            ("OPENROUTER_API_KEY", "openrouter"),
+            ("OPENAI_API_KEY", "openai"),
+            ("ANTHROPIC_API_KEY", "anthropic"),
+            ("GEMINI_API_KEY", "google"),
+            ("GOOGLE_API_KEY", "google"),
+            ("MISTRAL_API_KEY", "mistral"),
+            ("GROQ_API_KEY", "groq"),
+        ];
+        let mut found_hint = false;
+        for (ev, prov) in candidates {
+            if let Ok(val) = std::env::var(ev) {
+                if !val.trim().is_empty() {
+                    lines.push(format!(
+                        "        \u{1F4A1} Detected {ev} in your environment \u{2014} add --provider {prov} to use it"
+                    ));
+                    found_hint = true;
+                    break;
+                }
+            }
+        }
+        if !found_hint && no_provider {
+            lines.push(
+                "    \u{1F4A1} No provider configured. Try: --provider openrouter --api-key <key>"
+                    .to_string(),
+            );
+            lines.push(
+                "       Or set OPENROUTER_API_KEY in your environment / .env file".to_string(),
+            );
+        }
+    }
+
+    // Suggested command
+    lines.push(String::new());
+    let mut cmd_parts = vec!["clawden run".to_string()];
+    let mut seen_token = false;
+    let mut seen_app_token = false;
+    let mut seen_phone = false;
+    for (scope, name, env_var, resolved, _) in &fields {
+        if *resolved {
+            continue;
+        }
+        if *scope == "provider" {
+            cmd_parts.push(format!("--provider {name}"));
+            cmd_parts.push("--api-key <your-api-key>".to_string());
+        } else {
+            match env_var.as_str() {
+                v if (v.ends_with("_BOT_TOKEN") || v == "SIGNAL_TOKEN") && !seen_token => {
+                    cmd_parts.push("--token <your-token>".to_string());
+                    seen_token = true;
+                }
+                v if v.ends_with("_APP_TOKEN") && !seen_app_token => {
+                    cmd_parts.push("--app-token <your-app-token>".to_string());
+                    seen_app_token = true;
+                }
+                v if v.ends_with("_PHONE") && !seen_phone => {
+                    cmd_parts.push("--phone <your-phone>".to_string());
+                    seen_phone = true;
+                }
+                _ => {
+                    cmd_parts.push(format!("-e {env_var}=<value>"));
+                }
+            }
+        }
+    }
+    for ch in channels {
+        cmd_parts.push(format!("--channel {ch}"));
+    }
+    cmd_parts.push(runtime.to_string());
+
+    lines.push("Suggested command:".to_string());
+    lines.push(format!("    {}", cmd_parts.join(" ")));
+    lines.push(String::new());
+    lines.push("Or skip validation:".to_string());
+    lines.push(format!(
+        "    clawden run --allow-missing-credentials {}{}",
+        if channels.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "{} ",
+                channels
+                    .iter()
+                    .map(|c| format!("--channel {c}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        },
+        runtime
+    ));
+
+    anyhow::bail!(lines.join("\n"));
 }
 
 pub(crate) fn verify_runtime_startup(

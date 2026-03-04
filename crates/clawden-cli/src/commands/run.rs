@@ -11,8 +11,8 @@ use tracing::{debug, warn};
 use crate::commands::config_gen::{generate_config_dir, inject_config_dir_arg};
 use crate::commands::up::{
     build_runtime_env_vars, channels_for_runtime, infer_provider_type, load_config_with_env_file,
-    parse_env_overrides, pinned_version_for_runtime, render_log_line, tools_for_runtime,
-    validate_direct_runtime_config, verify_runtime_startup,
+    parse_env_overrides, pinned_version_for_runtime, render_log_line, runtime_provider_and_model,
+    tools_for_runtime, validate_direct_runtime_config, verify_runtime_startup,
 };
 use crate::util::{
     append_audit_file, ensure_installed_runtime, env_no_docker_enabled, parse_runtime, project_hash,
@@ -58,8 +58,50 @@ pub async fn exec_run(
         .unwrap_or_default();
 
     let mut config = load_config_with_env_file(opts.env_file.as_deref())?;
+
+    // Create a minimal config when credential flags or channels are present but
+    // no clawden.yaml exists, so apply_run_overrides populates the config struct
+    // consistently and validation can run.
+    let has_credential_flags = opts.token.is_some()
+        || opts.api_key.is_some()
+        || opts.provider.is_some()
+        || opts.model.is_some()
+        || opts.system_prompt.is_some()
+        || !opts.channel.is_empty();
+    if config.is_none() && has_credential_flags {
+        config = Some(empty_clawden_yaml(&opts.runtime));
+    }
+
     if let Some(cfg) = config.as_mut() {
         apply_run_overrides(cfg, &opts)?;
+    }
+
+    // Host environment auto-detection: infer provider from well-known env vars
+    // when no provider is explicitly configured.
+    if opts.provider.is_none() {
+        let need_provider = config
+            .as_ref()
+            .map(|c| runtime_provider_and_model(c, &opts.runtime).is_none())
+            .unwrap_or(true);
+        if need_provider {
+            if let Some((provider_name, env_var_name)) = infer_provider_from_host_env() {
+                eprintln!(
+                    "\u{2139} Using provider {provider_name} (detected {env_var_name} in environment)"
+                );
+                let api_key = std::env::var(env_var_name).ok();
+                let cfg = config.get_or_insert_with(|| empty_clawden_yaml(&opts.runtime));
+                cfg.provider = Some(ProviderRefYaml::Name(provider_name.to_string()));
+                cfg.providers
+                    .entry(provider_name.to_string())
+                    .or_insert(ProviderEntryYaml {
+                        provider_type: infer_provider_type(provider_name),
+                        api_key,
+                        base_url: None,
+                        org_id: None,
+                        extra: HashMap::new(),
+                    });
+            }
+        }
     }
 
     // `clawden run` defaults to Direct mode (uv-run style transparent exec).
@@ -80,6 +122,8 @@ pub async fn exec_run(
     } else {
         Vec::new()
     };
+    // Auto-inject detected host-env channel tokens at lowest precedence
+    inject_host_env_channel_tokens(&mut env_vars);
     apply_shortcut_env_overrides(&mut env_vars, &opts)?;
     let env_overrides = parse_env_overrides(&opts.env_vars)?;
     if !env_overrides.is_empty() {
@@ -113,6 +157,29 @@ pub async fn exec_run(
     } else {
         default_tools.clone()
     };
+
+    // Ensure CLI --channel overrides are reflected in the config so that
+    // config-dir generation (used by runtimes like zeroclaw that read
+    // channels from config.toml, not from env vars) includes them.
+    if !resolved_channels.is_empty() {
+        let cfg = config.get_or_insert_with(|| empty_clawden_yaml(&opts.runtime));
+        for ch in &resolved_channels {
+            cfg.channels
+                .entry(ch.clone())
+                .or_insert_with(empty_channel_instance);
+        }
+        // In multi-runtime mode, also add the channels to the runtime entry
+        // so that channels_for_runtime() returns them during config generation.
+        if cfg.runtime.as_deref() != Some(&opts.runtime) {
+            if let Some(entry) = cfg.runtimes.iter_mut().find(|r| r.name == opts.runtime) {
+                for ch in &resolved_channels {
+                    if !entry.channels.contains(ch) {
+                        entry.channels.push(ch.clone());
+                    }
+                }
+            }
+        }
+    }
 
     let pinned_version = config
         .as_ref()
@@ -181,12 +248,12 @@ pub async fn exec_run(
     // Channel and tool lists are passed via env vars — runtimes
     // do NOT accept --channels / --tools CLI flags.
     let mut combined_env = env_vars;
-    if let Some(cfg) = config.as_ref() {
-        if !opts.allow_missing_credentials {
+    if !opts.allow_missing_credentials {
+        if let Some(cfg) = config.as_ref() {
             validate_direct_runtime_config(cfg, &opts.runtime, &combined_env, &resolved_channels)?;
-        } else {
-            warn!("missing credential checks are skipped (--allow-missing-credentials)");
         }
+    } else {
+        warn!("missing credential checks are skipped (--allow-missing-credentials)");
     }
     if !resolved_channels.is_empty() {
         combined_env.push(("CLAWDEN_CHANNELS".to_string(), resolved_channels.join(",")));
@@ -452,6 +519,92 @@ fn provider_env_key_aliases(provider: &clawden_config::LlmProvider) -> &'static 
     }
 }
 
+fn empty_clawden_yaml(runtime: &str) -> ClawDenYaml {
+    ClawDenYaml {
+        runtime: Some(runtime.to_string()),
+        channels: HashMap::new(),
+        providers: HashMap::new(),
+        runtimes: Vec::new(),
+        tools: Vec::new(),
+        config: HashMap::new(),
+        provider: None,
+        model: None,
+        version: None,
+        mode: None,
+    }
+}
+
+/// Well-known provider env vars in priority order for auto-detection.
+const PROVIDER_ENV_CANDIDATES: &[(&str, &str)] = &[
+    ("OPENROUTER_API_KEY", "openrouter"),
+    ("OPENAI_API_KEY", "openai"),
+    ("ANTHROPIC_API_KEY", "anthropic"),
+    ("GEMINI_API_KEY", "google"),
+    ("GOOGLE_API_KEY", "google"),
+    ("MISTRAL_API_KEY", "mistral"),
+    ("GROQ_API_KEY", "groq"),
+];
+
+/// Well-known channel token env vars for auto-detection.
+const CHANNEL_ENV_VARS: &[&str] = &[
+    "TELEGRAM_BOT_TOKEN",
+    "DISCORD_BOT_TOKEN",
+    "SLACK_BOT_TOKEN",
+    "SLACK_APP_TOKEN",
+];
+
+/// Infer provider from host environment variables. Returns (provider_name, env_var_name).
+fn infer_provider_from_host_env() -> Option<(&'static str, &'static str)> {
+    for (env_var, provider) in PROVIDER_ENV_CANDIDATES {
+        if let Ok(val) = std::env::var(env_var) {
+            if !val.trim().is_empty() {
+                return Some((provider, env_var));
+            }
+        }
+    }
+    None
+}
+
+/// Inject detected host-env channel tokens into env_vars at lowest precedence.
+/// Only injects if the env var is not already present.
+fn inject_host_env_channel_tokens(env_vars: &mut Vec<(String, String)>) {
+    for var_name in CHANNEL_ENV_VARS {
+        if !env_vars.iter().any(|(k, _)| k == *var_name) {
+            if let Ok(val) = std::env::var(var_name) {
+                if !val.trim().is_empty() {
+                    env_vars.push((var_name.to_string(), val));
+                }
+            }
+        }
+    }
+}
+
+/// Scan and report well-known env vars. Returns (env_var, provider_name, value) tuples.
+pub(crate) fn detect_host_provider_keys() -> Vec<(&'static str, &'static str, String)> {
+    PROVIDER_ENV_CANDIDATES
+        .iter()
+        .filter_map(|(env_var, provider)| {
+            std::env::var(env_var)
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .map(|v| (*env_var, *provider, v))
+        })
+        .collect()
+}
+
+/// Scan host env for channel token values. Returns (env_var, value) tuples.
+pub(crate) fn detect_host_channel_tokens() -> Vec<(&'static str, String)> {
+    CHANNEL_ENV_VARS
+        .iter()
+        .filter_map(|var| {
+            std::env::var(var)
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .map(|v| (*var, v))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -617,5 +770,181 @@ providers:
         assert!(env
             .iter()
             .any(|(k, v)| k == "SIGNAL_PHONE" && v == "+15551234567"));
+    }
+
+    #[test]
+    fn token_flag_populates_config_without_yaml() {
+        use super::empty_clawden_yaml;
+        use crate::commands::up::validate_direct_runtime_config;
+
+        let mut config = empty_clawden_yaml("zeroclaw");
+        let mut opts = make_opts();
+        opts.channel = vec!["telegram".to_string()];
+        opts.token = Some("tg-tok".to_string());
+        opts.provider = Some("openrouter".to_string());
+        opts.api_key = Some("sk-or-key".to_string());
+
+        apply_run_overrides(&mut config, &opts).expect("overrides should apply");
+        config.resolve_env_vars().expect("env vars should resolve");
+        let env = build_runtime_env_vars(&config, "zeroclaw").expect("env vars should build");
+
+        assert!(
+            env.iter()
+                .any(|(k, v)| k == "TELEGRAM_BOT_TOKEN" && v == "tg-tok"),
+            "TELEGRAM_BOT_TOKEN should be set from --token without yaml"
+        );
+        assert!(
+            env.iter()
+                .any(|(k, v)| k == "CLAWDEN_LLM_API_KEY" && v == "sk-or-key"),
+            "CLAWDEN_LLM_API_KEY should be set from --api-key without yaml"
+        );
+
+        let channels = vec!["telegram".to_string()];
+        validate_direct_runtime_config(&config, "zeroclaw", &env, &channels)
+            .expect("validation should pass with --token overrides");
+    }
+
+    #[test]
+    fn validation_passes_when_token_only_in_env_vars() {
+        use super::empty_clawden_yaml;
+        use crate::commands::up::validate_direct_runtime_config;
+
+        let config = empty_clawden_yaml("zeroclaw");
+        let env = vec![("TELEGRAM_BOT_TOKEN".to_string(), "tg-tok".to_string())];
+        let channels = vec!["telegram".to_string()];
+
+        validate_direct_runtime_config(&config, "zeroclaw", &env, &channels)
+            .expect("validation should pass when token is in env_vars");
+    }
+
+    #[test]
+    fn validation_shows_checkmarks_and_crosses() {
+        use super::empty_clawden_yaml;
+        use crate::commands::up::validate_direct_runtime_config;
+
+        let mut config = empty_clawden_yaml("zeroclaw");
+        config
+            .channels
+            .insert("telegram".to_string(), super::empty_channel_instance());
+        let env = vec![];
+        let channels = vec!["telegram".to_string()];
+
+        let err = validate_direct_runtime_config(&config, "zeroclaw", &env, &channels)
+            .expect_err("validation should fail with missing token");
+        let msg = err.to_string();
+        assert!(msg.contains("\u{2717} missing"), "should contain ✗ missing");
+        assert!(
+            msg.contains("TELEGRAM_BOT_TOKEN"),
+            "should mention TELEGRAM_BOT_TOKEN"
+        );
+        assert!(
+            msg.contains("Suggested command:"),
+            "should show suggested command"
+        );
+    }
+
+    #[test]
+    fn infer_provider_from_host_env_priority_order() {
+        use super::infer_provider_from_host_env;
+        use crate::commands::test_env_lock;
+
+        let _guard = test_env_lock().lock().expect("env lock");
+        let originals: Vec<_> = super::PROVIDER_ENV_CANDIDATES
+            .iter()
+            .map(|(k, _)| (*k, std::env::var(k).ok()))
+            .collect();
+
+        // Clear all
+        for (k, _) in super::PROVIDER_ENV_CANDIDATES {
+            std::env::remove_var(k);
+        }
+
+        // Set openai and anthropic
+        std::env::set_var("OPENAI_API_KEY", "sk-openai");
+        std::env::set_var("ANTHROPIC_API_KEY", "sk-anthropic");
+
+        let result = infer_provider_from_host_env();
+        assert_eq!(result, Some(("openai", "OPENAI_API_KEY")));
+
+        // Set openrouter (higher priority)
+        std::env::set_var("OPENROUTER_API_KEY", "sk-or");
+        let result = infer_provider_from_host_env();
+        assert_eq!(result, Some(("openrouter", "OPENROUTER_API_KEY")));
+
+        // Restore
+        for (k, v) in originals {
+            match v {
+                Some(val) => std::env::set_var(k, val),
+                None => std::env::remove_var(k),
+            }
+        }
+    }
+
+    #[test]
+    fn explicit_provider_overrides_host_env_inference() {
+        use super::{empty_clawden_yaml, inject_host_env_channel_tokens};
+        use crate::commands::test_env_lock;
+
+        let _guard = test_env_lock().lock().expect("env lock");
+        let orig = std::env::var("OPENROUTER_API_KEY").ok();
+        std::env::set_var("OPENROUTER_API_KEY", "sk-or-host");
+
+        let mut opts = make_opts();
+        opts.provider = Some("openai".to_string());
+        opts.api_key = Some("sk-openai-explicit".to_string());
+        opts.channel = vec!["telegram".to_string()];
+        opts.token = Some("tg-tok".to_string());
+
+        let mut config = empty_clawden_yaml("zeroclaw");
+        apply_run_overrides(&mut config, &opts).expect("overrides should apply");
+        config.resolve_env_vars().expect("env vars should resolve");
+        let mut env = build_runtime_env_vars(&config, "zeroclaw").expect("env vars should build");
+        inject_host_env_channel_tokens(&mut env);
+        apply_shortcut_env_overrides(&mut env, &opts).expect("shortcut overrides should apply");
+
+        assert!(
+            env.iter()
+                .any(|(k, v)| k == "CLAWDEN_LLM_PROVIDER" && v == "openai"),
+            "explicit --provider should win over host env inference"
+        );
+
+        match orig {
+            Some(v) => std::env::set_var("OPENROUTER_API_KEY", v),
+            None => std::env::remove_var("OPENROUTER_API_KEY"),
+        }
+    }
+
+    #[test]
+    fn host_env_channel_token_injection() {
+        use super::inject_host_env_channel_tokens;
+        use crate::commands::test_env_lock;
+
+        let _guard = test_env_lock().lock().expect("env lock");
+        let orig = std::env::var("TELEGRAM_BOT_TOKEN").ok();
+        std::env::set_var("TELEGRAM_BOT_TOKEN", "tg-from-env");
+
+        let mut env = Vec::new();
+        inject_host_env_channel_tokens(&mut env);
+        assert!(
+            env.iter()
+                .any(|(k, v)| k == "TELEGRAM_BOT_TOKEN" && v == "tg-from-env"),
+            "host TELEGRAM_BOT_TOKEN should be injected"
+        );
+
+        // Should not override existing value
+        let mut env2 = vec![("TELEGRAM_BOT_TOKEN".to_string(), "explicit".to_string())];
+        inject_host_env_channel_tokens(&mut env2);
+        assert_eq!(
+            env2.iter()
+                .find(|(k, _)| k == "TELEGRAM_BOT_TOKEN")
+                .map(|(_, v)| v.as_str()),
+            Some("explicit"),
+            "existing env var should not be overridden"
+        );
+
+        match orig {
+            Some(v) => std::env::set_var("TELEGRAM_BOT_TOKEN", v),
+            None => std::env::remove_var("TELEGRAM_BOT_TOKEN"),
+        }
     }
 }

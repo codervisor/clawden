@@ -338,4 +338,10 @@ pub enum ConfigCommand {
         #[arg(long = "env-file")]
         env_file: Option<String>,
     },
+    /// Show detected environment variables relevant to ClawDen.
+    Env {
+        /// Show full values instead of redacting.
+        #[arg(long, default_value_t = false)]
+        reveal: bool,
+    },
 }
