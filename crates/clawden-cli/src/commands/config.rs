@@ -135,19 +135,27 @@ fn empty_config(runtime: &str) -> clawden_config::ClawDenYaml {
     clawden_config::ClawDenYaml::parse_yaml(&yaml).expect("minimal yaml should parse")
 }
 
-/// Simple line-level redaction for TOML secrets — replaces values of keys that
-/// look like they contain secrets (api_key, token, etc.) with `<redacted>`.
+/// Simple line-level redaction for TOML secrets — replaces string values of
+/// keys that look like they contain secrets with `<redacted>`.  Only matches
+/// lines whose value side is a quoted string (not integers, arrays, etc.).
 fn redact_toml_secrets(toml_str: &str) -> String {
     toml_str
         .lines()
         .map(|line| {
-            if let Some((key, _val)) = line.split_once('=') {
-                let key_lower = key.trim().to_ascii_lowercase();
-                if key_lower.contains("key")
-                    || key_lower.contains("token")
-                    || key_lower.contains("secret")
-                {
-                    return format!("{} = \"<redacted>\"", key.trim_end());
+            if let Some((key, val)) = line.split_once('=') {
+                let val_trimmed = val.trim();
+                // Only redact if the value is a quoted string.
+                if val_trimmed.starts_with('"') && val_trimmed.ends_with('"') {
+                    let key_lower = key.trim().to_ascii_lowercase();
+                    if key_lower == "api_key"
+                        || key_lower == "bot_token"
+                        || key_lower == "app_token"
+                        || key_lower.ends_with("_api_key")
+                        || key_lower.ends_with("_bot_token")
+                        || key_lower.ends_with("_app_token")
+                    {
+                        return format!("{} = \"<redacted>\"", key.trim_end());
+                    }
                 }
             }
             line.to_string()
@@ -161,20 +169,26 @@ fn redact_json_secrets(json_str: &str) -> String {
     json_str
         .lines()
         .map(|line| {
-            if let Some((key_part, _)) = line.split_once(':') {
-                let key_lower = key_part.trim().to_ascii_lowercase();
-                if key_lower.contains("key")
-                    || key_lower.contains("token")
-                    || key_lower.contains("secret")
-                {
-                    let indent = &line[..line.len() - line.trim_start().len()];
-                    let key_trimmed = key_part.trim();
-                    let comma = if line.trim_end().ends_with(',') {
-                        ","
-                    } else {
-                        ""
-                    };
-                    return format!("{indent}{key_trimmed}: \"<redacted>\"{comma}");
+            if let Some((key_part, val_part)) = line.split_once(':') {
+                let val_trimmed = val_part.trim().trim_end_matches(',');
+                // Only redact if the value is a quoted string.
+                if val_trimmed.starts_with('"') && val_trimmed.ends_with('"') {
+                    let key_lower = key_part.trim().trim_matches('"').to_ascii_lowercase();
+                    if key_lower == "api_key"
+                        || key_lower == "apikey"
+                        || key_lower == "apikeyref"
+                        || key_lower == "bot_token"
+                        || key_lower == "app_token"
+                    {
+                        let indent = &line[..line.len() - line.trim_start().len()];
+                        let key_trimmed = key_part.trim();
+                        let comma = if line.trim_end().ends_with(',') {
+                            ","
+                        } else {
+                            ""
+                        };
+                        return format!("{indent}{key_trimmed}: \"<redacted>\"{comma}");
+                    }
                 }
             }
             line.to_string()
