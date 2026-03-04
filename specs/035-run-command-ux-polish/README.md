@@ -10,7 +10,7 @@ tags:
 - developer-experience
 - run
 created_at: 2026-03-04T06:38:25.829298791Z
-updated_at: 2026-03-04T07:10:28.841175905Z
+updated_at: 2026-03-04T07:30:00.000000000Z
 ---
 # Run Command UX Polish — Credential Resolution, Smart Defaults & Actionable Errors
 
@@ -207,38 +207,38 @@ Detected environment variables:
 
 ## Plan
 
-- [ ] Fix `validate_direct_runtime_config()` to check env_vars vec for channel tokens (TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SIGNAL_PHONE, SIGNAL_TOKEN)
-- [ ] Apply CLI overrides (`apply_run_overrides`) even when `clawden.yaml` doesn't exist — create minimal config first
-- [ ] Add host-env scanning for well-known provider API key env vars
-- [ ] Add host-env scanning for well-known channel token env vars
-- [ ] Auto-inject detected host-env credentials into runtime env at lowest precedence
-- [ ] Implement default provider inference from host env vars (priority: openrouter > openai > anthropic > google > mistral > groq)
-- [ ] Print info line when provider is auto-inferred from environment
-- [ ] Redesign validation error format: show ✓/✗ status, source labels, detected env hints
-- [ ] Add concrete `Suggested command:` line to error output
-- [ ] Add provider/API key guidance section to error output (list known providers, show detected env vars)
-- [ ] Add `clawden config env` subcommand (scan and display known env vars with redaction)
-- [ ] Add tests: `--token` works without `clawden.yaml`
-- [ ] Add tests: host env `OPENROUTER_API_KEY` auto-detected and injected
-- [ ] Add tests: default provider inferred from host env
-- [ ] Add tests: error message includes ✓/✗ status and source labels
+- [x] Fix `validate_direct_runtime_config()` to check env_vars vec for channel tokens (TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SIGNAL_PHONE, SIGNAL_TOKEN)
+- [x] Apply CLI overrides (`apply_run_overrides`) even when `clawden.yaml` doesn't exist — create minimal config first
+- [x] Add host-env scanning for well-known provider API key env vars
+- [x] Add host-env scanning for well-known channel token env vars
+- [x] Auto-inject detected host-env credentials into runtime env at lowest precedence
+- [x] Implement default provider inference from host env vars (priority: openrouter > openai > anthropic > google > mistral > groq)
+- [x] Print info line when provider is auto-inferred from environment
+- [x] Redesign validation error format: show ✓/✗ status, source labels, detected env hints
+- [x] Add concrete `Suggested command:` line to error output
+- [x] Add provider/API key guidance section to error output (list known providers, show detected env vars)
+- [x] Add `clawden config env` subcommand (scan and display known env vars with redaction)
+- [x] Add tests: `--token` works without `clawden.yaml`
+- [x] Add tests: host env `OPENROUTER_API_KEY` auto-detected and injected
+- [x] Add tests: default provider inferred from host env
+- [x] Add tests: error message includes ✓/✗ status and source labels
 - [ ] Add tests: `clawden config env` output format
-- [ ] Add tests: precedence — explicit `--provider` overrides auto-inferred provider
+- [x] Add tests: precedence — explicit `--provider` overrides auto-inferred provider
 
 ## Test
 
-- [ ] `clawden run --token tok --channel telegram zeroclaw` (no `clawden.yaml`) → starts successfully with `TELEGRAM_BOT_TOKEN=tok`
-- [ ] `clawden run --api-key sk-... --provider openrouter --token tok --channel telegram zeroclaw` (no `clawden.yaml`) → starts successfully
-- [ ] `OPENROUTER_API_KEY=sk-... clawden run --channel telegram --token tok zeroclaw` (no `clawden.yaml`, no `--provider`) → infers openrouter, starts successfully
-- [ ] `OPENROUTER_API_KEY=sk-... OPENAI_API_KEY=sk-... clawden run zeroclaw` → infers openrouter (higher priority), prints info line
-- [ ] `OPENROUTER_API_KEY=sk-... clawden run --provider openai zeroclaw` → explicit `--provider` wins over auto-inference
-- [ ] `clawden run --channel telegram zeroclaw` (no token anywhere) → error shows `TELEGRAM_BOT_TOKEN ..... ✗ missing` with suggested command
-- [ ] `clawden run --token tok --channel telegram zeroclaw` (no provider) → error shows detected env vars if any, suggests `--provider`
+- [x] `clawden run --token tok --channel telegram zeroclaw` (no `clawden.yaml`) → starts successfully with `TELEGRAM_BOT_TOKEN=tok`
+- [x] `clawden run --api-key sk-... --provider openrouter --token tok --channel telegram zeroclaw` (no `clawden.yaml`) → starts successfully
+- [x] `OPENROUTER_API_KEY=sk-... clawden run --channel telegram --token tok zeroclaw` (no `clawden.yaml`, no `--provider`) → infers openrouter, starts successfully
+- [x] `OPENROUTER_API_KEY=sk-... OPENAI_API_KEY=sk-... clawden run zeroclaw` → infers openrouter (higher priority), prints info line
+- [x] `OPENROUTER_API_KEY=sk-... clawden run --provider openai zeroclaw` → explicit `--provider` wins over auto-inference
+- [x] `clawden run --channel telegram zeroclaw` (no token anywhere) → error shows `TELEGRAM_BOT_TOKEN ..... ✗ missing` with suggested command
+- [x] `clawden run --token tok --channel telegram zeroclaw` (no provider) → error shows detected env vars if any, suggests `--provider`
 - [ ] `clawden config env` → lists all known env vars with ✓/✗ status
 - [ ] `clawden config env --reveal` → shows full env var values
-- [ ] Error message includes copy-paste-ready `Suggested command:` line
-- [ ] Error message shows source of resolved values (`--token`, `clawden.yaml`, `.env`, environment)
-- [ ] `--allow-missing-credentials` still works and skips all validation
+- [x] Error message includes copy-paste-ready `Suggested command:` line
+- [x] Error message shows source of resolved values (`--token`, `clawden.yaml`, `.env`, environment)
+- [x] `--allow-missing-credentials` still works and skips all validation
 
 ## Notes
 
