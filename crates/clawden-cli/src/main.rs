@@ -174,11 +174,31 @@ async fn main() -> Result<()> {
 }
 
 fn init_logging(verbose: bool, log_level: Option<&str>) -> Result<()> {
-    let level = log_level.unwrap_or(if verbose { "debug" } else { "info" });
+    let level = resolved_log_level(verbose, log_level);
     let filter = EnvFilter::try_new(level).or_else(|_| EnvFilter::try_new("info"))?;
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
         .try_init();
     Ok(())
+}
+
+fn resolved_log_level<'a>(verbose: bool, log_level: Option<&'a str>) -> &'a str {
+    log_level.unwrap_or(if verbose { "debug" } else { "info" })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolved_log_level;
+
+    #[test]
+    fn verbose_defaults_to_debug() {
+        assert_eq!(resolved_log_level(true, None), "debug");
+    }
+
+    #[test]
+    fn explicit_log_level_overrides_verbose() {
+        assert_eq!(resolved_log_level(true, Some("trace")), "trace");
+        assert_eq!(resolved_log_level(false, Some("warn")), "warn");
+    }
 }

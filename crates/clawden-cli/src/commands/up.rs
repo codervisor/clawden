@@ -288,17 +288,19 @@ pub(crate) fn validate_direct_runtime_config(
     env_vars: &[(String, String)],
     channels: &[String],
 ) -> Result<()> {
+    let mut missing = Vec::new();
+    let mut provider_name_for_summary = None;
     if let Some((provider_name, _, _)) = runtime_provider_and_model(config, runtime) {
+        provider_name_for_summary = Some(provider_name.clone());
         let has_provider_key = env_vars
             .iter()
             .any(|(k, v)| k == "CLAWDEN_LLM_API_KEY" && !v.trim().is_empty());
         if !has_provider_key {
-            anyhow::bail!(
-                "Error: provider '{}' is configured for runtime '{}' but API key is missing.\n  → Set it in .env / clawden.yaml or run: clawden providers set {}",
+            missing.push((
+                "provider".to_string(),
                 provider_name,
-                runtime,
-                provider_name
-            );
+                "CLAWDEN_LLM_API_KEY".to_string(),
+            ));
         }
     }
 
@@ -317,10 +319,11 @@ pub(crate) fn validate_direct_runtime_config(
                     .or(channel.bot_token.as_ref())
                     .is_none_or(|v| v.trim().is_empty())
                 {
-                    anyhow::bail!(
-                        "Error: channel '{}' is enabled but TELEGRAM_BOT_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
-                        channel_name
-                    );
+                    missing.push((
+                        "channel".to_string(),
+                        channel_name.clone(),
+                        "TELEGRAM_BOT_TOKEN".to_string(),
+                    ));
                 }
             }
             "discord" => {
@@ -330,10 +333,11 @@ pub(crate) fn validate_direct_runtime_config(
                     .or(channel.bot_token.as_ref())
                     .is_none_or(|v| v.trim().is_empty())
                 {
-                    anyhow::bail!(
-                        "Error: channel '{}' is enabled but DISCORD_BOT_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
-                        channel_name
-                    );
+                    missing.push((
+                        "channel".to_string(),
+                        channel_name.clone(),
+                        "DISCORD_BOT_TOKEN".to_string(),
+                    ));
                 }
             }
             "slack" => {
@@ -342,34 +346,38 @@ pub(crate) fn validate_direct_runtime_config(
                     .as_ref()
                     .is_none_or(|v| v.trim().is_empty())
                 {
-                    anyhow::bail!(
-                        "Error: channel '{}' is enabled but SLACK_BOT_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
-                        channel_name
-                    );
+                    missing.push((
+                        "channel".to_string(),
+                        channel_name.clone(),
+                        "SLACK_BOT_TOKEN".to_string(),
+                    ));
                 }
                 if channel
                     .app_token
                     .as_ref()
                     .is_none_or(|v| v.trim().is_empty())
                 {
-                    anyhow::bail!(
-                        "Error: channel '{}' is enabled but SLACK_APP_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
-                        channel_name
-                    );
+                    missing.push((
+                        "channel".to_string(),
+                        channel_name.clone(),
+                        "SLACK_APP_TOKEN".to_string(),
+                    ));
                 }
             }
             "signal" => {
                 if channel.phone.as_ref().is_none_or(|v| v.trim().is_empty()) {
-                    anyhow::bail!(
-                        "Error: channel '{}' is enabled but SIGNAL_PHONE is empty.\n  → Set it in .env or run: clawden init --reconfigure",
-                        channel_name
-                    );
+                    missing.push((
+                        "channel".to_string(),
+                        channel_name.clone(),
+                        "SIGNAL_PHONE".to_string(),
+                    ));
                 }
                 if channel.token.as_ref().is_none_or(|v| v.trim().is_empty()) {
-                    anyhow::bail!(
-                        "Error: channel '{}' is enabled but SIGNAL_TOKEN is empty.\n  → Set it in .env or run: clawden init --reconfigure",
-                        channel_name
-                    );
+                    missing.push((
+                        "channel".to_string(),
+                        channel_name.clone(),
+                        "SIGNAL_TOKEN".to_string(),
+                    ));
                 }
             }
             _ => {
@@ -379,13 +387,36 @@ pub(crate) fn validate_direct_runtime_config(
                     .or(channel.bot_token.as_ref())
                     .is_none_or(|v| v.trim().is_empty())
                 {
-                    anyhow::bail!(
-                        "Error: channel '{}' is enabled but token is empty.\n  → Set it in .env or run: clawden init --reconfigure",
-                        channel_name
-                    );
+                    missing.push((
+                        "channel".to_string(),
+                        channel_name.clone(),
+                        "CHANNEL_TOKEN".to_string(),
+                    ));
                 }
             }
         }
+    }
+
+    if !missing.is_empty() {
+        let mut lines = vec!["Required fields for this run:".to_string()];
+        if let Some(provider_name) = provider_name_for_summary {
+            lines.push(format!("    provider: {provider_name}"));
+        }
+        for (scope, name, key) in missing {
+            lines.push(format!("    {scope}: {name}"));
+            lines.push(format!("        - {key} ...... missing"));
+        }
+        lines.push(String::new());
+        lines.push("How to continue:".to_string());
+        lines.push(
+            "    1) Provide missing fields now: --api-key ..., --token ..., -e KEY=VAL, or --env-file <path>"
+                .to_string(),
+        );
+        lines.push(
+            "    2) Skip credential validation for this run: --allow-missing-credentials"
+                .to_string(),
+        );
+        anyhow::bail!(lines.join("\n"));
     }
 
     Ok(())
@@ -875,7 +906,8 @@ channels:
         let env = build_runtime_env_vars(&config, "zeroclaw").expect("env vars should build");
         let err = validate_direct_runtime_config(&config, "zeroclaw", &env, &channels)
             .expect_err("empty telegram token must fail");
-        assert!(err.to_string().contains("TELEGRAM_BOT_TOKEN is empty"));
+        assert!(err.to_string().contains("Required fields for this run"));
+        assert!(err.to_string().contains("TELEGRAM_BOT_TOKEN"));
     }
 
     #[test]
@@ -896,8 +928,9 @@ channels:
         let channels = channels_for_runtime(&config, "zeroclaw");
         let err = validate_direct_runtime_config(&config, "zeroclaw", &[], &channels)
             .expect_err("missing provider key must fail");
-        assert!(err.to_string().contains("provider 'openrouter'"));
-        assert!(err.to_string().contains("API key is missing"));
+        assert!(err.to_string().contains("provider: openrouter"));
+        assert!(err.to_string().contains("CLAWDEN_LLM_API_KEY"));
+        assert!(err.to_string().contains("--allow-missing-credentials"));
     }
 
     #[test]

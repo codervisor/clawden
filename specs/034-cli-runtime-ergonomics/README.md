@@ -387,10 +387,10 @@ After implementation, `clawden run -h` must list all new flags in this spec with
 - [ ] Add `--token` flag to `Run` — map to channel-specific env var based on `--channel`
 - [ ] Add `--app-token` and `--phone` flags to `Run` for channels with multi-field credentials
 - [ ] Add `--api-key` flag to `Run` — map to provider-specific env var based on `--provider` or config
-- [ ] Ensure `--api-key` always sets `CLAWDEN_LLM_API_KEY` and runtime-scoped `*_LLM_API_KEY` (plus optional generic alias)
+- [x] Ensure `--api-key` always sets `CLAWDEN_LLM_API_KEY` and runtime-scoped `*_LLM_API_KEY` (plus optional generic alias)
 - [ ] Add required-fields summary builder (provider/channel requirements + resolved sources + missing list)
 - [x] Add `--allow-missing-credentials` to `Run` and `Up`
-- [ ] Make missing-required-field flow friendly and actionable (no stack trace panic path)
+- [x] Make missing-required-field flow friendly and actionable (no stack trace panic path)
 - [x] Add `--provider` flag to `Run` command
 - [x] Add `--model` flag to `Run` command
 - [ ] Apply `--model` and `--provider` overrides in config translation pipeline
@@ -411,7 +411,7 @@ After implementation, `clawden run -h` must list all new flags in this spec with
 - [ ] Add `-p` / `--port` flag to `Run` tests (Direct mode env var + Docker mode passthrough)
 - [x] Add `Config` command variant to the `Commands` enum in `cli.rs`
 - [ ] Wire `--env-file` into `load_config()` to override `.env` auto-detection path
-- [ ] Add tests for `config show` format variants (`native`, `env`, `json`)
+- [x] Add tests for `config show` format variants (`native`, `env`, `json`)
 - [ ] Add tests for `--env-file` with `run`
 - [ ] Add tests for `--verbose` / `--log-level` interaction
 - [ ] Add tests for duplicate `-e` keys (last occurrence wins)

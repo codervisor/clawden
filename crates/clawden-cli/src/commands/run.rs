@@ -288,6 +288,7 @@ fn apply_shortcut_env_overrides(
     }
     if let Some(api_key) = &opts.api_key {
         set_env("CLAWDEN_LLM_API_KEY".to_string(), api_key.clone());
+        set_env("CLAWDEN_API_KEY".to_string(), api_key.clone());
         set_env(format!("{runtime_key}_LLM_API_KEY"), api_key.clone());
         if let Some(provider) = opts.provider.as_ref() {
             if let Some(known) = infer_provider_type(provider) {
@@ -295,6 +296,10 @@ fn apply_shortcut_env_overrides(
                     set_env(key.to_string(), api_key.clone());
                 }
             }
+        } else {
+            eprintln!(
+                "Hint: provider-specific API key env vars were skipped; pass --provider to map --api-key to OPENAI_API_KEY/ANTHROPIC_API_KEY."
+            );
         }
     }
     if let Some(system_prompt) = &opts.system_prompt {
@@ -305,7 +310,9 @@ fn apply_shortcut_env_overrides(
     }
     if let Some(token) = &opts.token {
         if opts.channel.is_empty() {
-            anyhow::bail!("--token requires at least one --channel value");
+            anyhow::bail!(
+                "Required fields for this run:\n    channel: (not selected)\n        - CHANNEL .............. missing\n\nHow to continue:\n    1) Select a channel explicitly: --channel telegram (or discord/slack/signal)\n    2) Then pass token(s): --token ..., --app-token ..., --phone ... as needed"
+            );
         }
         for channel in &opts.channel {
             set_env(channel_token_env_name(channel), token.clone());
@@ -438,5 +445,173 @@ fn provider_env_key_aliases(provider: &clawden_config::LlmProvider) -> &'static 
         clawden_config::LlmProvider::Groq => &["GROQ_API_KEY"],
         clawden_config::LlmProvider::OpenRouter => &["OPENROUTER_API_KEY"],
         _ => &[],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        apply_run_overrides, apply_shortcut_env_overrides, merge_env_overrides, RunOptions,
+    };
+    use crate::commands::up::build_runtime_env_vars;
+    use clawden_config::ClawDenYaml;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn make_opts() -> RunOptions {
+        RunOptions {
+            runtime: "zeroclaw".to_string(),
+            channel: Vec::new(),
+            env_vars: Vec::new(),
+            env_file: None,
+            provider: None,
+            model: None,
+            token: None,
+            api_key: None,
+            app_token: None,
+            phone: None,
+            system_prompt: None,
+            ports: Vec::new(),
+            allow_missing_credentials: false,
+            tools: None,
+            restart: None,
+            detach: false,
+            rm: false,
+            extra_args: Vec::new(),
+            no_docker: true,
+        }
+    }
+
+    #[test]
+    fn api_key_shortcut_sets_compat_aliases() {
+        let mut opts = make_opts();
+        opts.provider = Some("openai".to_string());
+        opts.api_key = Some("sk-test".to_string());
+        let mut env = Vec::new();
+        apply_shortcut_env_overrides(&mut env, &opts).expect("shortcut overrides should apply");
+
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "CLAWDEN_LLM_API_KEY" && v == "sk-test"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "ZEROCLAW_LLM_API_KEY" && v == "sk-test"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "CLAWDEN_API_KEY" && v == "sk-test"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "OPENAI_API_KEY" && v == "sk-test"));
+    }
+
+    #[test]
+    fn token_without_channel_returns_guidance_error() {
+        let mut opts = make_opts();
+        opts.token = Some("tg-test".to_string());
+        let mut env = Vec::new();
+        let err = apply_shortcut_env_overrides(&mut env, &opts)
+            .expect_err("token without channel should fail with guidance");
+        assert!(err.to_string().contains("Required fields for this run"));
+        assert!(err.to_string().contains("--channel telegram"));
+    }
+
+    #[test]
+    fn merge_env_overrides_last_occurrence_wins() {
+        let merged = merge_env_overrides(
+            vec![("A".to_string(), "base".to_string())],
+            &[
+                ("A".to_string(), "one".to_string()),
+                ("A".to_string(), "two".to_string()),
+            ],
+        );
+        assert_eq!(merged, vec![("A".to_string(), "two".to_string())]);
+    }
+
+    #[test]
+    fn provider_and_model_overrides_flow_into_runtime_env() {
+        let mut config = ClawDenYaml::parse_yaml(
+            r#"
+runtime: zeroclaw
+provider: openai
+model: gpt-4o-mini
+providers:
+  openai:
+    api_key: sk-openai
+"#,
+        )
+        .expect("yaml should parse");
+        let mut opts = make_opts();
+        opts.provider = Some("anthropic".to_string());
+        opts.model = Some("claude-sonnet-4".to_string());
+        opts.api_key = Some("sk-anthropic".to_string());
+
+        apply_run_overrides(&mut config, &opts).expect("overrides should apply");
+        config.resolve_env_vars().expect("env vars should resolve");
+        let env = build_runtime_env_vars(&config, "zeroclaw").expect("env vars should build");
+
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "CLAWDEN_LLM_PROVIDER" && v == "anthropic"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "CLAWDEN_LLM_MODEL" && v == "claude-sonnet-4"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "ANTHROPIC_API_KEY" && v == "sk-anthropic"));
+    }
+
+    #[test]
+    fn system_prompt_override_is_written_into_config() {
+        let mut config = ClawDenYaml::parse_yaml("runtime: zeroclaw\n").expect("yaml should parse");
+        let mut opts = make_opts();
+        opts.system_prompt = Some("You are a tutor".to_string());
+
+        apply_run_overrides(&mut config, &opts).expect("overrides should apply");
+        assert_eq!(
+            config.config.get("system_prompt").and_then(|v| v.as_str()),
+            Some("You are a tutor")
+        );
+    }
+
+    #[test]
+    fn system_prompt_file_is_loaded_for_env_override() {
+        let mut opts = make_opts();
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let prompt_path = std::env::temp_dir().join(format!("clawden-prompt-{stamp}.txt"));
+        std::fs::write(&prompt_path, "from-file").expect("prompt file should be written");
+        opts.system_prompt = Some(format!("@{}", prompt_path.display()));
+
+        let mut env = Vec::new();
+        apply_shortcut_env_overrides(&mut env, &opts).expect("shortcut overrides should apply");
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "CLAWDEN_SYSTEM_PROMPT" && v == "from-file"));
+        let _ = std::fs::remove_file(prompt_path);
+    }
+
+    #[test]
+    fn channel_shortcuts_map_tokens_app_tokens_and_phone() {
+        let mut opts = make_opts();
+        opts.channel = vec!["slack".to_string(), "signal".to_string()];
+        opts.token = Some("bot-token".to_string());
+        opts.app_token = Some("app-token".to_string());
+        opts.phone = Some("+15551234567".to_string());
+
+        let mut env = Vec::new();
+        apply_shortcut_env_overrides(&mut env, &opts).expect("shortcut overrides should apply");
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "SLACK_BOT_TOKEN" && v == "bot-token"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "SIGNAL_BOT_TOKEN" && v == "bot-token"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "SLACK_APP_TOKEN" && v == "app-token"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "SIGNAL_PHONE" && v == "+15551234567"));
     }
 }
