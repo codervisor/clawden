@@ -34,61 +34,15 @@ These gaps force users into a "edit YAML → run → repeat" loop for tasks that
 
 ## Context
 
-### What Works Today
-
-| Capability | How | CLI flag |
-|---|---|---|
-| Channel selection | `--channel telegram` | ✅ |
-| Tool selection | `--with git,http` | ✅ |
-| Docker bypass | `--no-docker` | ✅ |
-| Detach | `-d` / `--detach` | ✅ |
-| Cleanup | `--rm` | ✅ |
-| Restart policy | `--restart` | ✅ |
-| Runtime args passthrough | Trailing args after runtime name | ✅ |
-
-### What's Missing
-
-| Capability | Expected flag | Status |
-|---|---|---|
-| Inline env var | `-e KEY=VAL` | ❌ Missing |
-| Bot/channel token | `--token` | ❌ Missing |
-| LLM API key | `--api-key` | ❌ Missing |
-| Provider override | `--provider openai` | ❌ Missing |
-| Model override | `--model gpt-4o` | ❌ Missing |
-| System prompt | `--system-prompt "..."` | ❌ Missing |
-| Port mapping | `-p 8080:8080` | ❌ Missing |
-| Show resolved config | `clawden config show [runtime]` | ❌ Missing (no `config` command) |
-| Verbose/debug output | `--verbose` / `--log-level` | ❌ Missing (global) |
-| .env file override | `--env-file path` | ❌ Missing |
+Current CLI already supports channel/tool selection, docker bypass, detach, cleanup, and restart controls. This spec focuses on the missing ad-hoc ergonomics: inline credentials/env vars, provider/model overrides, system prompt override, env-file override, port mapping, and resolved-config inspection.
 
 ### User Stories
 
-**Quick Telegram bot test** (today requires editing .env + YAML):
-```sh
-# Desired one-liner:
-clawden run --token 123:abc --channel telegram zeroclaw
-```
-
-**Full zero-config quickstart** (no YAML, no .env, nothing):
-```sh
-clawden run --api-key sk-... --token 123:abc --channel telegram zeroclaw
-```
-
-**Test a different model without touching config**:
-```sh
-clawden run --model claude-sonnet-4-20250514 --provider anthropic zeroclaw
-```
-
-**Debug config translation** (what does zeroclaw actually receive?):
-```sh
-clawden config show zeroclaw
-# Shows resolved TOML, env vars, channels, tools
-```
-
-**Quick bot with system prompt**:
-```sh
-clawden run --channel telegram --system-prompt "You are a helpful coding assistant" zeroclaw
-```
+- Quick Telegram bot test without editing files first
+- Zero-config quickstart using inline API key + token
+- Temporary model/provider experiments without modifying `clawden.yaml`
+- Inspecting fully resolved runtime config/env before launch
+- Quick system-prompt injection for ad-hoc behavior testing
 
 ### Why This Matters
 
@@ -138,13 +92,45 @@ clawden run --token 123:abc --channel telegram --channel discord zeroclaw
 **`--token` behavior**:
 - Sets the token for the channel(s) specified by `--channel`
 - Mapped to the correct env var per channel type: `TELEGRAM_BOT_TOKEN`, `DISCORD_BOT_TOKEN`, etc.
-- If multiple `--channel` flags are given with different token requirements, `--token` applies to all of them; use `-e` for per-channel tokens
-- If `--channel` is not specified, error: `"--token requires --channel to know which channel the token belongs to"`
+- If multiple `--channel` flags are given, `--token` applies to each channel's primary bot token field
+- If `--channel` is not specified, do not guess: print a short required-fields summary and ask for explicit channel selection
+- For channels that require extra credentials (Slack app token, Signal phone), `--token` is accepted but missing required fields are handled with a friendly guidance message (no panic, no stack trace)
+
+**Additional channel credential flags**:
+- `--app-token <TOKEN>`: optional shortcut for channels that require an app token (for example Slack)
+- `--phone <E164>`: optional shortcut for channels that require a phone identity (for example Signal)
+- These flags only apply to channels selected via `--channel`
+
+### Required-Fields Guidance (UX Contract)
+
+Before startup, `run`/`up` should build and print a compact "Required fields" summary showing:
+
+- Which fields are mandatory for selected channels/providers
+- Which values were auto-detected (from CLI flags, `-e`, `--env-file`, `.env`, `clawden.yaml`, vault)
+- Which fields are still missing
+
+Example:
+
+```text
+Required fields for this run:
+    provider: openai
+        - OPENAI_API_KEY .......... missing
+    channel: telegram
+        - TELEGRAM_BOT_TOKEN ...... provided (from --token)
+
+How to continue:
+    1) Provide missing fields now: --api-key ..., -e KEY=VAL, or --env-file <path>
+    2) Skip credential validation for this run: --allow-missing-credentials
+```
+
+This keeps the UX explicit for newcomers while still enabling fast expert workflows.
 
 **`--api-key` behavior**:
 - Sets the LLM provider API key for the current run
 - Auto-detects which env var to use based on `--provider` or the configured provider: `--provider openai` → `OPENAI_API_KEY`, `--provider anthropic` → `ANTHROPIC_API_KEY`, etc.
-- If no provider can be determined, sets a generic `CLAWDEN_API_KEY` (runtimes fall back to this)
+- Always sets `CLAWDEN_LLM_API_KEY` and `{RUNTIME}_LLM_API_KEY` (e.g. `ZEROCLAW_LLM_API_KEY`) for compatibility with current direct-mode validation and runtime contracts
+- Also sets `CLAWDEN_API_KEY` as a compatibility alias — this is read by some community tools that expect a generic key name; drop this alias if no consumer is identified during implementation
+- If no provider can be determined, continue without error and print a short hint: provider-specific env vars will be skipped unless `--provider` is supplied
 - If `--provider` is given alongside `--api-key`, both resolve together
 
 **CLI definition**:
@@ -173,7 +159,7 @@ clawden run --model gpt-4o zeroclaw  # uses provider from YAML or infers from mo
 - `--provider` overrides `provider` in `clawden.yaml` for this run
 - `--model` overrides `model` in `clawden.yaml` for this run
 - Both are translated to the runtime's expected env vars/config using the existing config translation pipeline
-- If `--provider` is used without an API key configured for that provider, error with: `"Provider 'anthropic' has no API key. Set ANTHROPIC_API_KEY in environment or .env, or pass -e ANTHROPIC_API_KEY=..."`
+- If `--provider` is used without a resolved API key, print it as missing in the required-fields summary and offer explicit next actions
 
 **CLI definition**:
 ```rust
@@ -197,6 +183,7 @@ clawden run --system-prompt "You are a Python tutor" zeroclaw
 - Runtimes that support system prompts read from this env var
 - Also written to the generated config file for config-dir runtimes (zeroclaw: `system_prompt` in TOML, picoclaw: `systemPrompt` in JSON)
 - If the value starts with `@`, read from file: `--system-prompt @prompt.txt`
+- Shell quoting: multi-word prompts must be quoted (`--system-prompt "You are a tutor"`); the `@file` form avoids quoting issues for complex prompts
 
 **CLI definition**:
 ```rust
@@ -219,7 +206,7 @@ clawden run --env-file ./staging.env zeroclaw
 ```rust
 /// Path to .env file (overrides auto-detected .env)
 #[arg(long)]
-env_file: Option<String>,
+env_file: Option<PathBuf>,
 ```
 
 ### 6. Port Mapping (`-p`)
@@ -229,7 +216,7 @@ clawden run -p 3000:42617 zeroclaw  # map host:3000 → runtime:42617
 ```
 
 **Behavior**:
-- In Direct mode: sets `CLAWDEN_PORT_MAP` env var (runtime-specific interpretation) and adds port-related args if the runtime supports them
+- In Direct mode: sets `CLAWDEN_PORT_MAP` env var as a comma-separated list of `HOST:CONTAINER` pairs (e.g. `3000:42617,8080:8080`). Runtimes that support port configuration read this env var. If a runtime ignores `CLAWDEN_PORT_MAP`, the mapping has no effect in Direct mode — this is documented, not an error.
 - In Docker mode: passes `-p host:container` to `docker run`
 - Common use case: exposing the runtime's HTTP gateway on a known port
 
@@ -270,6 +257,11 @@ OPENROUTER_API_KEY=***redacted***
 - Redacts secrets by default; `--reveal` flag to show actual values (for debugging)
 - Shows both the native config file content AND the env vars that would be passed
 
+**Format options**:
+- `native` (default): runtime's native config format (TOML for zeroclaw, JSON for picoclaw) plus the env vars that would be passed
+- `env`: env-var-only output, one `KEY=VALUE` per line — suitable for piping to `env` or `source`
+- `json`: structured JSON with `{ "config": { ... }, "env": { ... } }` — suitable for programmatic consumption
+
 **CLI definition**:
 ```rust
 #[derive(Debug, Subcommand)]
@@ -278,7 +270,7 @@ pub enum ConfigCommand {
     Show {
         /// Runtime to show (shows all if omitted)
         runtime: Option<String>,
-        /// Output format: native, env, yaml, json
+        /// Output format: native, env, json
         #[arg(long, default_value = "native")]
         format: String,
         /// Show actual secret values instead of redacting
@@ -314,6 +306,33 @@ pub verbose: bool,
 pub log_level: Option<String>,
 ```
 
+**Interaction**: If both `--verbose` and `--log-level` are given, `--log-level` takes precedence. `--verbose` alone is equivalent to `--log-level debug`.
+
+**Constraint**: The `-v` short flag is reserved globally. Future subcommands must not reuse `-v` for other purposes.
+
+### 9. Merge / Precedence Rules
+
+To keep behavior predictable and easy to explain, all credential/config sources follow one precedence order:
+
+1. Explicit CLI key-value overrides (`-e KEY=VAL`)
+2. Shortcut CLI flags (`--api-key`, `--token`, `--app-token`, `--phone`, `--provider`, `--model`, `--system-prompt`)
+3. Explicit env file from `--env-file`
+4. Auto-detected `.env`
+5. `clawden.yaml`
+6. Provider key vault fallback (when relevant)
+
+**Notes**:
+- If both `-e OPENAI_API_KEY=...` and `--api-key ...` are provided, `-e` wins
+- `KEY` form of `-e` (without value) imports from host process env at the same highest precedence level as other `-e` entries
+- Unknown provider with `--api-key` is non-fatal; generic key vars are still injected for best-effort startup
+
+### 10. Missing-Credential Handling
+
+- Default behavior: if required fields remain missing after resolution, print the required-fields summary and exit with a friendly actionable message (no stack trace)
+- Opt-in skip behavior: `--allow-missing-credentials` proceeds even when required fields are missing
+- In skip mode, still print the summary and mark fields as missing so users understand likely runtime failure causes
+- `--allow-missing-credentials` is supported on both `run` and `up`
+
 ### Summary of Flag Changes
 
 **`clawden run` — new flags:**
@@ -322,19 +341,25 @@ pub log_level: Option<String>,
 |---|---|---|---|
 | `--env` | `-e` | `Vec<String>` | Inline env vars (KEY=VAL) |
 | `--token` | | `Option<String>` | Bot/channel token (with --channel) |
+| `--app-token` | | `Option<String>` | Channel app token shortcut |
+| `--phone` | | `Option<String>` | Channel phone identity shortcut |
 | `--api-key` | | `Option<String>` | LLM provider API key |
+| `--allow-missing-credentials` | | `bool` (default `false`) | Proceed even if required credential fields are missing |
 | `--provider` | | `Option<String>` | LLM provider override |
 | `--model` | | `Option<String>` | LLM model override |
 | `--system-prompt` | | `Option<String>` | System prompt (or @file) |
-| `--env-file` | | `Option<String>` | Alternate .env file path |
+| `--env-file` | | `Option<PathBuf>` | Alternate .env file path |
 | `--port` | `-p` | `Vec<String>` | Port mapping HOST:CONTAINER |
 
 **`clawden up` — new flags:**
 
+> `up` intentionally receives fewer flags than `run`. It orchestrates multiple runtimes from `clawden.yaml`, so per-runtime overrides like `--token`, `--provider`, `--model`, `--system-prompt`, and `--port` don't have clear semantics (which runtime would they apply to?). Use `-e` for ad-hoc env var injection, or edit `clawden.yaml` for per-runtime configuration.
+
 | Flag | Short | Type | Description |
 |---|---|---|---|
 | `--env` | `-e` | `Vec<String>` | Inline env vars |
-| `--env-file` | | `Option<String>` | Alternate .env file path |
+| `--env-file` | | `Option<PathBuf>` | Alternate .env file path |
+| `--allow-missing-credentials` | | `bool` (default `false`) | Proceed even if required credential fields are missing |
 
 **Global — new flags:**
 
@@ -351,39 +376,19 @@ pub log_level: Option<String>,
 
 ### Updated Help Output
 
-After implementation, `clawden run -h` should show:
-```
-Run a claw runtime directly
-
-Usage: clawden-cli run [OPTIONS] [RUNTIME_AND_ARGS]...
-
-Arguments:
-  [RUNTIME_AND_ARGS]...  Runtime name followed by runtime args
-
-Options:
-  -e, --env <ENV>                  Set environment variables (KEY=VAL)
-      --env-file <PATH>            Path to .env file (overrides auto-detected .env)
-      --channel <CHANNEL>          Channels to connect (must appear before runtime name)
-      --token <TOKEN>              Bot/channel token (requires --channel)
-      --api-key <KEY>              LLM provider API key
-      --with <TOOLS>               Tools to enable (must appear before runtime name)
-      --provider <PROVIDER>        LLM provider override
-      --model <MODEL>              LLM model override
-      --system-prompt <PROMPT>     System prompt for the agent (or @file)
-  -p, --port <HOST:CONTAINER>      Port mapping
-      --no-docker                  Force direct mode
-      --rm                         Remove one-off state after exit
-  -d, --detach                     Run in background and return immediately
-      --restart <RESTART>          Restart on failure policy
-  -h, --help                       Print help
-```
+After implementation, `clawden run -h` must list all new flags in this spec with brief UX-first descriptions and examples for channel credential shortcuts.
 
 ## Plan
 
 - [ ] Add `-e` / `--env` flag to `Run` command (parse KEY=VAL, inject into env)
 - [ ] Add `-e` / `--env` flag to `Up` command
 - [ ] Add `--token` flag to `Run` — map to channel-specific env var based on `--channel`
+- [ ] Add `--app-token` and `--phone` flags to `Run` for channels with multi-field credentials
 - [ ] Add `--api-key` flag to `Run` — map to provider-specific env var based on `--provider` or config
+- [ ] Ensure `--api-key` always sets `CLAWDEN_LLM_API_KEY` and runtime-scoped `*_LLM_API_KEY` (plus optional generic alias)
+- [ ] Add required-fields summary builder (provider/channel requirements + resolved sources + missing list)
+- [ ] Add `--allow-missing-credentials` to `Run` and `Up`
+- [ ] Make missing-required-field flow friendly and actionable (no stack trace panic path)
 - [ ] Add `--provider` flag to `Run` command
 - [ ] Add `--model` flag to `Run` command
 - [ ] Apply `--model` and `--provider` overrides in config translation pipeline
@@ -399,6 +404,16 @@ Options:
 - [ ] Add tests for `-e` parsing (KEY=VAL, KEY-only, multiple)
 - [ ] Add tests for `--model` / `--provider` override in config translation
 - [ ] Add tests for `config show` output and redaction
+- [ ] Add tests for precedence matrix (`-e` vs shortcut flags vs env-file vs yaml)
+- [ ] Add `up` command tests for `-e` and `--env-file`
+- [ ] Add `-p` / `--port` flag to `Run` tests (Direct mode env var + Docker mode passthrough)
+- [ ] Add `Config` command variant to the `Commands` enum in `cli.rs`
+- [ ] Wire `--env-file` into `load_config()` to override `.env` auto-detection path
+- [ ] Add tests for `config show` format variants (`native`, `env`, `json`)
+- [ ] Add tests for `--env-file` with `run`
+- [ ] Add tests for `--verbose` / `--log-level` interaction
+- [ ] Add tests for duplicate `-e` keys (last occurrence wins)
+- [ ] Add tests for `--system-prompt` with config-dir runtimes (TOML/JSON output)
 
 ## Test
 
@@ -406,9 +421,13 @@ Options:
 - [ ] `clawden run -e TELEGRAM_BOT_TOKEN=tok --channel telegram zeroclaw` → works without .env
 - [ ] `clawden run --token tok --channel telegram zeroclaw` → sets `TELEGRAM_BOT_TOKEN=tok` in runtime env
 - [ ] `clawden run --api-key sk-... --provider openai zeroclaw` → sets `OPENAI_API_KEY=sk-...` in runtime env
+- [ ] `clawden run --api-key sk-... zeroclaw` (no provider) → sets `CLAWDEN_LLM_API_KEY` and runtime-scoped key vars without hard error
 - [ ] `clawden run --token tok --channel telegram --api-key sk-... zeroclaw` → full zero-config run works
-- [ ] `--token` without `--channel` → clear error message
+- [ ] `--token` without `--channel` → prints required-fields guidance and asks for explicit `--channel` (does not guess a default channel)
+- [ ] `clawden run --channel slack --token xoxb-... --app-token xapp-... zeroclaw` → sets both Slack credentials correctly
+- [ ] `clawden run --channel signal --token sig-... --phone +15551234567 zeroclaw` → sets Signal token + phone correctly
 - [ ] `-e` values override `.env` file values for the same key
+- [ ] `-e OPENAI_API_KEY=override --api-key sk-base --provider openai` → `OPENAI_API_KEY=override` (CLI `-e` wins)
 - [ ] `clawden run --model gpt-4o --provider openai zeroclaw` → config translation uses overridden values
 - [ ] `clawden run --system-prompt "test" zeroclaw` → `CLAWDEN_SYSTEM_PROMPT=test` in runtime env
 - [ ] `clawden run --system-prompt @prompt.txt zeroclaw` → reads prompt from file
@@ -416,6 +435,17 @@ Options:
 - [ ] `clawden config show --reveal zeroclaw` → displays actual secret values
 - [ ] `--verbose` produces debug output showing config resolution steps
 - [ ] Audit log for `-e` usage contains key names but not values
+- [ ] `clawden up -e OPENAI_API_KEY=sk-...` → provider key override is applied for started runtimes
+- [ ] `clawden up --env-file ./staging.env` → selected env file is used instead of auto-detected `.env`
+- [ ] Missing provider key with no skip flag → command exits with friendly required-fields summary and remediation options
+- [ ] Missing provider key with `--allow-missing-credentials` → command proceeds and summary marks key as missing
+- [ ] `clawden run --env-file ./staging.env zeroclaw` → uses staging.env instead of auto-detected .env
+- [ ] `clawden run -p 3000:42617 zeroclaw` → Direct mode sets `CLAWDEN_PORT_MAP=3000:42617`; Docker mode passes `-p 3000:42617`
+- [ ] `clawden config show --format env zeroclaw` → outputs `KEY=VALUE` lines (secrets redacted)
+- [ ] `clawden config show --format json zeroclaw` → outputs structured JSON
+- [ ] `--verbose` and `--log-level debug` both produce debug output; `--log-level trace --verbose` uses trace (log-level wins)
+- [ ] `clawden run --system-prompt "test" zeroclaw` → for config-dir runtimes, value appears in generated TOML/JSON config
+- [ ] `clawden run -e A=1 -e A=2 zeroclaw` → runtime receives `A=2` (last occurrence wins)
 
 ## Notes
 
