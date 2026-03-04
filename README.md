@@ -31,9 +31,10 @@ ClawDen combines three roles:
 - `cargo run -p clawden-cli -- run --channel telegram zeroclaw --verbose`
 
 Rules:
-- ClawDen flags go before runtime name: `--channel`, `--with`, `-d`, `--rm`, `--restart`
+- ClawDen flags go before runtime name: `--channel`, `--with`, `--provider`, `--model`, `--allowed-users`, `-d`
 - Runtime flags go after runtime name and are passed through verbatim
 - `clawden run zeroclaw --help` shows runtime help output (passthrough)
+- Docker-specific execution uses `clawden docker run` (for `-p/--port`, `--rm`, `--restart`, `--network`, `--volume`, `--image`)
 
 ### Config translation pipeline
 
@@ -72,7 +73,7 @@ Provider key management:
 	- `cargo run -p clawden-cli -- doctor`
 	- `cargo run -p clawden-cli -- install --list`
 3. Run directly on host:
-	- `cargo run -p clawden-cli -- --no-docker run zeroclaw`
+	- `cargo run -p clawden-cli -- run zeroclaw`
 4. Manage runtime processes:
 	- `cargo run -p clawden-cli -- up`
 	- `cargo run -p clawden-cli -- ps`
@@ -81,7 +82,8 @@ Provider key management:
 
 Notes:
 - Direct installs are stored under `~/.clawden/runtimes/`.
-- Set `CLAWDEN_NO_DOCKER=1` to always prefer direct mode.
+- Use `mode: direct` in `clawden.yaml` to force direct mode for `clawden up`.
+- Use `cargo run -p clawden-cli -- docker run ...` or `cargo run -p clawden-cli -- docker up` to force Docker mode explicitly.
 - To enable health checks in `clawden ps`, set runtime-specific health env vars such as `CLAWDEN_HEALTH_PORT_ZEROCLAW=8080` (or `CLAWDEN_HEALTH_URL_ZEROCLAW=http://127.0.0.1:8080/health`).
 
 ### Dashboard and SDK

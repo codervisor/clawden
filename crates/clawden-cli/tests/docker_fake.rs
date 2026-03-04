@@ -104,7 +104,9 @@ channels:
     assert!(status.success());
 
     let log = fs::read_to_string(&docker_log).expect("docker log should exist");
-    assert!(log.contains("run -d --rm --name clawden-zeroclaw-zeroclaw-default"));
+    assert!(log.contains("run -d"));
+    assert!(log.contains("--rm"));
+    assert!(log.contains("--name clawden-zeroclaw-zeroclaw-default"));
     assert!(log.contains("RUNTIME=zeroclaw"));
     assert!(log.contains("TOOLS=git,http"));
     assert!(log.contains("OPENAI_API_KEY=sk-up-test"));
@@ -204,6 +206,15 @@ channels:
             "discord",
             "--with",
             "git,http",
+            "--rm",
+            "--restart",
+            "unless-stopped",
+            "--name",
+            "custom-zeroclaw",
+            "--network",
+            "clawden-net",
+            "--volume",
+            "/tmp/tools:/tools",
             "-p",
             "3000:42617",
             "zeroclaw",
@@ -213,10 +224,14 @@ channels:
     assert!(status.success());
 
     let log = fs::read_to_string(&docker_log).expect("docker log should exist");
-    assert!(log.contains("run -d --rm --name clawden-zeroclaw-zeroclaw-default"));
+    assert!(log.contains("run -d --name custom-zeroclaw"));
+    assert!(log.contains("--rm"));
     assert!(log.contains("RUNTIME=zeroclaw"));
     assert!(log.contains("TOOLS=git,http"));
     assert!(log.contains("OPENAI_API_KEY=sk-run-test"));
+    assert!(log.contains("--restart unless-stopped"));
+    assert!(log.contains("--network clawden-net"));
+    assert!(log.contains("-v /tmp/tools:/tools"));
     assert!(log.contains("CLAWDEN_LLM_MODEL=gpt-4o-mini"));
     assert!(log.contains("ZEROCLAW_LLM_MODEL=gpt-4o-mini"));
     assert!(log.contains("--channels=discord"));

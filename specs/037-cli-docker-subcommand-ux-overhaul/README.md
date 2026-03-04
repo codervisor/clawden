@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-03-04
 priority: high
 tags:
@@ -9,11 +9,15 @@ tags:
 - developer-experience
 - overhaul
 created_at: 2026-03-04T14:08:09.114409Z
-updated_at: 2026-03-04T14:27:09.291498Z
+updated_at: 2026-03-04T14:54:52.837114Z
+completed_at: 2026-03-04T14:54:52.837114Z
 transitions:
 - status: in-progress
   at: 2026-03-04T14:27:09.291498Z
+- status: complete
+  at: 2026-03-04T14:54:52.837114Z
 ---
+
 # CLI Docker Subcommand & UX Overhaul — Dedicated Docker Surface, Allowed-Users Shortcut & Arg Declutter
 
 > **Status**: in-progress · **Priority**: high · **Created**: 2026-03-04
@@ -315,7 +319,7 @@ For commands that have no adapter-level abstraction (e.g., `exec`, `build`), the
 
 ### Step 1: `clawden docker` subcommand (MVP)
 - [x] Add `Docker` subcommand group to clap CLI
-- [ ] Implement `docker run` with full Docker-specific flags (`-p`, `-v`, `--rm`, `--restart`, `--name`, `--network`, `--image`) plus all credential/channel flags
+- [x] Implement `docker run` with full Docker-specific flags (`-p`, `-v`, `--rm`, `--restart`, `--name`, `--network`, `--image`) plus all credential/channel flags
 - [x] Implement `docker ps` — list ClawDen-managed containers by label
 - [x] Implement `docker images` — list claw runtime images
 - [x] Implement `docker pull` — pull runtime image via adapter metadata
@@ -334,8 +338,8 @@ For commands that have no adapter-level abstraction (e.g., `exec`, `build`), the
 - [x] Implement `docker build`
 
 ### Step 4: Cleanup
-- [ ] Update documentation & README
-- [ ] Update dashboard RuntimeCatalog if needed
+- [x] Update documentation & README
+- [x] Update dashboard RuntimeCatalog if needed
 
 ## Breaking Changes
 
@@ -354,4 +358,3 @@ For commands that have no adapter-level abstraction (e.g., `exec`, `build`), the
 - **Not a raw Docker passthrough**: `clawden docker` is not `docker` — it operates through ClawDen's adapter layer with config injection. Users needing raw Docker access should use `docker` directly.
 - **Not replacing `docker compose`**: `clawden docker up` uses ClawDen's multi-runtime system, not compose files.
 - **Not changing `up` default mode**: `clawden up` keeps Auto mode (prefer Docker if available). Only `clawden run` is Direct-default.
-
