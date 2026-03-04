@@ -5,7 +5,6 @@ use super::up::{exec_up, UpOptions};
 
 pub async fn exec_start(
     runtimes: Vec<String>,
-    no_docker: bool,
     installer: &RuntimeInstaller,
     process_manager: &ProcessManager,
     manager: &mut LifecycleManager,
@@ -19,8 +18,8 @@ pub async fn exec_start(
             detach: true,
             no_log_prefix: false,
             timeout: 10,
+            force_docker: false,
         },
-        no_docker,
         installer,
         process_manager,
         manager,

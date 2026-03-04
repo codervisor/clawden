@@ -10,7 +10,6 @@ use crate::util::append_audit_file;
 pub async fn exec_restart(
     runtimes: Vec<String>,
     timeout: u64,
-    no_docker: bool,
     installer: &RuntimeInstaller,
     process_manager: &ProcessManager,
     manager: &mut LifecycleManager,
@@ -32,8 +31,8 @@ pub async fn exec_restart(
             detach: true,
             no_log_prefix: false,
             timeout,
+            force_docker: false,
         },
-        no_docker,
         installer,
         process_manager,
         manager,

@@ -59,8 +59,8 @@ async fn main() -> Result<()> {
                     detach,
                     no_log_prefix,
                     timeout,
+                    force_docker: false,
                 },
-                cli.no_docker,
                 &installer,
                 &process_manager,
                 &mut manager,
@@ -68,14 +68,7 @@ async fn main() -> Result<()> {
             .await?
         }
         Commands::Start { runtimes } => {
-            commands::exec_start(
-                runtimes,
-                cli.no_docker,
-                &installer,
-                &process_manager,
-                &mut manager,
-            )
-            .await?
+            commands::exec_start(runtimes, &installer, &process_manager, &mut manager).await?
         }
         Commands::Down {
             runtimes,
@@ -86,7 +79,6 @@ async fn main() -> Result<()> {
             commands::exec_restart(
                 runtimes,
                 timeout,
-                cli.no_docker,
                 &installer,
                 &process_manager,
                 &mut manager,
@@ -103,13 +95,11 @@ async fn main() -> Result<()> {
             api_key,
             app_token,
             phone,
+            allowed_users,
             system_prompt,
-            ports,
             allow_missing_credentials,
             tools,
-            rm,
             detach,
-            restart,
             runtime_and_args,
         } => {
             let (runtime, args) = runtime_and_args.split_first().ok_or_else(|| {
@@ -129,21 +119,22 @@ async fn main() -> Result<()> {
                     api_key,
                     app_token,
                     phone,
+                    allowed_users,
                     system_prompt,
-                    ports,
                     allow_missing_credentials,
                     tools,
-                    restart,
-                    rm,
                     detach,
                     extra_args: args.to_vec(),
-                    no_docker: cli.no_docker,
+                    force_docker: false,
                 },
                 &installer,
                 &process_manager,
                 &mut manager,
             )
             .await?
+        }
+        Commands::Docker { command } => {
+            commands::exec_docker(command, &installer, &process_manager, &mut manager).await?
         }
         Commands::Ps => commands::exec_ps(&process_manager)?,
         Commands::Stop { runtime, timeout } => {

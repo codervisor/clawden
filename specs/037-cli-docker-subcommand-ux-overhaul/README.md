@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-03-04
 priority: high
 tags:
@@ -9,12 +9,14 @@ tags:
 - developer-experience
 - overhaul
 created_at: 2026-03-04T14:08:09.114409Z
-updated_at: 2026-03-04T14:08:09.114409Z
+updated_at: 2026-03-04T14:27:09.291498Z
+transitions:
+- status: in-progress
+  at: 2026-03-04T14:27:09.291498Z
 ---
-
 # CLI Docker Subcommand & UX Overhaul — Dedicated Docker Surface, Allowed-Users Shortcut & Arg Declutter
 
-> **Status**: planned · **Priority**: high · **Created**: 2026-03-04
+> **Status**: in-progress · **Priority**: high · **Created**: 2026-03-04
 
 ## Overview
 
@@ -312,24 +314,24 @@ For commands that have no adapter-level abstraction (e.g., `exec`, `build`), the
 ## Plan
 
 ### Step 1: `clawden docker` subcommand (MVP)
-- [ ] Add `Docker` subcommand group to clap CLI
+- [x] Add `Docker` subcommand group to clap CLI
 - [ ] Implement `docker run` with full Docker-specific flags (`-p`, `-v`, `--rm`, `--restart`, `--name`, `--network`, `--image`) plus all credential/channel flags
-- [ ] Implement `docker ps` — list ClawDen-managed containers by label
-- [ ] Implement `docker images` — list claw runtime images
-- [ ] Implement `docker pull` — pull runtime image via adapter metadata
+- [x] Implement `docker ps` — list ClawDen-managed containers by label
+- [x] Implement `docker images` — list claw runtime images
+- [x] Implement `docker pull` — pull runtime image via adapter metadata
 
 ### Step 2: Simplify existing commands
-- [ ] Remove `--no-docker`, `-p/--port`, `--rm`, `--restart` from `clawden run`
-- [ ] Remove `--no-docker` from `clawden up`
-- [ ] Add `--allowed-users` to `clawden run`
-- [ ] Update all integration tests
+- [x] Remove `--no-docker`, `-p/--port`, `--rm`, `--restart` from `clawden run`
+- [x] Remove `--no-docker` from `clawden up`
+- [x] Add `--allowed-users` to `clawden run`
+- [x] Update all integration tests
 
 ### Step 3: Extended Docker commands
-- [ ] Implement `docker up` (force-Docker orchestration)
-- [ ] Implement `docker stop` / `docker rm`
-- [ ] Implement `docker logs` with `-f` and `--tail`
-- [ ] Implement `docker exec`
-- [ ] Implement `docker build`
+- [x] Implement `docker up` (force-Docker orchestration)
+- [x] Implement `docker stop` / `docker rm`
+- [x] Implement `docker logs` with `-f` and `--tail`
+- [x] Implement `docker exec`
+- [x] Implement `docker build`
 
 ### Step 4: Cleanup
 - [ ] Update documentation & README
@@ -352,5 +354,4 @@ For commands that have no adapter-level abstraction (e.g., `exec`, `build`), the
 - **Not a raw Docker passthrough**: `clawden docker` is not `docker` — it operates through ClawDen's adapter layer with config injection. Users needing raw Docker access should use `docker` directly.
 - **Not replacing `docker compose`**: `clawden docker up` uses ClawDen's multi-runtime system, not compose files.
 - **Not changing `up` default mode**: `clawden up` keeps Auto mode (prefer Docker if available). Only `clawden run` is Direct-default.
-
 

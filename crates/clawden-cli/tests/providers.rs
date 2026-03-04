@@ -124,6 +124,7 @@ fn up_passes_provider_env_to_runtime_process() {
     std::os::unix::fs::symlink("latest", current_link).expect("current symlink should be created");
 
     let yaml = r#"
+mode: direct
 runtime: zeroclaw
 provider: openai
 model: gpt-4o-mini
@@ -135,7 +136,7 @@ model: gpt-4o-mini
         .env("HOME", &home)
         .env("OPENAI_API_KEY", "sk-launch-test")
         .env("CLAWDEN_ENV_DUMP_FILE", &dump_path)
-        .args(["up", "--no-docker", "--detach"])
+        .args(["up", "--detach"])
         .status()
         .expect("up should run");
     assert!(status.success());

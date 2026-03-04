@@ -178,10 +178,7 @@ fn run_docker_includes_cli_channel_and_tool_overrides() {
     fs::create_dir_all(&bin_dir).expect("bin dir should be created");
     setup_fake_docker(&bin_dir, &docker_log);
 
-    // `clawden run` defaults to Direct mode per spec 33 (uv-run model).
-    // Explicitly set `mode: docker` so this test exercises the Docker path.
     let yaml = r#"
-mode: docker
 runtime: zeroclaw
 provider: openai
 model: gpt-4o-mini
@@ -201,6 +198,7 @@ channels:
         .env("OPENAI_API_KEY", "sk-run-test")
         .env("TELEGRAM_BOT_TOKEN", "tg-run-token")
         .args([
+            "docker",
             "run",
             "--channel",
             "discord",
@@ -208,7 +206,6 @@ channels:
             "git,http",
             "-p",
             "3000:42617",
-            "--detach",
             "zeroclaw",
         ])
         .status()

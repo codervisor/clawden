@@ -13,8 +13,8 @@ use tracing::{debug, warn};
 use crate::commands::config_gen::{generate_config_dir, inject_config_dir_arg};
 use crate::commands::InitOptions;
 use crate::util::{
-    append_audit_file, ensure_installed_runtime, env_no_docker_enabled,
-    get_provider_key_from_vault, is_first_run_context, parse_runtime, project_hash, prompt_yes_no,
+    append_audit_file, ensure_installed_runtime, get_provider_key_from_vault, is_first_run_context,
+    parse_runtime, project_hash, prompt_yes_no,
 };
 
 pub struct UpOptions {
@@ -25,11 +25,11 @@ pub struct UpOptions {
     pub detach: bool,
     pub no_log_prefix: bool,
     pub timeout: u64,
+    pub force_docker: bool,
 }
 
 pub async fn exec_up(
     opts: UpOptions,
-    no_docker: bool,
     installer: &RuntimeInstaller,
     process_manager: &ProcessManager,
     manager: &mut LifecycleManager,
@@ -59,8 +59,11 @@ pub async fn exec_up(
         .as_ref()
         .and_then(|c| c.mode.as_deref())
         .is_some_and(|m| m.eq_ignore_ascii_case("direct"));
-    let mode =
-        process_manager.resolve_mode(no_docker || env_no_docker_enabled() || config_mode_is_direct);
+    let mode = if opts.force_docker {
+        process_manager.resolve_mode(false)
+    } else {
+        process_manager.resolve_mode(config_mode_is_direct)
+    };
     let target_runtimes =
         resolve_target_runtimes(opts.runtimes.clone(), config.as_ref(), installer)?;
 

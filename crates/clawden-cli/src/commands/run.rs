@@ -14,9 +14,7 @@ use crate::commands::up::{
     parse_env_overrides, pinned_version_for_runtime, render_log_line, runtime_provider_and_model,
     tools_for_runtime, validate_direct_runtime_config, verify_runtime_startup,
 };
-use crate::util::{
-    append_audit_file, ensure_installed_runtime, env_no_docker_enabled, parse_runtime, project_hash,
-};
+use crate::util::{append_audit_file, ensure_installed_runtime, parse_runtime, project_hash};
 
 pub struct RunOptions {
     pub runtime: String,
@@ -29,15 +27,13 @@ pub struct RunOptions {
     pub api_key: Option<String>,
     pub app_token: Option<String>,
     pub phone: Option<String>,
+    pub allowed_users: Option<String>,
     pub system_prompt: Option<String>,
-    pub ports: Vec<String>,
     pub allow_missing_credentials: bool,
     pub tools: Option<String>,
-    pub restart: Option<String>,
     pub detach: bool,
-    pub rm: bool,
     pub extra_args: Vec<String>,
-    pub no_docker: bool,
+    pub force_docker: bool,
 }
 
 pub async fn exec_run(
@@ -66,6 +62,7 @@ pub async fn exec_run(
         || opts.api_key.is_some()
         || opts.provider.is_some()
         || opts.model.is_some()
+        || opts.allowed_users.is_some()
         || opts.system_prompt.is_some()
         || !opts.channel.is_empty();
     if config.is_none() && has_credential_flags {
@@ -110,9 +107,7 @@ pub async fn exec_run(
         .as_ref()
         .and_then(|c| c.mode.as_deref())
         .is_some_and(|m| m.eq_ignore_ascii_case("docker"));
-    let mode = if opts.no_docker || env_no_docker_enabled() {
-        ExecutionMode::Direct
-    } else if config_mode_is_docker {
+    let mode = if opts.force_docker || config_mode_is_docker {
         process_manager.resolve_mode(false)
     } else {
         ExecutionMode::Direct
@@ -213,13 +208,9 @@ pub async fn exec_run(
             if !opts.extra_args.is_empty() {
                 eprintln!(
                     "Warning: extra runtime args ({}) are ignored in Docker mode. \
-                     Use --no-docker or set mode: direct in clawden.yaml to pass args through.",
+                     Use `clawden run` (direct) or set mode: direct in clawden.yaml to pass args through.",
                     opts.extra_args.join(" "),
                 );
-            }
-            let mut docker_env = env_vars.clone();
-            if !opts.ports.is_empty() {
-                docker_env.push(("CLAWDEN_PORT_MAP".to_string(), opts.ports.join(",")));
             }
             let runtime = parse_runtime(&opts.runtime)?;
             let record = manager.register_agent_with_config(
@@ -230,7 +221,7 @@ pub async fn exec_run(
                     name: format!("{}-default", runtime.as_slug()),
                     runtime,
                     model: None,
-                    env_vars: merge_env_overrides(docker_env, &env_overrides),
+                    env_vars: merge_env_overrides(env_vars, &env_overrides),
                     channels: resolved_channels.clone(),
                     tools: effective_tools,
                 },
@@ -248,11 +239,7 @@ pub async fn exec_run(
     let current_project_hash = project_hash()?;
     let installed = ensure_installed_runtime(installer, &opts.runtime, pinned_version)?;
 
-    let mut args = Vec::new();
-    if let Some(policy) = &opts.restart {
-        args.push(format!("--restart={policy}"));
-    }
-    args.extend(opts.extra_args.clone());
+    let mut args = opts.extra_args.clone();
     if let Some(cfg) = config.as_ref() {
         if let Some(config_dir) = generate_config_dir(
             cfg,
@@ -285,9 +272,6 @@ pub async fn exec_run(
     }
     if !effective_tools.is_empty() {
         combined_env.push(("CLAWDEN_TOOLS".to_string(), effective_tools.join(",")));
-    }
-    if !opts.ports.is_empty() {
-        combined_env.push(("CLAWDEN_PORT_MAP".to_string(), opts.ports.join(",")));
     }
     combined_env = merge_env_overrides(combined_env, &env_overrides);
 
@@ -350,10 +334,6 @@ pub async fn exec_run(
                 }
             }
         }
-    }
-
-    if opts.rm {
-        let _ = process_manager.stop_with_timeout(&opts.runtime, 1)?;
     }
 
     Ok(())
@@ -451,6 +431,11 @@ fn apply_shortcut_env_overrides(
             );
         }
     }
+
+    if let Some(allowed_users) = &opts.allowed_users {
+        set_env("CLAWDEN_ALLOWED_USERS".to_string(), allowed_users.clone());
+    }
+
     Ok(())
 }
 
@@ -516,8 +501,39 @@ fn apply_run_overrides(config: &mut ClawDenYaml, opts: &RunOptions) -> Result<()
             }
         }
     }
+
+    if let Some(users_str) = &opts.allowed_users {
+        let users = parse_allowed_users(users_str);
+        for channel_name in &opts.channel {
+            let channel = config
+                .channels
+                .entry(channel_name.clone())
+                .or_insert_with(empty_channel_instance);
+            let channel_type = channel
+                .channel_type
+                .as_deref()
+                .unwrap_or(channel_name)
+                .to_ascii_lowercase();
+            if channel_type == "telegram" {
+                channel.allowed_users = users.clone();
+            } else {
+                debug!(
+                    "ignoring --allowed-users for unsupported channel '{}'",
+                    channel_name
+                );
+            }
+        }
+    }
     debug!("applied run option overrides for runtime {}", opts.runtime);
     Ok(())
+}
+
+fn parse_allowed_users(value: &str) -> Vec<String> {
+    value
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 fn empty_channel_instance() -> ChannelInstanceYaml {
@@ -625,7 +641,8 @@ fn inject_host_env_channel_tokens(env_vars: &mut Vec<(String, String)>) {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_run_overrides, apply_shortcut_env_overrides, merge_env_overrides, RunOptions,
+        apply_run_overrides, apply_shortcut_env_overrides, merge_env_overrides,
+        parse_allowed_users, RunOptions,
     };
     use crate::commands::up::build_runtime_env_vars;
     use clawden_config::ClawDenYaml;
@@ -643,16 +660,38 @@ mod tests {
             api_key: None,
             app_token: None,
             phone: None,
+            allowed_users: None,
             system_prompt: None,
-            ports: Vec::new(),
             allow_missing_credentials: false,
             tools: None,
-            restart: None,
             detach: false,
-            rm: false,
             extra_args: Vec::new(),
-            no_docker: true,
+            force_docker: false,
         }
+    }
+
+    #[test]
+    fn parse_allowed_users_supports_comma_and_space() {
+        assert_eq!(
+            parse_allowed_users("42, 84 126"),
+            vec!["42".to_string(), "84".to_string(), "126".to_string()]
+        );
+    }
+
+    #[test]
+    fn allowed_users_override_is_written_for_telegram_channel() {
+        let mut config = ClawDenYaml::parse_yaml("runtime: zeroclaw\n").expect("yaml parse");
+        let mut opts = make_opts();
+        opts.channel = vec!["telegram".to_string()];
+        opts.allowed_users = Some("42,84".to_string());
+
+        apply_run_overrides(&mut config, &opts).expect("overrides should apply");
+        let users = config
+            .channels
+            .get("telegram")
+            .map(|c| c.allowed_users.clone())
+            .unwrap_or_default();
+        assert_eq!(users, vec!["42".to_string(), "84".to_string()]);
     }
 
     #[test]

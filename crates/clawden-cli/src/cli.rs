@@ -7,8 +7,6 @@ use clap::{Parser, Subcommand};
     about = "Run and manage claw runtimes from one CLI"
 )]
 pub struct Cli {
-    #[arg(long, global = true, default_value_t = false)]
-    pub no_docker: bool,
     #[arg(short = 'v', long, global = true, default_value_t = false)]
     pub verbose: bool,
     #[arg(long, global = true)]
@@ -133,30 +131,29 @@ pub enum Commands {
         /// Channel phone shortcut (e.g. Signal).
         #[arg(long)]
         phone: Option<String>,
+        /// Comma-separated user allowlist (e.g. Telegram user IDs).
+        #[arg(long = "allowed-users")]
+        allowed_users: Option<String>,
         /// Override system prompt value. Prefix with @ to load from file.
         #[arg(long = "system-prompt")]
         system_prompt: Option<String>,
-        /// Port mapping (HOST:CONTAINER). Multiple allowed.
-        #[arg(short = 'p', long = "port")]
-        ports: Vec<String>,
         /// Proceed even when required provider/channel credentials are missing.
         #[arg(long, default_value_t = false)]
         allow_missing_credentials: bool,
         /// Tools to enable (must appear before runtime name)
         #[arg(long = "with")]
         tools: Option<String>,
-        /// Remove one-off state after exit
-        #[arg(long, default_value_t = false)]
-        rm: bool,
         /// Run in background and return immediately
         #[arg(short = 'd', long, default_value_t = false)]
         detach: bool,
-        /// Restart on failure policy
-        #[arg(long)]
-        restart: Option<String>,
         /// Runtime name followed by runtime args; include runtime subcommands explicitly
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         runtime_and_args: Vec<String>,
+    },
+    /// Docker-focused runtime management
+    Docker {
+        #[command(subcommand)]
+        command: DockerCommand,
     },
     /// Show running runtimes
     Ps,
@@ -343,5 +340,186 @@ pub enum ConfigCommand {
         /// Show full values instead of redacting.
         #[arg(long, default_value_t = false)]
         reveal: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DockerCommand {
+    /// Run a claw runtime in Docker mode (one-off)
+    #[command(trailing_var_arg = true)]
+    Run {
+        /// Runtime name followed by runtime args.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        runtime_and_args: Vec<String>,
+        /// Channels to connect.
+        #[arg(long)]
+        channel: Vec<String>,
+        /// Set environment variables (KEY=VAL).
+        #[arg(short = 'e', long = "env")]
+        env_vars: Vec<String>,
+        /// Override auto-detected .env file.
+        #[arg(long = "env-file")]
+        env_file: Option<String>,
+        /// Override provider.
+        #[arg(long)]
+        provider: Option<String>,
+        /// Override model.
+        #[arg(long)]
+        model: Option<String>,
+        /// Channel token shortcut.
+        #[arg(long)]
+        token: Option<String>,
+        /// LLM API key shortcut.
+        #[arg(long = "api-key")]
+        api_key: Option<String>,
+        /// Channel app token shortcut (e.g. Slack).
+        #[arg(long = "app-token")]
+        app_token: Option<String>,
+        /// Channel phone shortcut (e.g. Signal).
+        #[arg(long)]
+        phone: Option<String>,
+        /// Comma-separated user allowlist (e.g. Telegram user IDs).
+        #[arg(long = "allowed-users")]
+        allowed_users: Option<String>,
+        /// Override system prompt value. Prefix with @ to load from file.
+        #[arg(long = "system-prompt")]
+        system_prompt: Option<String>,
+        /// Tools to enable.
+        #[arg(long = "with")]
+        tools: Option<String>,
+        /// Proceed even when required provider/channel credentials are missing.
+        #[arg(long, default_value_t = false)]
+        allow_missing_credentials: bool,
+        /// Port mapping (HOST:CONTAINER). Multiple allowed.
+        #[arg(short = 'p', long = "port")]
+        ports: Vec<String>,
+        /// Volume mapping (HOST:CONTAINER). Multiple allowed.
+        #[arg(long = "volume")]
+        volumes: Vec<String>,
+        /// Remove container after exit.
+        #[arg(long, default_value_t = false)]
+        rm: bool,
+        /// Run in background and return immediately.
+        #[arg(short = 'd', long, default_value_t = false)]
+        detach: bool,
+        /// Restart policy (no|on-failure|always|unless-stopped).
+        #[arg(long)]
+        restart: Option<String>,
+        /// Container name override.
+        #[arg(long)]
+        name: Option<String>,
+        /// Docker network to join.
+        #[arg(long)]
+        network: Option<String>,
+        /// Override Docker image.
+        #[arg(long)]
+        image: Option<String>,
+    },
+    /// Start runtimes from clawden.yaml in Docker mode
+    Up {
+        /// Specific runtimes to start (starts all if empty)
+        runtimes: Vec<String>,
+        /// Set environment variables (KEY=VAL).
+        #[arg(short = 'e', long = "env")]
+        env_vars: Vec<String>,
+        /// Override auto-detected .env file.
+        #[arg(long = "env-file")]
+        env_file: Option<String>,
+        /// Proceed even when required provider/channel credentials are missing.
+        #[arg(long, default_value_t = false)]
+        allow_missing_credentials: bool,
+        /// Run in background and return immediately.
+        #[arg(short = 'd', long, default_value_t = false)]
+        detach: bool,
+        /// Disable runtime name prefixes in attached log output.
+        #[arg(long, default_value_t = false)]
+        no_log_prefix: bool,
+        /// Graceful shutdown timeout in seconds.
+        #[arg(long, default_value_t = 10)]
+        timeout: u64,
+        /// Rebuild images before starting.
+        #[arg(long, default_value_t = false)]
+        build: bool,
+        /// Recreate containers even if config unchanged.
+        #[arg(long, default_value_t = false)]
+        force_recreate: bool,
+    },
+    /// List ClawDen-managed Docker containers
+    Ps {
+        /// Show all containers (including stopped)
+        #[arg(short = 'a', long, default_value_t = false)]
+        all: bool,
+    },
+    /// List local claw runtime images
+    Images {
+        /// Show all images (including intermediate)
+        #[arg(short = 'a', long, default_value_t = false)]
+        all: bool,
+        /// Optional runtime filter
+        runtime: Option<String>,
+    },
+    /// Pull/update a runtime image
+    Pull {
+        /// Runtime name
+        runtime: String,
+        /// Specific image tag
+        #[arg(long)]
+        tag: Option<String>,
+    },
+    /// View container logs
+    Logs {
+        /// Runtime/container identifier
+        runtime: String,
+        /// Follow output
+        #[arg(short = 'f', long, default_value_t = false)]
+        follow: bool,
+        /// Number of lines to show from end of log
+        #[arg(long = "tail")]
+        tail: Option<usize>,
+    },
+    /// Execute command in a running container
+    #[command(trailing_var_arg = true)]
+    Exec {
+        /// Runtime/container identifier
+        runtime: String,
+        /// Use interactive TTY
+        #[arg(long = "it", default_value_t = false)]
+        interactive: bool,
+        /// User for docker exec
+        #[arg(long)]
+        user: Option<String>,
+        /// Command to execute (defaults to /bin/sh)
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
+    /// Stop a running container
+    Stop {
+        /// Runtime/container identifier
+        runtime: String,
+    },
+    /// Remove a stopped container
+    Rm {
+        /// Runtime/container identifier
+        runtime: String,
+        /// Force remove even if running
+        #[arg(short = 'f', long, default_value_t = false)]
+        force: bool,
+    },
+    /// Build a custom runtime image
+    Build {
+        /// Runtime name
+        runtime: Option<String>,
+        /// Custom image tag
+        #[arg(long)]
+        tag: Option<String>,
+        /// Dockerfile path
+        #[arg(short = 'f', long)]
+        file: Option<String>,
+        /// Disable build cache
+        #[arg(long, default_value_t = false)]
+        no_cache: bool,
+        /// Build context path
+        #[arg(default_value = ".")]
+        context: String,
     },
 }

@@ -88,13 +88,7 @@ fn run_uses_env_file_override() {
         .env("HOME", &home)
         .env("CLAWDEN_ENV_DUMP_FILE", &dump_path)
         .env_remove("OPENAI_API_KEY")
-        .args([
-            "--no-docker",
-            "run",
-            "--env-file",
-            "staging.env",
-            "zeroclaw",
-        ])
+        .args(["run", "--env-file", "staging.env", "zeroclaw"])
         .status()
         .expect("run should execute");
     assert!(status.success());
@@ -121,7 +115,6 @@ fn run_env_flag_overrides_api_key_shortcut_for_provider_key() {
         .env("HOME", &home)
         .env("CLAWDEN_ENV_DUMP_FILE", &dump_path)
         .args([
-            "--no-docker",
             "run",
             "--provider",
             "openai",
@@ -141,8 +134,8 @@ fn run_env_flag_overrides_api_key_shortcut_for_provider_key() {
 }
 
 #[test]
-fn run_sets_port_map_env_in_direct_mode() {
-    let dir = temp_dir("run-port-map");
+fn run_sets_allowed_users_env_shortcut() {
+    let dir = temp_dir("run-allowed-users");
     let home = dir.join("home");
     let project = dir.join("project");
     let dump_path = dir.join("runtime.env");
@@ -158,11 +151,12 @@ fn run_sets_port_map_env_in_direct_mode() {
         .env("HOME", &home)
         .env("CLAWDEN_ENV_DUMP_FILE", &dump_path)
         .args([
-            "--no-docker",
             "run",
             "--allow-missing-credentials",
-            "-p",
-            "3000:42617",
+            "--channel",
+            "telegram",
+            "--allowed-users",
+            "3000,42617",
             "zeroclaw",
         ])
         .status()
@@ -170,5 +164,5 @@ fn run_sets_port_map_env_in_direct_mode() {
     assert!(status.success());
 
     let env_dump = wait_for_dump(&dump_path);
-    assert!(env_dump.contains("CLAWDEN_PORT_MAP=3000:42617"));
+    assert!(env_dump.contains("CLAWDEN_ALLOWED_USERS=3000,42617"));
 }

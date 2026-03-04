@@ -31,12 +31,6 @@ pub fn command_exists(command: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn env_no_docker_enabled() -> bool {
-    std::env::var("CLAWDEN_NO_DOCKER")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
-}
-
 pub fn ensure_installed_runtime(
     installer: &RuntimeInstaller,
     runtime: &str,

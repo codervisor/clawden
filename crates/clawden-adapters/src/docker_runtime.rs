@@ -35,7 +35,9 @@ pub fn container_name(runtime: ClawRuntime, agent_name: &str) -> String {
 }
 
 pub fn start_container(runtime: ClawRuntime, config: &AgentConfig) -> Result<String> {
-    let name = container_name(runtime.clone(), &config.name);
+    let default_name = container_name(runtime.clone(), &config.name);
+    let name =
+        docker_override(config, "CLAWDEN_DOCKER_NAME").unwrap_or_else(|| default_name.clone());
     if std::env::var("CLAWDEN_ADAPTER_DRY_RUN")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
@@ -79,12 +81,36 @@ fn build_run_args(
     let mut args = vec![
         "run".to_string(),
         "-d".to_string(),
-        "--rm".to_string(),
         "--name".to_string(),
         container_name.to_string(),
+        "--label".to_string(),
+        "clawden.managed=true".to_string(),
+        "--label".to_string(),
+        format!("clawden.runtime={}", runtime.as_slug()),
         "-e".to_string(),
         format!("RUNTIME={}", runtime.as_slug()),
     ];
+
+    if docker_bool_override(config, "CLAWDEN_DOCKER_RM").unwrap_or(true) {
+        args.push("--rm".to_string());
+    }
+
+    if let Some(network) = docker_override(config, "CLAWDEN_DOCKER_NETWORK") {
+        args.push("--network".to_string());
+        args.push(network);
+    }
+
+    if let Some(restart) = docker_override(config, "CLAWDEN_DOCKER_RESTART") {
+        args.push("--restart".to_string());
+        args.push(restart);
+    }
+
+    if let Some(volumes) = docker_override(config, "CLAWDEN_DOCKER_VOLUMES") {
+        for volume in volumes.split(';').map(str::trim).filter(|v| !v.is_empty()) {
+            args.push("-v".to_string());
+            args.push(volume.to_string());
+        }
+    }
 
     if !config.tools.is_empty() {
         args.push("-e".to_string());
@@ -104,6 +130,9 @@ fn build_run_args(
     }
 
     for (key, value) in &config.env_vars {
+        if key.starts_with("CLAWDEN_DOCKER_") {
+            continue;
+        }
         args.push("-e".to_string());
         args.push(format!("{}={}", key, value));
     }
@@ -115,6 +144,21 @@ fn build_run_args(
     }
 
     args
+}
+
+fn docker_override(config: &AgentConfig, key: &str) -> Option<String> {
+    config
+        .env_vars
+        .iter()
+        .find(|(k, v)| k == key && !v.trim().is_empty())
+        .map(|(_, v)| v.clone())
+}
+
+fn docker_bool_override(config: &AgentConfig, key: &str) -> Option<bool> {
+    docker_override(config, key).map(|v| {
+        let lower = v.to_ascii_lowercase();
+        matches!(lower.as_str(), "1" | "true" | "yes" | "on")
+    })
 }
 
 pub fn stop_container(container_id: &str) -> Result<()> {
@@ -252,5 +296,54 @@ mod tests {
         assert!(args.contains(&"TOOLS=git,http".to_string()));
         assert!(args.contains(&"OPENAI_API_KEY=sk".to_string()));
         assert!(args.contains(&"--channels=telegram,discord".to_string()));
+        assert!(args.contains(&"clawden.managed=true".to_string()));
+        assert!(args.contains(&"clawden.runtime=zeroclaw".to_string()));
+    }
+
+    #[test]
+    fn build_run_args_applies_docker_overrides() {
+        let cfg = AgentConfig {
+            name: "alpha".to_string(),
+            runtime: ClawRuntime::ZeroClaw,
+            model: None,
+            env_vars: vec![
+                ("CLAWDEN_DOCKER_RM".to_string(), "0".to_string()),
+                (
+                    "CLAWDEN_DOCKER_RESTART".to_string(),
+                    "unless-stopped".to_string(),
+                ),
+                (
+                    "CLAWDEN_DOCKER_NETWORK".to_string(),
+                    "clawden-net".to_string(),
+                ),
+                (
+                    "CLAWDEN_DOCKER_VOLUMES".to_string(),
+                    "/tmp/a:/a;/tmp/b:/b".to_string(),
+                ),
+            ],
+            channels: vec![],
+            tools: vec![],
+        };
+
+        let args = build_run_args(
+            ClawRuntime::ZeroClaw,
+            &cfg,
+            "clawden-zeroclaw-alpha",
+            "ghcr.io/codervisor/clawden-runtime:latest",
+        );
+
+        assert!(!args.contains(&"--rm".to_string()));
+        assert!(args.contains(&"--restart".to_string()));
+        assert!(args.contains(&"unless-stopped".to_string()));
+        assert!(args.contains(&"--network".to_string()));
+        assert!(args.contains(&"clawden-net".to_string()));
+        assert!(args.contains(&"/tmp/a:/a".to_string()));
+        assert!(args.contains(&"/tmp/b:/b".to_string()));
+        assert!(
+            !args
+                .iter()
+                .any(|entry| entry.starts_with("CLAWDEN_DOCKER_")),
+            "internal docker override vars should not be forwarded into container env"
+        );
     }
 }
