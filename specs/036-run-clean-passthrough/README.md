@@ -1,5 +1,5 @@
 ---
-status: draft
+status: planned
 created: 2026-03-04
 priority: high
 tags:
@@ -8,8 +8,8 @@ tags:
 - ux
 - passthrough
 - product-positioning
+updated_at: 2026-03-04T09:29:03.379621949Z
 ---
-
 # Run Clean Passthrough — Remove Implicit Subcommands from `clawden run`
 
 ## Overview
