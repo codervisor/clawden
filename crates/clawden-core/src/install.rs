@@ -320,14 +320,12 @@ impl RuntimeInstaller {
         let archive_path = self.download_to_cache("picoclaw", "latest", archive_name, url)?;
 
         self.report_progress("Extracting picoclaw archive…");
-        ensure_command_available("7z", "p7zip")?;
-        run_command(
-            Command::new("7z")
-                .arg("x")
-                .arg(&archive_path)
-                .arg(format!("-o{}", tmp_dir.display())),
-            "extract picoclaw archive",
-        )?;
+        sevenz_rust::decompress_file(&archive_path, tmp_dir).with_context(|| {
+            format!(
+                "failed to extract picoclaw 7z archive: {}",
+                archive_path.display()
+            )
+        })?;
 
         let candidate = find_executable_by_name(tmp_dir, "picoclaw")?.ok_or_else(|| {
             anyhow!(
@@ -407,13 +405,22 @@ impl RuntimeInstaller {
         run_command(
             command_in_dir("pnpm", &repo_dir)
                 .arg("install")
-                .arg("--prod")
                 .arg("--ignore-scripts"),
             "install nanoclaw dependencies",
         )?;
 
         if !repo_dir.join("package.json").exists() {
             bail!("nanoclaw validation failed: expected package.json missing");
+        }
+
+        self.report_progress("Building nanoclaw…");
+        run_command(
+            command_in_dir("pnpm", &repo_dir).arg("run").arg("build"),
+            "build nanoclaw",
+        )?;
+
+        if !repo_dir.join("dist").join("index.js").exists() {
+            bail!("nanoclaw build failed: dist/index.js not produced");
         }
 
         let launcher = tmp_dir.join("nanoclaw");

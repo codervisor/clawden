@@ -10,4 +10,5 @@ async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 semver.workspace = true
+sevenz-rust.workspace = true
 sha2.workspace = true

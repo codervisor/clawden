@@ -151,8 +151,18 @@ pub(crate) fn inject_config_dir_arg(runtime: &str, args: &mut Vec<String>, confi
         .position(|arg| !arg.starts_with('-'))
         .map(|idx| idx + 1)
         .unwrap_or(0);
-    args.insert(insert_at, "--config-dir".to_string());
-    args.insert(insert_at + 1, config_dir.to_string_lossy().to_string());
+
+    // OpenFang accepts `--config <file>` rather than `--config-dir <dir>`.
+    if runtime == "openfang" {
+        args.insert(insert_at, "--config".to_string());
+        args.insert(
+            insert_at + 1,
+            config_dir.join("config.toml").to_string_lossy().to_string(),
+        );
+    } else {
+        args.insert(insert_at, "--config-dir".to_string());
+        args.insert(insert_at + 1, config_dir.to_string_lossy().to_string());
+    }
 }
 
 pub(crate) fn cleanup_project_config_dir(project_hash: &str) -> Result<()> {
@@ -912,9 +922,10 @@ config:
 
         let mut args = vec!["daemon".to_string()];
         inject_config_dir_arg("openfang", &mut args, &dir);
+        let config_file = dir.join("config.toml").to_string_lossy().to_string();
         assert!(args
             .windows(2)
-            .any(|w| { w[0] == "--config-dir" && w[1] == dir.to_string_lossy() }));
+            .any(|w| { w[0] == "--config" && w[1] == config_file }));
 
         if let Some(home) = original_home {
             std::env::set_var("HOME", home);

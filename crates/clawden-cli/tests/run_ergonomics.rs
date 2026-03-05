@@ -30,7 +30,7 @@ fn setup_direct_runtime(home: &Path) {
     let executable = runtime_dir.join("zeroclaw");
     fs::write(
         &executable,
-        "#!/usr/bin/env sh\nprintenv > \"$CLAWDEN_ENV_DUMP_FILE\"\nsleep 3\nexit 0\n",
+        "#!/usr/bin/env sh\nprintenv > \"$CLAWDEN_ENV_DUMP_FILE\"\nsleep 15\nexit 0\n",
     )
     .expect("runtime script should be written");
 
