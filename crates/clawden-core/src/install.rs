@@ -313,12 +313,94 @@ impl RuntimeInstaller {
         Ok(target)
     }
 
-    fn install_picoclaw(&self, _version: &str, tmp_dir: &Path) -> Result<PathBuf> {
-        let archive_name = "picoclaw_x64.7z";
-        let url =
-            "https://github.com/picoclaw-labs/picoclaw/releases/download/picoclaw/picoclaw_x64.7z";
-        let archive_path = self.download_to_cache("picoclaw", "latest", archive_name, url)?;
+    fn install_picoclaw(&self, version: &str, tmp_dir: &Path) -> Result<PathBuf> {
+        let (os, arch) = host_os_arch()?;
+        // PicoClaw uses a non-semver release tag ("picoclaw"), so the resolved
+        // version string won't start with a digit.  Fall back to "latest" to
+        // hit the /releases/latest endpoint instead of /releases/tags/v{...}.
+        let query_version = if version.starts_with(|c: char| c.is_ascii_digit()) {
+            version
+        } else {
+            "latest"
+        };
+        let release = github_release_assets("picoclaw-labs", "picoclaw", query_version)?;
 
+        let mut patterns = Vec::new();
+        match (os, arch) {
+            ("linux", "x86_64") => {
+                patterns.push("linux_x64");
+                patterns.push("linux_amd64");
+                patterns.push("linux-x86_64");
+            }
+            ("linux", "aarch64") => {
+                patterns.push("linux_arm64");
+                patterns.push("linux-aarch64");
+            }
+            ("darwin", "x86_64") => {
+                patterns.push("darwin_x64");
+                patterns.push("macos_x64");
+                patterns.push("darwin-x86_64");
+            }
+            ("darwin", "aarch64") => {
+                patterns.push("darwin_arm64");
+                patterns.push("macos_arm64");
+                patterns.push("darwin-aarch64");
+            }
+            _ => {}
+        }
+
+        // PicoClaw may publish a single platform-ambiguous asset (e.g.
+        // "picoclaw_x64.7z").  When no OS-specific pattern matched, check
+        // whether the sole asset is a native binary before falling back.
+        if pick_asset(&release.assets, &patterns, ".7z").is_none() && release.assets.len() == 1 {
+            let only = &release.assets[0];
+            if only.name.ends_with(".7z") {
+                // Download to a temp location and verify the binary format
+                // before committing to the install.
+                let probe_path = self.download_to_cache(
+                    "picoclaw",
+                    release.tag.trim_start_matches('v'),
+                    &only.name,
+                    &only.url,
+                )?;
+                if !is_native_7z_archive(&probe_path)? {
+                    bail!(
+                        "picoclaw release asset '{}' does not contain a native {} binary \
+                         (it appears to be a Windows executable). \
+                         PicoClaw may not publish binaries for this platform.",
+                        only.name,
+                        os,
+                    );
+                }
+                // Archive contains a native binary — allow it through.
+                patterns.push("_x64");
+                patterns.push("_amd64");
+                patterns.push("_arm64");
+            }
+        }
+
+        let asset = pick_asset(&release.assets, &patterns, ".7z").ok_or_else(|| {
+            anyhow!(
+                "no picoclaw release asset matched platform {}-{} in {} (available: {}). \
+                 PicoClaw may not publish binaries for this platform.",
+                os,
+                arch,
+                release.tag,
+                release
+                    .assets
+                    .iter()
+                    .map(|a| a.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
+        })?;
+
+        let archive_path = self.download_to_cache(
+            "picoclaw",
+            release.tag.trim_start_matches('v'),
+            &asset.name,
+            &asset.url,
+        )?;
         self.report_progress("Extracting picoclaw archive…");
         sevenz_rust::decompress_file(&archive_path, tmp_dir).with_context(|| {
             format!(
@@ -329,7 +411,8 @@ impl RuntimeInstaller {
 
         let candidate = find_executable_by_name(tmp_dir, "picoclaw")?.ok_or_else(|| {
             anyhow!(
-                "Download validation failed for {archive_name}: archive is missing expected runtime binary"
+                "Download validation failed for {}: archive is missing expected runtime binary",
+                asset.name
             )
         })?;
 
@@ -821,6 +904,65 @@ fn host_os_arch() -> Result<(&'static str, &'static str)> {
     };
 
     Ok((os, arch))
+}
+
+/// Extract a 7z archive to a temporary directory, find the largest file,
+/// and check whether its magic bytes indicate a native binary for the
+/// current host OS (ELF on Linux, Mach-O on macOS) rather than a Windows PE.
+fn is_native_7z_archive(archive: &Path) -> Result<bool> {
+    let probe_dir = archive.with_extension("probe");
+    if probe_dir.exists() {
+        fs::remove_dir_all(&probe_dir)?;
+    }
+    fs::create_dir_all(&probe_dir)?;
+    let result = (|| -> Result<bool> {
+        sevenz_rust::decompress_file(archive, &probe_dir)
+            .with_context(|| format!("failed to probe 7z archive: {}", archive.display()))?;
+
+        // Find the largest file — most likely the runtime binary.
+        let mut largest: Option<(PathBuf, u64)> = None;
+        let mut stack = vec![probe_dir.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in fs::read_dir(&dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if let Ok(meta) = fs::metadata(&path) {
+                    let size = meta.len();
+                    if largest.as_ref().map_or(true, |(_, s)| size > *s) {
+                        largest = Some((path, size));
+                    }
+                }
+            }
+        }
+
+        let Some((binary_path, _)) = largest else {
+            return Ok(false);
+        };
+
+        // Read the first 4 bytes to check the magic number.
+        let magic = fs::read(&binary_path)
+            .map(|data| data.into_iter().take(4).collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        let is_native = match std::env::consts::OS {
+            "linux" => magic.starts_with(&[0x7f, b'E', b'L', b'F']), // ELF
+            "macos" => {
+                // Mach-O: MH_MAGIC / MH_MAGIC_64 / FAT_MAGIC
+                magic.starts_with(&[0xfe, 0xed, 0xfa, 0xce])
+                    || magic.starts_with(&[0xfe, 0xed, 0xfa, 0xcf])
+                    || magic.starts_with(&[0xcf, 0xfa, 0xed, 0xfe])
+                    || magic.starts_with(&[0xce, 0xfa, 0xed, 0xfe])
+                    || magic.starts_with(&[0xca, 0xfe, 0xba, 0xbe])
+            }
+            _ => false,
+        };
+
+        Ok(is_native)
+    })();
+    let _ = fs::remove_dir_all(&probe_dir);
+    result
 }
 
 fn normalize_version(version: &str) -> String {
