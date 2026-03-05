@@ -124,9 +124,17 @@ impl ChannelStore {
         };
 
         match config.channel_type {
-            ChannelType::Telegram | ChannelType::Discord | ChannelType::Feishu => {
+            ChannelType::Telegram | ChannelType::Discord => {
                 if get("token").is_none() {
                     errors.push("missing required credential: token".to_string());
+                }
+            }
+            ChannelType::Feishu => {
+                if get("app_id").is_none() {
+                    errors.push("missing required credential: app_id".to_string());
+                }
+                if get("app_secret").is_none() {
+                    errors.push("missing required credential: app_secret".to_string());
                 }
             }
             ChannelType::Slack => {

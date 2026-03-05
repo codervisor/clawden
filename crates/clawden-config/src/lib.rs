@@ -680,16 +680,17 @@ impl RuntimeConfigTranslator for OpenClawConfigTranslator {
 
     fn to_runtime_config(&self, canonical: &ClawDenConfig) -> Result<Value, String> {
         canonical.validate()?;
+        let common = common_runtime_fields(canonical);
         Ok(serde_json::json!({
             "runtime": "openclaw",
             "agent": canonical.agent.name,
             "model": canonical.agent.model.name,
             "provider": canonical.agent.model.provider,
             "apiKeyRef": canonical.agent.model.api_key_ref,
-            "tools": canonical.agent.tools,
-            "channels": canonical.agent.channels,
-            "security": canonical.agent.security,
-            "extras": canonical.agent.extras,
+            "tools": common.tools,
+            "channels": common.channels,
+            "security": common.security,
+            "extras": common.extras,
         }))
     }
 
@@ -729,16 +730,17 @@ impl RuntimeConfigTranslator for ZeroClawConfigTranslator {
 
     fn to_runtime_config(&self, canonical: &ClawDenConfig) -> Result<Value, String> {
         canonical.validate()?;
+        let common = common_runtime_fields(canonical);
         Ok(serde_json::json!({
             "runtime": "zeroclaw",
             "agent": {
                 "name": canonical.agent.name,
                 "model": canonical.agent.model,
-                "tools": canonical.agent.tools,
-                "channels": canonical.agent.channels,
-                "security": canonical.agent.security,
+                "tools": common.tools,
+                "channels": common.channels,
+                "security": common.security,
             },
-            "extras": canonical.agent.extras,
+            "extras": common.extras,
         }))
     }
 
@@ -778,6 +780,7 @@ impl RuntimeConfigTranslator for PicoClawConfigTranslator {
 
     fn to_runtime_config(&self, canonical: &ClawDenConfig) -> Result<Value, String> {
         canonical.validate()?;
+        let common = common_runtime_fields(canonical);
         Ok(serde_json::json!({
             "runtime": "picoclaw",
             "name": canonical.agent.name,
@@ -786,10 +789,10 @@ impl RuntimeConfigTranslator for PicoClawConfigTranslator {
                 "model": canonical.agent.model.name,
                 "apiKeyRef": canonical.agent.model.api_key_ref,
             },
-            "tools": canonical.agent.tools,
-            "channels": canonical.agent.channels,
-            "policy": canonical.agent.security,
-            "extras": canonical.agent.extras,
+            "tools": common.tools,
+            "channels": common.channels,
+            "policy": common.security,
+            "extras": common.extras,
         }))
     }
 
@@ -828,6 +831,7 @@ impl RuntimeConfigTranslator for NanoClawConfigTranslator {
 
     fn to_runtime_config(&self, canonical: &ClawDenConfig) -> Result<Value, String> {
         canonical.validate()?;
+        let common = common_runtime_fields(canonical);
         Ok(serde_json::json!({
             "runtime": "nanoclaw",
             "agent": {
@@ -836,10 +840,10 @@ impl RuntimeConfigTranslator for NanoClawConfigTranslator {
                 "model": canonical.agent.model.name,
                 "apiKeyRef": canonical.agent.model.api_key_ref,
             },
-            "tools": canonical.agent.tools,
-            "channels": canonical.agent.channels,
-            "security": canonical.agent.security,
-            "extras": canonical.agent.extras,
+            "tools": common.tools,
+            "channels": common.channels,
+            "security": common.security,
+            "extras": common.extras,
         }))
     }
 
@@ -936,6 +940,22 @@ fn base_config_with_runtime(
             }),
             extras,
         },
+    }
+}
+
+struct CommonRuntimeFields {
+    tools: Vec<ToolConfig>,
+    channels: Vec<ChannelConfig>,
+    security: SecurityConfig,
+    extras: Map<String, Value>,
+}
+
+fn common_runtime_fields(canonical: &ClawDenConfig) -> CommonRuntimeFields {
+    CommonRuntimeFields {
+        tools: canonical.agent.tools.clone(),
+        channels: canonical.agent.channels.clone(),
+        security: canonical.agent.security.clone(),
+        extras: canonical.agent.extras.clone(),
     }
 }
 
@@ -1209,9 +1229,21 @@ impl ChannelCredentialMapper {
                     "token": ch.token.as_deref().unwrap_or("")
                 }
             })),
-            "feishu" | "lark" => Ok(serde_json::json!({
-                "feishu": { "token": ch.token.as_deref().unwrap_or("") }
-            })),
+            "feishu" | "lark" => {
+                let app_id = ch
+                    .extra
+                    .get("app_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let app_secret = ch
+                    .extra
+                    .get("app_secret")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                Ok(serde_json::json!({
+                    "feishu": { "app_id": app_id, "app_secret": app_secret }
+                }))
+            }
             _ => Ok(serde_json::json!({
                 channel_type: { "token": ch.token.as_deref().unwrap_or("") }
             })),
@@ -1254,6 +1286,14 @@ impl ChannelCredentialMapper {
                     vars.insert(format!("{prefix}_DRIVER"), "cloud-api".to_string());
                 }
             }
+            "feishu" | "lark" => {
+                if let Some(app_id) = ch.extra.get("app_id").and_then(Value::as_str) {
+                    vars.insert(format!("{prefix}_APP_ID"), app_id.to_string());
+                }
+                if let Some(app_secret) = ch.extra.get("app_secret").and_then(Value::as_str) {
+                    vars.insert(format!("{prefix}_APP_SECRET"), app_secret.to_string());
+                }
+            }
             _ => {
                 if let Some(token) = &ch.token {
                     vars.insert(format!("{prefix}_BOT_TOKEN"), token.clone());
@@ -1292,6 +1332,14 @@ impl ChannelCredentialMapper {
                 } else if let Some(token) = &ch.token {
                     vars.insert(format!("{prefix}_TOKEN"), token.clone());
                     vars.insert(format!("{prefix}_DRIVER"), "cloud-api".to_string());
+                }
+            }
+            "feishu" | "lark" => {
+                if let Some(app_id) = ch.extra.get("app_id").and_then(Value::as_str) {
+                    vars.insert(format!("{prefix}_APP_ID"), app_id.to_string());
+                }
+                if let Some(app_secret) = ch.extra.get("app_secret").and_then(Value::as_str) {
+                    vars.insert(format!("{prefix}_APP_SECRET"), app_secret.to_string());
                 }
             }
             _ => {
@@ -1352,7 +1400,7 @@ impl ChannelCredentialMapper {
             }
         }
 
-        if channel_type == "dingtalk" {
+        if channel_type == "dingtalk" || channel_type == "feishu" || channel_type == "lark" {
             if let Some(app_id) = ch.extra.get("app_id").and_then(Value::as_str) {
                 cfg.insert("app_id".to_string(), Value::String(app_id.to_string()));
             }

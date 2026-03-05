@@ -1,3 +1,4 @@
+mod docker_adapter;
 mod docker_runtime;
 #[cfg(feature = "nanoclaw")]
 mod nanoclaw;
@@ -17,37 +18,38 @@ use std::sync::Arc;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use clawden_core::ClawRuntime;
+pub use docker_adapter::{ConfigStore, DockerAdapter, InMemoryConfigStore, RuntimeMeta};
 
 #[cfg(feature = "nanoclaw")]
-pub use nanoclaw::NanoClawAdapter;
+pub use nanoclaw::{NanoClawAdapter, NanoClawMeta};
 #[cfg(feature = "openclaw")]
-pub use openclaw::OpenClawAdapter;
+pub use openclaw::{OpenClawAdapter, OpenClawMeta};
 #[cfg(feature = "openfang")]
-pub use openfang::OpenFangAdapter;
+pub use openfang::{OpenFangAdapter, OpenFangMeta};
 #[cfg(feature = "picoclaw")]
-pub use picoclaw::PicoClawAdapter;
+pub use picoclaw::{PicoClawAdapter, PicoClawMeta};
 pub use registry::AdapterRegistry;
 #[cfg(feature = "zeroclaw")]
-pub use zeroclaw::ZeroClawAdapter;
+pub use zeroclaw::{ZeroClawAdapter, ZeroClawMeta};
 
 /// Creates a registry pre-populated with all compile-time enabled adapters.
 pub fn builtin_registry() -> AdapterRegistry {
     let mut registry = AdapterRegistry::new();
 
     #[cfg(feature = "openclaw")]
-    registry.register(ClawRuntime::OpenClaw, Arc::new(OpenClawAdapter));
+    registry.register(ClawRuntime::OpenClaw, Arc::new(OpenClawAdapter::default()));
 
     #[cfg(feature = "openfang")]
-    registry.register(ClawRuntime::OpenFang, Arc::new(OpenFangAdapter));
+    registry.register(ClawRuntime::OpenFang, Arc::new(OpenFangAdapter::default()));
 
     #[cfg(feature = "zeroclaw")]
-    registry.register(ClawRuntime::ZeroClaw, Arc::new(ZeroClawAdapter));
+    registry.register(ClawRuntime::ZeroClaw, Arc::new(ZeroClawAdapter::default()));
 
     #[cfg(feature = "picoclaw")]
-    registry.register(ClawRuntime::PicoClaw, Arc::new(PicoClawAdapter));
+    registry.register(ClawRuntime::PicoClaw, Arc::new(PicoClawAdapter::default()));
 
     #[cfg(feature = "nanoclaw")]
-    registry.register(ClawRuntime::NanoClaw, Arc::new(NanoClawAdapter));
+    registry.register(ClawRuntime::NanoClaw, Arc::new(NanoClawAdapter::default()));
 
     tracing::info!(
         adapter_count = registry.list().len(),

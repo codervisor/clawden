@@ -90,9 +90,23 @@ fn validate_channel(channel_type: &str, ch: &ChannelInstanceYaml) -> Vec<String>
     let has = |opt: &Option<String>| opt.as_deref().is_some_and(|v| !v.trim().is_empty());
 
     match channel_type {
-        "telegram" | "discord" | "feishu" | "lark" => {
+        "telegram" | "discord" => {
             if !has(&ch.token) {
                 errors.push("missing token".to_string());
+            }
+        }
+        "feishu" | "lark" => {
+            let has_extra = |k: &str| {
+                ch.extra
+                    .get(k)
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|s| !s.trim().is_empty())
+            };
+            if !has_extra("app_id") {
+                errors.push("missing app_id".to_string());
+            }
+            if !has_extra("app_secret") {
+                errors.push("missing app_secret".to_string());
             }
         }
         "slack" => {

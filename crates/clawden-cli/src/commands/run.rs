@@ -45,32 +45,10 @@ pub async fn exec_run(
     process_manager: &ProcessManager,
     manager: &mut LifecycleManager,
 ) -> Result<()> {
-    let tools_list = opts
-        .tools
-        .clone()
-        .map(|t| {
-            t.split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let tools_list = parse_tools_option(&opts);
 
     let mut config = load_config_with_env_file(opts.env_file.as_deref())?;
-
-    // Create a minimal config when credential flags or channels are present but
-    // no clawden.yaml exists, so apply_run_overrides populates the config struct
-    // consistently and validation can run.
-    let has_credential_flags = opts.token.is_some()
-        || opts.api_key.is_some()
-        || opts.provider.is_some()
-        || opts.model.is_some()
-        || opts.allowed_users.is_some()
-        || opts.system_prompt.is_some()
-        || !opts.channel.is_empty();
-    if config.is_none() && has_credential_flags {
-        config = Some(empty_clawden_yaml(&opts.runtime));
-    }
+    ensure_config_for_run_overrides(&mut config, &opts);
 
     if let Some(cfg) = config.as_mut() {
         apply_run_overrides(cfg, &opts)?;
@@ -104,17 +82,7 @@ pub async fn exec_run(
         }
     }
 
-    // `clawden run` defaults to Direct mode (uv-run style transparent exec).
-    // Only use Docker when clawden.yaml explicitly sets `mode: docker`.
-    let config_mode_is_docker = config
-        .as_ref()
-        .and_then(|c| c.mode.as_deref())
-        .is_some_and(|m| m.eq_ignore_ascii_case("docker"));
-    let mode = if opts.force_docker || config_mode_is_docker {
-        process_manager.resolve_mode(false)
-    } else {
-        ExecutionMode::Direct
-    };
+    let mode = resolve_run_mode(&opts, config.as_ref(), process_manager);
     let mut env_vars = if let Some(cfg) = config.as_ref() {
         build_runtime_env_vars(cfg, &opts.runtime)?
     } else {
@@ -195,6 +163,27 @@ pub async fn exec_run(
                     if let Ok(val) = std::env::var("SLACK_APP_TOKEN") {
                         if !val.trim().is_empty() {
                             instance.app_token = Some(val);
+                        }
+                    }
+                }
+                if matches!(ch.as_str(), "feishu" | "lark") {
+                    if !instance.extra.contains_key("app_id") {
+                        if let Ok(val) = std::env::var("FEISHU_APP_ID") {
+                            if !val.trim().is_empty() {
+                                instance
+                                    .extra
+                                    .insert("app_id".to_string(), serde_json::Value::String(val));
+                            }
+                        }
+                    }
+                    if !instance.extra.contains_key("app_secret") {
+                        if let Ok(val) = std::env::var("FEISHU_APP_SECRET") {
+                            if !val.trim().is_empty() {
+                                instance.extra.insert(
+                                    "app_secret".to_string(),
+                                    serde_json::Value::String(val),
+                                );
+                            }
                         }
                     }
                 }
@@ -367,6 +356,51 @@ pub async fn exec_run(
     }
 
     Ok(())
+}
+
+fn parse_tools_option(opts: &RunOptions) -> Vec<String> {
+    opts.tools
+        .clone()
+        .map(|t| {
+            t.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn ensure_config_for_run_overrides(config: &mut Option<ClawDenYaml>, opts: &RunOptions) {
+    // Create a minimal config when credential flags or channels are present but
+    // no clawden.yaml exists, so apply_run_overrides populates the config struct
+    // consistently and validation can run.
+    let has_credential_flags = opts.token.is_some()
+        || opts.api_key.is_some()
+        || opts.provider.is_some()
+        || opts.model.is_some()
+        || opts.allowed_users.is_some()
+        || opts.system_prompt.is_some()
+        || !opts.channel.is_empty();
+    if config.is_none() && has_credential_flags {
+        *config = Some(empty_clawden_yaml(&opts.runtime));
+    }
+}
+
+fn resolve_run_mode(
+    opts: &RunOptions,
+    config: Option<&ClawDenYaml>,
+    process_manager: &ProcessManager,
+) -> ExecutionMode {
+    // `clawden run` defaults to Direct mode (uv-run style transparent exec).
+    // Only use Docker when clawden.yaml explicitly sets `mode: docker`.
+    let config_mode_is_docker = config
+        .and_then(|c| c.mode.as_deref())
+        .is_some_and(|m| m.eq_ignore_ascii_case("docker"));
+    if opts.force_docker || config_mode_is_docker {
+        process_manager.resolve_mode(false)
+    } else {
+        ExecutionMode::Direct
+    }
 }
 
 fn print_missing_subcommand_hint(runtime: &str) {

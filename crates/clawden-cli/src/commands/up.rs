@@ -55,15 +55,7 @@ pub async fn exec_up(
     }
 
     let config = load_config_with_env_file(opts.env_file.as_deref())?;
-    let config_mode_is_direct = config
-        .as_ref()
-        .and_then(|c| c.mode.as_deref())
-        .is_some_and(|m| m.eq_ignore_ascii_case("direct"));
-    let mode = if opts.force_docker {
-        process_manager.resolve_mode(false)
-    } else {
-        process_manager.resolve_mode(config_mode_is_direct)
-    };
+    let mode = resolve_up_mode(&opts, config.as_ref(), process_manager);
     let target_runtimes =
         resolve_target_runtimes(opts.runtimes.clone(), config.as_ref(), installer)?;
 
@@ -306,6 +298,167 @@ fn runtime_running(process_manager: &ProcessManager, runtime: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn resolve_up_mode(
+    opts: &UpOptions,
+    config: Option<&ClawDenYaml>,
+    process_manager: &ProcessManager,
+) -> ExecutionMode {
+    let config_mode_is_direct = config
+        .and_then(|c| c.mode.as_deref())
+        .is_some_and(|m| m.eq_ignore_ascii_case("direct"));
+    if opts.force_docker {
+        process_manager.resolve_mode(false)
+    } else {
+        process_manager.resolve_mode(config_mode_is_direct)
+    }
+}
+
+type RequiredField = (&'static str, String, String, bool, &'static str);
+
+fn source_of(config_value_present: bool, env_value_present: bool) -> &'static str {
+    if config_value_present {
+        "clawden.yaml"
+    } else if env_value_present {
+        "provided"
+    } else {
+        ""
+    }
+}
+
+fn add_channel_requirements(
+    config: &ClawDenYaml,
+    channel_name: &str,
+    env_has: &dyn Fn(&str) -> bool,
+    fields: &mut Vec<RequiredField>,
+) {
+    let channel = config.channels.get(channel_name);
+    let channel_type = channel
+        .and_then(|ch| ClawDenYaml::resolve_channel_type(channel_name, ch))
+        .unwrap_or_else(|| channel_name.to_string());
+
+    let config_has_token_or_bot = |ch: Option<&clawden_config::ChannelInstanceYaml>| -> bool {
+        ch.and_then(|c| c.token.as_ref().or(c.bot_token.as_ref()))
+            .is_some_and(|v| !v.trim().is_empty())
+    };
+
+    match channel_type.as_str() {
+        "telegram" => {
+            let cfg_ok = config_has_token_or_bot(channel);
+            let env_ok = env_has("TELEGRAM_BOT_TOKEN");
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                "TELEGRAM_BOT_TOKEN".to_string(),
+                cfg_ok || env_ok,
+                source_of(cfg_ok, env_ok),
+            ));
+        }
+        "discord" => {
+            let cfg_ok = config_has_token_or_bot(channel);
+            let env_ok = env_has("DISCORD_BOT_TOKEN");
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                "DISCORD_BOT_TOKEN".to_string(),
+                cfg_ok || env_ok,
+                source_of(cfg_ok, env_ok),
+            ));
+        }
+        "slack" => {
+            let cfg_bt = channel
+                .and_then(|c| c.bot_token.as_ref())
+                .is_some_and(|v| !v.trim().is_empty());
+            let env_bt = env_has("SLACK_BOT_TOKEN");
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                "SLACK_BOT_TOKEN".to_string(),
+                cfg_bt || env_bt,
+                source_of(cfg_bt, env_bt),
+            ));
+
+            let cfg_at = channel
+                .and_then(|c| c.app_token.as_ref())
+                .is_some_and(|v| !v.trim().is_empty());
+            let env_at = env_has("SLACK_APP_TOKEN");
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                "SLACK_APP_TOKEN".to_string(),
+                cfg_at || env_at,
+                source_of(cfg_at, env_at),
+            ));
+        }
+        "signal" => {
+            let cfg_p = channel
+                .and_then(|c| c.phone.as_ref())
+                .is_some_and(|v| !v.trim().is_empty());
+            let env_p = env_has("SIGNAL_PHONE");
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                "SIGNAL_PHONE".to_string(),
+                cfg_p || env_p,
+                source_of(cfg_p, env_p),
+            ));
+
+            let cfg_t = channel
+                .and_then(|c| c.token.as_ref())
+                .is_some_and(|v| !v.trim().is_empty());
+            let env_t = env_has("SIGNAL_TOKEN");
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                "SIGNAL_TOKEN".to_string(),
+                cfg_t || env_t,
+                source_of(cfg_t, env_t),
+            ));
+        }
+        "feishu" | "lark" => {
+            let cfg_id = channel
+                .and_then(|c| c.extra.get("app_id"))
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.trim().is_empty());
+            let env_id = env_has("FEISHU_APP_ID");
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                "FEISHU_APP_ID".to_string(),
+                cfg_id || env_id,
+                source_of(cfg_id, env_id),
+            ));
+
+            let cfg_secret = channel
+                .and_then(|c| c.extra.get("app_secret"))
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.trim().is_empty());
+            let env_secret = env_has("FEISHU_APP_SECRET");
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                "FEISHU_APP_SECRET".to_string(),
+                cfg_secret || env_secret,
+                source_of(cfg_secret, env_secret),
+            ));
+        }
+        _ => {
+            let env_var_name = format!(
+                "{}_BOT_TOKEN",
+                channel_type.to_ascii_uppercase().replace('-', "_")
+            );
+            let cfg_ok = config_has_token_or_bot(channel);
+            let env_ok = env_has(&env_var_name);
+            fields.push((
+                "channel",
+                channel_name.to_string(),
+                env_var_name,
+                cfg_ok || env_ok,
+                source_of(cfg_ok, env_ok),
+            ));
+        }
+    }
+}
+
 pub(crate) fn validate_direct_runtime_config(
     config: &ClawDenYaml,
     runtime: &str,
@@ -319,7 +472,7 @@ pub(crate) fn validate_direct_runtime_config(
     };
 
     // (scope, name, env_var, resolved, source)
-    let mut fields: Vec<(&str, String, String, bool, &str)> = Vec::new();
+    let mut fields: Vec<RequiredField> = Vec::new();
 
     // --- Provider key check ---
     if let Some((provider_name, _, _)) = runtime_provider_and_model(config, runtime) {
@@ -335,157 +488,7 @@ pub(crate) fn validate_direct_runtime_config(
 
     // --- Channel credential checks (config struct AND env_vars) ---
     for channel_name in channels {
-        let channel = config.channels.get(channel_name);
-        let channel_type = channel
-            .and_then(|ch| ClawDenYaml::resolve_channel_type(channel_name, ch))
-            .unwrap_or_else(|| channel_name.clone());
-
-        let config_has_token_or_bot = |ch: Option<&clawden_config::ChannelInstanceYaml>| -> bool {
-            ch.and_then(|c| c.token.as_ref().or(c.bot_token.as_ref()))
-                .is_some_and(|v| !v.trim().is_empty())
-        };
-
-        match channel_type.as_str() {
-            "telegram" => {
-                let cfg_ok = config_has_token_or_bot(channel);
-                let env_ok = env_has("TELEGRAM_BOT_TOKEN");
-                let resolved = cfg_ok || env_ok;
-                let source = if cfg_ok {
-                    "clawden.yaml"
-                } else if env_ok {
-                    "provided"
-                } else {
-                    ""
-                };
-                fields.push((
-                    "channel",
-                    channel_name.clone(),
-                    "TELEGRAM_BOT_TOKEN".to_string(),
-                    resolved,
-                    source,
-                ));
-            }
-            "discord" => {
-                let cfg_ok = config_has_token_or_bot(channel);
-                let env_ok = env_has("DISCORD_BOT_TOKEN");
-                let resolved = cfg_ok || env_ok;
-                let source = if cfg_ok {
-                    "clawden.yaml"
-                } else if env_ok {
-                    "provided"
-                } else {
-                    ""
-                };
-                fields.push((
-                    "channel",
-                    channel_name.clone(),
-                    "DISCORD_BOT_TOKEN".to_string(),
-                    resolved,
-                    source,
-                ));
-            }
-            "slack" => {
-                let cfg_bt = channel
-                    .and_then(|c| c.bot_token.as_ref())
-                    .is_some_and(|v| !v.trim().is_empty());
-                let env_bt = env_has("SLACK_BOT_TOKEN");
-                let r_bt = cfg_bt || env_bt;
-                fields.push((
-                    "channel",
-                    channel_name.clone(),
-                    "SLACK_BOT_TOKEN".to_string(),
-                    r_bt,
-                    if cfg_bt {
-                        "clawden.yaml"
-                    } else if env_bt {
-                        "provided"
-                    } else {
-                        ""
-                    },
-                ));
-
-                let cfg_at = channel
-                    .and_then(|c| c.app_token.as_ref())
-                    .is_some_and(|v| !v.trim().is_empty());
-                let env_at = env_has("SLACK_APP_TOKEN");
-                let r_at = cfg_at || env_at;
-                fields.push((
-                    "channel",
-                    channel_name.clone(),
-                    "SLACK_APP_TOKEN".to_string(),
-                    r_at,
-                    if cfg_at {
-                        "clawden.yaml"
-                    } else if env_at {
-                        "provided"
-                    } else {
-                        ""
-                    },
-                ));
-            }
-            "signal" => {
-                let cfg_p = channel
-                    .and_then(|c| c.phone.as_ref())
-                    .is_some_and(|v| !v.trim().is_empty());
-                let env_p = env_has("SIGNAL_PHONE");
-                let r_p = cfg_p || env_p;
-                fields.push((
-                    "channel",
-                    channel_name.clone(),
-                    "SIGNAL_PHONE".to_string(),
-                    r_p,
-                    if cfg_p {
-                        "clawden.yaml"
-                    } else if env_p {
-                        "provided"
-                    } else {
-                        ""
-                    },
-                ));
-
-                let cfg_t = channel
-                    .and_then(|c| c.token.as_ref())
-                    .is_some_and(|v| !v.trim().is_empty());
-                let env_t = env_has("SIGNAL_TOKEN");
-                let r_t = cfg_t || env_t;
-                fields.push((
-                    "channel",
-                    channel_name.clone(),
-                    "SIGNAL_TOKEN".to_string(),
-                    r_t,
-                    if cfg_t {
-                        "clawden.yaml"
-                    } else if env_t {
-                        "provided"
-                    } else {
-                        ""
-                    },
-                ));
-            }
-            _ => {
-                let env_var_name = format!(
-                    "{}_BOT_TOKEN",
-                    channel_type.to_ascii_uppercase().replace('-', "_")
-                );
-                let cfg_ok = config_has_token_or_bot(channel);
-                let env_ok = env_has(&env_var_name);
-                let resolved = cfg_ok || env_ok;
-                let source = if cfg_ok {
-                    "clawden.yaml"
-                } else if env_ok {
-                    "provided"
-                } else {
-                    ""
-                };
-                fields.push((
-                    "channel",
-                    channel_name.clone(),
-                    env_var_name,
-                    resolved,
-                    source,
-                ));
-            }
-        }
+        add_channel_requirements(config, channel_name, &env_has, &mut fields);
     }
 
     let has_missing = fields.iter().any(|(_, _, _, resolved, _)| !resolved);

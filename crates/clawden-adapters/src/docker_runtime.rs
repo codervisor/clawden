@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use clawden_core::{AgentConfig, ClawRuntime, RuntimeConfig};
-use std::collections::HashMap;
 use std::process::Command;
 
 const DEFAULT_IMAGE: &str = "ghcr.io/codervisor/clawden-runtime:latest";
@@ -202,35 +201,6 @@ pub fn container_running(container_id: &str) -> Result<bool> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     Ok(stdout.trim() == "true")
-}
-
-pub fn set_stored_config(
-    store: &std::sync::Mutex<HashMap<String, RuntimeConfig>>,
-    handle_id: &str,
-    config: RuntimeConfig,
-) {
-    if let Ok(mut guard) = store.lock() {
-        guard.insert(handle_id.to_string(), config);
-    }
-}
-
-pub fn get_stored_config(
-    store: &std::sync::Mutex<HashMap<String, RuntimeConfig>>,
-    handle_id: &str,
-) -> Option<RuntimeConfig> {
-    store
-        .lock()
-        .ok()
-        .and_then(|guard| guard.get(handle_id).cloned())
-}
-
-pub fn remove_stored_config(
-    store: &std::sync::Mutex<HashMap<String, RuntimeConfig>>,
-    handle_id: &str,
-) {
-    if let Ok(mut guard) = store.lock() {
-        guard.remove(handle_id);
-    }
 }
 
 fn ensure_docker_available() -> Result<()> {

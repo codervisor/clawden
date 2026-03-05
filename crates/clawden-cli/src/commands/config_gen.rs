@@ -326,50 +326,11 @@ pub(crate) fn generate_toml_config(
 /// Detect HTTP proxy environment variables from the host and populate the
 /// `[proxy]` section in the runtime config accordingly.
 fn inject_proxy_config(root: &mut toml::Table) {
-    let https_proxy = std::env::var("https_proxy")
-        .or_else(|_| std::env::var("HTTPS_PROXY"))
-        .ok()
-        .filter(|v| !v.trim().is_empty());
-    let http_proxy = std::env::var("http_proxy")
-        .or_else(|_| std::env::var("HTTP_PROXY"))
-        .ok()
-        .filter(|v| !v.trim().is_empty());
-    let no_proxy = std::env::var("no_proxy")
-        .or_else(|_| std::env::var("NO_PROXY"))
-        .ok()
-        .filter(|v| !v.trim().is_empty());
-
-    if https_proxy.is_none() && http_proxy.is_none() {
+    let Some(settings) = detect_proxy_settings() else {
         return;
-    }
-
-    let proxy = root
-        .entry("proxy".to_string())
-        .or_insert_with(|| TomlValue::Table(toml::Table::new()));
-    if let TomlValue::Table(t) = proxy {
-        t.insert("enabled".to_string(), TomlValue::Boolean(true));
-        // Use "environment" scope so ALL HTTP clients in the runtime
-        // process (LLM provider, channel polling, etc.) route through the
-        // proxy — not just the main zeroclaw client.
-        t.insert(
-            "scope".to_string(),
-            TomlValue::String("environment".to_string()),
-        );
-
-        if let Some(url) = &https_proxy {
-            t.insert("https_proxy".to_string(), TomlValue::String(url.clone()));
-        }
-        if let Some(url) = &http_proxy {
-            t.insert("http_proxy".to_string(), TomlValue::String(url.clone()));
-        }
-        if let Some(hosts) = &no_proxy {
-            let list: Vec<TomlValue> = hosts
-                .split(',')
-                .map(|s| TomlValue::String(s.trim().to_string()))
-                .collect();
-            t.insert("no_proxy".to_string(), TomlValue::Array(list));
-        }
-    }
+    };
+    let mut emitter = TomlProxyEmitter { root };
+    inject_proxy_config_with_emitter(&mut emitter, &settings);
 }
 
 pub(crate) fn generate_picoclaw_config(
@@ -540,6 +501,122 @@ pub(crate) fn write_env_runtime_config(
 /// Detect HTTP proxy environment variables from the host and populate a
 /// `"proxy"` object in a JSON runtime config (picoclaw).
 fn inject_proxy_config_json(root: &mut serde_json::Map<String, JsonValue>) {
+    let Some(settings) = detect_proxy_settings() else {
+        return;
+    };
+    let mut emitter = JsonProxyEmitter { root };
+    inject_proxy_config_with_emitter(&mut emitter, &settings);
+}
+
+struct ProxySettings {
+    https_proxy: Option<String>,
+    http_proxy: Option<String>,
+    no_proxy: Option<Vec<String>>,
+}
+
+trait ProxyConfigEmitter {
+    fn set_bool(&mut self, key: &str, value: bool);
+    fn set_string(&mut self, key: &str, value: String);
+    fn set_string_array(&mut self, key: &str, value: Vec<String>);
+}
+
+struct TomlProxyEmitter<'a> {
+    root: &'a mut toml::Table,
+}
+
+impl ProxyConfigEmitter for TomlProxyEmitter<'_> {
+    fn set_bool(&mut self, key: &str, value: bool) {
+        let proxy = self
+            .root
+            .entry("proxy".to_string())
+            .or_insert_with(|| TomlValue::Table(toml::Table::new()));
+        if let TomlValue::Table(table) = proxy {
+            table.insert(key.to_string(), TomlValue::Boolean(value));
+        }
+    }
+
+    fn set_string(&mut self, key: &str, value: String) {
+        let proxy = self
+            .root
+            .entry("proxy".to_string())
+            .or_insert_with(|| TomlValue::Table(toml::Table::new()));
+        if let TomlValue::Table(table) = proxy {
+            table.insert(key.to_string(), TomlValue::String(value));
+        }
+    }
+
+    fn set_string_array(&mut self, key: &str, value: Vec<String>) {
+        let proxy = self
+            .root
+            .entry("proxy".to_string())
+            .or_insert_with(|| TomlValue::Table(toml::Table::new()));
+        if let TomlValue::Table(table) = proxy {
+            table.insert(
+                key.to_string(),
+                TomlValue::Array(value.into_iter().map(TomlValue::String).collect()),
+            );
+        }
+    }
+}
+
+struct JsonProxyEmitter<'a> {
+    root: &'a mut serde_json::Map<String, JsonValue>,
+}
+
+impl ProxyConfigEmitter for JsonProxyEmitter<'_> {
+    fn set_bool(&mut self, key: &str, value: bool) {
+        let proxy = self
+            .root
+            .entry("proxy".to_string())
+            .or_insert_with(|| JsonValue::Object(serde_json::Map::new()));
+        if let JsonValue::Object(table) = proxy {
+            table.insert(to_camel_case(key), JsonValue::Bool(value));
+        }
+    }
+
+    fn set_string(&mut self, key: &str, value: String) {
+        let proxy = self
+            .root
+            .entry("proxy".to_string())
+            .or_insert_with(|| JsonValue::Object(serde_json::Map::new()));
+        if let JsonValue::Object(table) = proxy {
+            table.insert(to_camel_case(key), JsonValue::String(value));
+        }
+    }
+
+    fn set_string_array(&mut self, key: &str, value: Vec<String>) {
+        let proxy = self
+            .root
+            .entry("proxy".to_string())
+            .or_insert_with(|| JsonValue::Object(serde_json::Map::new()));
+        if let JsonValue::Object(table) = proxy {
+            table.insert(
+                to_camel_case(key),
+                JsonValue::Array(value.into_iter().map(JsonValue::String).collect()),
+            );
+        }
+    }
+}
+
+fn inject_proxy_config_with_emitter(
+    emitter: &mut dyn ProxyConfigEmitter,
+    settings: &ProxySettings,
+) {
+    emitter.set_bool("enabled", true);
+    // Use "environment" scope so ALL HTTP clients in the runtime process route through the proxy.
+    emitter.set_string("scope", "environment".to_string());
+    if let Some(url) = &settings.https_proxy {
+        emitter.set_string("https_proxy", url.clone());
+    }
+    if let Some(url) = &settings.http_proxy {
+        emitter.set_string("http_proxy", url.clone());
+    }
+    if let Some(hosts) = &settings.no_proxy {
+        emitter.set_string_array("no_proxy", hosts.clone());
+    }
+}
+
+fn detect_proxy_settings() -> Option<ProxySettings> {
     let https_proxy = std::env::var("https_proxy")
         .or_else(|_| std::env::var("HTTPS_PROXY"))
         .ok()
@@ -551,32 +628,39 @@ fn inject_proxy_config_json(root: &mut serde_json::Map<String, JsonValue>) {
     let no_proxy = std::env::var("no_proxy")
         .or_else(|_| std::env::var("NO_PROXY"))
         .ok()
-        .filter(|v| !v.trim().is_empty());
+        .filter(|v| !v.trim().is_empty())
+        .map(|hosts| hosts.split(',').map(|s| s.trim().to_string()).collect());
 
     if https_proxy.is_none() && http_proxy.is_none() {
-        return;
+        return None;
     }
 
-    let mut proxy = serde_json::Map::new();
-    proxy.insert("enabled".to_string(), JsonValue::Bool(true));
-    proxy.insert(
-        "scope".to_string(),
-        JsonValue::String("environment".to_string()),
-    );
-    if let Some(url) = &https_proxy {
-        proxy.insert("httpsProxy".to_string(), JsonValue::String(url.clone()));
+    Some(ProxySettings {
+        https_proxy,
+        http_proxy,
+        no_proxy,
+    })
+}
+
+fn to_camel_case(key: &str) -> String {
+    if !key.contains('_') {
+        return key.to_string();
     }
-    if let Some(url) = &http_proxy {
-        proxy.insert("httpProxy".to_string(), JsonValue::String(url.clone()));
+    let mut out = String::new();
+    let mut upper = false;
+    for ch in key.chars() {
+        if ch == '_' {
+            upper = true;
+            continue;
+        }
+        if upper {
+            out.push(ch.to_ascii_uppercase());
+            upper = false;
+        } else {
+            out.push(ch);
+        }
     }
-    if let Some(hosts) = &no_proxy {
-        let list: Vec<JsonValue> = hosts
-            .split(',')
-            .map(|s| JsonValue::String(s.trim().to_string()))
-            .collect();
-        proxy.insert("noProxy".to_string(), JsonValue::Array(list));
-    }
-    root.insert("proxy".to_string(), JsonValue::Object(proxy));
+    out
 }
 
 fn runtime_config_overrides<'a>(

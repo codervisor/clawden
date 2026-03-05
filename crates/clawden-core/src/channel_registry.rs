@@ -41,8 +41,8 @@ pub static CHANNELS: &[ChannelDescriptor] = &[
     },
     ChannelDescriptor {
         channel_type: ChannelType::Feishu,
-        token_env_var: "FEISHU_BOT_TOKEN",
-        required_credentials: &["token"],
+        token_env_var: "FEISHU_APP_ID",
+        required_credentials: &["app_id", "app_secret"],
         optional_credentials: &[],
     },
 ];
@@ -52,6 +52,8 @@ const WELL_KNOWN_CHANNEL_ENV_VARS: &[&str] = &[
     "DISCORD_BOT_TOKEN",
     "SLACK_BOT_TOKEN",
     "SLACK_APP_TOKEN",
+    "FEISHU_APP_ID",
+    "FEISHU_APP_SECRET",
 ];
 
 pub fn channel_descriptors() -> &'static [ChannelDescriptor] {

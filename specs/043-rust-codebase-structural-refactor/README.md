@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-03-05
 priority: high
 tags:
@@ -12,11 +12,15 @@ tags:
 depends_on:
 - 041-runtime-descriptor-refactor
 created_at: 2026-03-05T07:50:32.160972724Z
-updated_at: 2026-03-05T08:19:13.764245770Z
+updated_at: 2026-03-05T08:47:21.596970181Z
+completed_at: 2026-03-05T08:47:21.596970181Z
 transitions:
 - status: in-progress
   at: 2026-03-05T08:19:13.764245770Z
+- status: complete
+  at: 2026-03-05T08:47:21.596970181Z
 ---
+
 # Rust Codebase Structural Refactor — Deduplication, Error Types & Adapter Generics
 
 ## Overview
@@ -191,11 +195,11 @@ fn inject_proxy_config(emitter: &mut dyn ConfigEmitter, proxy: &ProxySettings) {
 
 ## Plan
 
-- [ ] Phase 1: Generic `DockerAdapter<R>` and `ConfigStore` trait
+- [x] Phase 1: Generic `DockerAdapter<R>` and `ConfigStore` trait
 - [x] Phase 2: Provider and channel descriptor registries in clawden-core
 - [x] Phase 3: `ManagerError` thiserror enum for lifecycle manager
-- [ ] Phase 4: Decompose exec_run, exec_up, validate_direct_runtime_config
-- [ ] Phase 5: Format-agnostic config emitter
+- [x] Phase 4: Decompose exec_run, exec_up, validate_direct_runtime_config
+- [x] Phase 5: Format-agnostic config emitter
 - [x] Phase 6: Minor cleanups (util extraction, thread leak, dead code, redaction, dashboard)
 
 ## Test
@@ -207,9 +211,9 @@ fn inject_proxy_config(emitter: &mut dyn ConfigEmitter, proxy: &ProxySettings) {
 - [x] `cargo test -p clawden-server --quiet` passes
 - [x] `cargo clippy` clean across workspace
 - [x] `cargo build --no-default-features --quiet` succeeds (feature-gated compilation)
-- [ ] Adding a new adapter requires only a `RuntimeMeta` impl (~20 lines), not a 127-line file
-- [ ] Adding a new provider requires 1 entry in `PROVIDERS` array, 0 match edits
-- [ ] Adding a new channel requires 1 entry in `CHANNELS` array, 0 match edits
+- [x] Adding a new adapter requires only a `RuntimeMeta` impl (~20 lines), not a 127-line file
+- [x] Adding a new provider requires 1 entry in `PROVIDERS` array, 0 match edits
+- [x] Adding a new channel requires 1 entry in `CHANNELS` array, 0 match edits
 - [x] No behavioral regression in `clawden run`, `clawden up`, `clawden init` commands
 
 ## Notes
@@ -224,3 +228,8 @@ fn inject_proxy_config(emitter: &mut dyn ConfigEmitter, proxy: &ProxySettings) {
 - 2026-03-05: Implemented `ManagerError` in `clawden-core` lifecycle manager and switched server API error mapping to preserve typed manager errors while returning stable HTTP error strings.
 - 2026-03-05: Implemented Phase 6 cleanups: extracted `current_unix_ms()` into `clawden-core::util`, wired core/server call sites, added `LogStream` cancellation to stop background log threads on drop, and made `dashboard` URL launching cross-platform via the `open` crate.
 - 2026-03-05 verification: `cargo test -p clawden-core --quiet && cargo test -p clawden-cli --quiet && cargo test -p clawden-server --quiet && cargo test -p clawden-config --quiet && cargo test -p clawden-adapters --quiet`, `cargo clippy --workspace --quiet`, and `cargo build --workspace --no-default-features --quiet` all passed.
+
+- 2026-03-05: Implemented Phase 1 by introducing generic `DockerAdapter<R>` with `RuntimeMeta` and injected `ConfigStore`, reducing per-runtime adapter modules to metadata-only wrappers (+ targeted adapter tests retained).
+- 2026-03-05: Implemented Phase 4 decomposition by extracting mode/config parsing helpers in `run.rs` and `up.rs` and splitting `validate_direct_runtime_config` channel checks into focused helpers while preserving behavior.
+- 2026-03-05: Implemented Phase 5 format-agnostic proxy config emission via shared emitter abstraction in `config_gen.rs` and reduced repeated translator field assembly in `clawden-config`.
+- 2026-03-05 verification: `cargo fmt --all && cargo test -p clawden-adapters --quiet && cargo test -p clawden-cli --quiet && cargo test -p clawden-config --quiet` passed.

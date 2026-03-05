@@ -72,10 +72,10 @@ mod tests {
 
     #[test]
     fn tier3_signal_proxy_matrix_matches_support_model() {
-        let open = OpenClawAdapter.metadata();
-        let zero = ZeroClawAdapter.metadata();
-        let nano = NanoClawAdapter.metadata();
-        let pico = PicoClawAdapter.metadata();
+        let open = OpenClawAdapter::default().metadata();
+        let zero = ZeroClawAdapter::default().metadata();
+        let nano = NanoClawAdapter::default().metadata();
+        let pico = PicoClawAdapter::default().metadata();
 
         assert!(!needs_proxy(&open, &ChannelType::Signal));
         assert!(!needs_proxy(&zero, &ChannelType::Signal));
@@ -85,10 +85,10 @@ mod tests {
 
     #[test]
     fn tier3_dingtalk_proxy_matrix_matches_support_model() {
-        let open = OpenClawAdapter.metadata();
-        let zero = ZeroClawAdapter.metadata();
-        let nano = NanoClawAdapter.metadata();
-        let pico = PicoClawAdapter.metadata();
+        let open = OpenClawAdapter::default().metadata();
+        let zero = ZeroClawAdapter::default().metadata();
+        let nano = NanoClawAdapter::default().metadata();
+        let pico = PicoClawAdapter::default().metadata();
 
         assert!(needs_proxy(&open, &ChannelType::Dingtalk));
         assert!(needs_proxy(&zero, &ChannelType::Dingtalk));
@@ -98,10 +98,10 @@ mod tests {
 
     #[test]
     fn tier3_qq_proxy_matrix_matches_support_model() {
-        let open = OpenClawAdapter.metadata();
-        let zero = ZeroClawAdapter.metadata();
-        let nano = NanoClawAdapter.metadata();
-        let pico = PicoClawAdapter.metadata();
+        let open = OpenClawAdapter::default().metadata();
+        let zero = ZeroClawAdapter::default().metadata();
+        let nano = NanoClawAdapter::default().metadata();
+        let pico = PicoClawAdapter::default().metadata();
 
         assert!(needs_proxy(&open, &ChannelType::Qq));
         assert!(needs_proxy(&zero, &ChannelType::Qq));
