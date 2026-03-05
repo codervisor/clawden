@@ -148,8 +148,7 @@ async fn main() -> Result<()> {
         } => commands::exec_logs(&process_manager, runtimes, tail, follow, timestamps).await?,
         Commands::Dashboard { port } => commands::exec_dashboard(port)?,
         Commands::Doctor => commands::exec_doctor(&installer)?,
-        Commands::Channels { command } => commands::exec_channels(command, &mut manager)?,
-        Commands::Telegram { command } => commands::exec_telegram(command)?,
+        Commands::Channels { command } => commands::exec_channels(command, &mut manager).await?,
         Commands::Providers { command } => commands::exec_providers(command).await?,
         Commands::Tools { command } => commands::exec_tools(command)?,
         Commands::Config { command } => match command {

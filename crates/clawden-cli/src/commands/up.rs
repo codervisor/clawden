@@ -69,7 +69,8 @@ pub async fn exec_up(
 
     for runtime in target_runtimes {
         if let Some(cfg) = config.as_mut() {
-            super::telegram::resolve_openclaw_telegram_allowed_users_for_runtime(cfg, &runtime)?;
+            super::telegram::resolve_openclaw_telegram_allowed_users_for_runtime(cfg, &runtime)
+                .await?;
         }
 
         let env_vars = if let Some(cfg) = config.as_ref() {

@@ -4,7 +4,7 @@ use clawden_core::LifecycleManager;
 
 use crate::cli::ChannelCommand;
 
-pub fn exec_channels(
+pub async fn exec_channels(
     command: Option<ChannelCommand>,
     manager: &mut LifecycleManager,
 ) -> Result<()> {
@@ -20,6 +20,9 @@ pub fn exec_channels(
         }
         Some(ChannelCommand::Test { channel_type }) => {
             test_channels(channel_type.as_deref())?;
+        }
+        Some(ChannelCommand::Telegram { command }) => {
+            super::telegram::exec_telegram(command).await?;
         }
     }
     Ok(())

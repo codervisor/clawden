@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clawden_config::{is_numeric_telegram_id, ChannelInstanceYaml, ClawDenYaml};
 use clawden_core::ExecutionMode;
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs;
@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::cli::TelegramCommand;
 
-pub fn exec_telegram(command: TelegramCommand) -> Result<()> {
+pub async fn exec_telegram(command: TelegramCommand) -> Result<()> {
     match command {
         TelegramCommand::ResolveId { username } => {
             let normalized = normalize_username(&username);
@@ -29,14 +29,14 @@ pub fn exec_telegram(command: TelegramCommand) -> Result<()> {
 
             let token = resolve_default_telegram_token()?;
             let resolver = TelegramIdResolver::new(token)?;
-            let id = resolver.resolve_username(&normalized)?;
+            let id = resolver.resolve_username(&normalized).await?;
             println!("{} -> {}", normalized, id);
             Ok(())
         }
     }
 }
 
-pub(crate) fn resolve_openclaw_telegram_allowed_users_for_runtime(
+pub(crate) async fn resolve_openclaw_telegram_allowed_users_for_runtime(
     config: &mut ClawDenYaml,
     runtime: &str,
 ) -> Result<()> {
@@ -55,13 +55,13 @@ pub(crate) fn resolve_openclaw_telegram_allowed_users_for_runtime(
         if channel_type != "telegram" {
             continue;
         }
-        resolve_telegram_allowed_users(channel)?;
+        resolve_telegram_allowed_users(channel).await?;
     }
 
     Ok(())
 }
 
-fn resolve_telegram_allowed_users(channel: &mut ChannelInstanceYaml) -> Result<()> {
+async fn resolve_telegram_allowed_users(channel: &mut ChannelInstanceYaml) -> Result<()> {
     if channel.allowed_users.is_empty() {
         return Ok(());
     }
@@ -100,7 +100,7 @@ fn resolve_telegram_allowed_users(channel: &mut ChannelInstanceYaml) -> Result<(
         }
 
         let username = normalize_username(trimmed);
-        let id = resolver.resolve_username(&username)?;
+        let id = resolver.resolve_username(&username).await?;
         eprintln!("Telegram: resolved @{} -> {}", username, id);
         resolved.push(id);
     }
@@ -165,7 +165,7 @@ impl TelegramIdResolver {
         })
     }
 
-    fn resolve_username(&self, username: &str) -> Result<String> {
+    async fn resolve_username(&self, username: &str) -> Result<String> {
         let username_norm = normalize_username(username);
         if username_norm.is_empty() {
             anyhow::bail!("username cannot be empty");
@@ -176,7 +176,7 @@ impl TelegramIdResolver {
             return Ok(entry.id.clone());
         }
 
-        if let Some(found) = self.find_in_recent_updates(&username_norm)? {
+        if let Some(found) = self.find_in_recent_updates(&username_norm).await? {
             self.upsert_cache(&mut cache, &username_norm, &found, false)?;
             return Ok(found);
         }
@@ -197,25 +197,25 @@ impl TelegramIdResolver {
 
         let deadline = std::time::Instant::now() + Duration::from_secs(30);
         while std::time::Instant::now() < deadline {
-            if let Some(found) = self.find_in_recent_updates(&username_norm)? {
+            if let Some(found) = self.find_in_recent_updates(&username_norm).await? {
                 self.upsert_cache(&mut cache, &username_norm, &found, false)?;
                 return Ok(found);
             }
-            std::thread::sleep(Duration::from_secs(2));
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
 
         let mut message = format!(
             "timed out resolving @{} after 30s. Send a message to your bot from that account and retry.",
             username_norm
         );
-        if self.get_updates_raw()?.is_empty() && is_openclaw_running() {
+        if self.get_updates_raw().await?.is_empty() && is_openclaw_running() {
             message.push_str(" Another process appears to be polling Telegram updates (OpenClaw running). Stop it first and retry.");
         }
         anyhow::bail!(message)
     }
 
-    fn find_in_recent_updates(&self, username: &str) -> Result<Option<String>> {
-        let updates = self.get_updates_raw()?;
+    async fn find_in_recent_updates(&self, username: &str) -> Result<Option<String>> {
+        let updates = self.get_updates_raw().await?;
         for (candidate_user, candidate_id) in collect_username_id_pairs(&updates) {
             if candidate_user == username {
                 return Ok(Some(candidate_id));
@@ -224,15 +224,17 @@ impl TelegramIdResolver {
         Ok(None)
     }
 
-    fn get_updates_raw(&self) -> Result<Vec<Value>> {
+    async fn get_updates_raw(&self) -> Result<Vec<Value>> {
         let url = format!("https://api.telegram.org/bot{}/getUpdates", self.token);
         let resp = self
             .client
             .get(url)
             .send()
+            .await
             .map_err(|e| anyhow::anyhow!("telegram getUpdates request failed: {e}"))?;
         let payload: Value = resp
             .json()
+            .await
             .map_err(|e| anyhow::anyhow!("invalid getUpdates response: {e}"))?;
 
         let ok = payload.get("ok").and_then(Value::as_bool).unwrap_or(false);
@@ -460,8 +462,8 @@ mod tests {
         assert_eq!(pairs, vec![("marvzhang".to_string(), "123456".to_string())]);
     }
 
-    #[test]
-    fn resolves_cached_username_for_openclaw_telegram_channel() {
+    #[tokio::test]
+    async fn resolves_cached_username_for_openclaw_telegram_channel() {
         let _guard = test_env_lock().lock().expect("env lock");
         let original_cwd = std::env::current_dir().expect("cwd");
         let original_token = std::env::var("TELEGRAM_BOT_TOKEN").ok();
@@ -499,6 +501,7 @@ channels:
         cfg.resolve_env_vars().expect("resolve env");
 
         resolve_openclaw_telegram_allowed_users_for_runtime(&mut cfg, "openclaw")
+            .await
             .expect("resolution");
         let generated = generate_openclaw_config(&cfg, "openclaw");
         assert_eq!(

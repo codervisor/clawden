@@ -37,7 +37,6 @@ pub use restart::exec_restart;
 pub use run::{exec_run, RunOptions};
 pub use start::exec_start;
 pub use stop::exec_stop;
-pub use telegram::exec_telegram;
 pub use tools::exec_tools;
 pub use up::{exec_up, UpOptions};
 

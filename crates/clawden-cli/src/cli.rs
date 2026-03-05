@@ -191,11 +191,6 @@ pub enum Commands {
         #[command(subcommand)]
         command: Option<ChannelCommand>,
     },
-    /// Telegram utilities
-    Telegram {
-        #[command(subcommand)]
-        command: TelegramCommand,
-    },
     /// LLM provider management
     Providers {
         #[command(subcommand)]
@@ -292,6 +287,11 @@ pub enum ChannelCommand {
     Test {
         /// Specific channel type to test
         channel_type: Option<String>,
+    },
+    /// Telegram-specific utilities
+    Telegram {
+        #[command(subcommand)]
+        command: TelegramCommand,
     },
 }
 
