@@ -1316,16 +1316,13 @@ impl ChannelCredentialMapper {
         ch: &ChannelInstanceYaml,
     ) -> HashMap<String, String> {
         let mut vars = HashMap::new();
-        match channel_type {
-            "telegram" => {
-                if !ch.allowed_users.is_empty() {
-                    vars.insert(
-                        "OPENCLAW_TELEGRAM_ALLOW_FROM".to_string(),
-                        ch.allowed_users.join(","),
-                    );
-                }
+        if channel_type == "telegram" {
+            if !ch.allowed_users.is_empty() {
+                vars.insert(
+                    "OPENCLAW_TELEGRAM_ALLOW_FROM".to_string(),
+                    ch.allowed_users.join(","),
+                );
             }
-            _ => {}
         }
         vars
     }
