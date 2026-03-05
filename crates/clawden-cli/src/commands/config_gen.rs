@@ -385,6 +385,8 @@ pub(crate) fn generate_picoclaw_config(
         root.insert("channels".to_string(), JsonValue::Object(channels));
     }
 
+    inject_proxy_config_json(&mut root);
+
     for (k, v) in runtime_config_overrides(config, runtime) {
         let key = if k == "system_prompt" {
             // picoclaw expects camelCase for this field.
@@ -395,6 +397,48 @@ pub(crate) fn generate_picoclaw_config(
         root.insert(key, v.clone());
     }
     root
+}
+
+/// Detect HTTP proxy environment variables from the host and populate a
+/// `"proxy"` object in a JSON runtime config (picoclaw).
+fn inject_proxy_config_json(root: &mut serde_json::Map<String, JsonValue>) {
+    let https_proxy = std::env::var("https_proxy")
+        .or_else(|_| std::env::var("HTTPS_PROXY"))
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let http_proxy = std::env::var("http_proxy")
+        .or_else(|_| std::env::var("HTTP_PROXY"))
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let no_proxy = std::env::var("no_proxy")
+        .or_else(|_| std::env::var("NO_PROXY"))
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+
+    if https_proxy.is_none() && http_proxy.is_none() {
+        return;
+    }
+
+    let mut proxy = serde_json::Map::new();
+    proxy.insert("enabled".to_string(), JsonValue::Bool(true));
+    proxy.insert(
+        "scope".to_string(),
+        JsonValue::String("environment".to_string()),
+    );
+    if let Some(url) = &https_proxy {
+        proxy.insert("httpsProxy".to_string(), JsonValue::String(url.clone()));
+    }
+    if let Some(url) = &http_proxy {
+        proxy.insert("httpProxy".to_string(), JsonValue::String(url.clone()));
+    }
+    if let Some(hosts) = &no_proxy {
+        let list: Vec<JsonValue> = hosts
+            .split(',')
+            .map(|s| JsonValue::String(s.trim().to_string()))
+            .collect();
+        proxy.insert("noProxy".to_string(), JsonValue::Array(list));
+    }
+    root.insert("proxy".to_string(), JsonValue::Object(proxy));
 }
 
 fn runtime_config_overrides<'a>(
@@ -924,5 +968,143 @@ config:
             std::env::remove_var("HOME");
         }
         let _ = fs::remove_dir_all(tmp_home);
+    }
+
+    #[test]
+    fn generates_picoclaw_json_with_proxy_from_env() {
+        let _guard = test_env_lock().lock().expect("env lock");
+        let original_home = std::env::var("HOME").ok();
+        let orig_https = std::env::var("HTTPS_PROXY").ok();
+        let orig_http = std::env::var("HTTP_PROXY").ok();
+        let orig_no = std::env::var("NO_PROXY").ok();
+        // Clear lowercase variants too
+        let orig_https_lc = std::env::var("https_proxy").ok();
+        let orig_http_lc = std::env::var("http_proxy").ok();
+        let orig_no_lc = std::env::var("no_proxy").ok();
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let tmp_home = std::env::temp_dir().join(format!("clawden-picoclaw-proxy-{unique}"));
+        fs::create_dir_all(&tmp_home).expect("tmp home");
+        std::env::set_var("HOME", &tmp_home);
+        std::env::set_var("HTTPS_PROXY", "http://proxy.corp:3128");
+        std::env::set_var("HTTP_PROXY", "http://proxy.corp:3128");
+        std::env::set_var("NO_PROXY", "localhost,127.0.0.1,.internal");
+        // Remove lowercase so detection uses uppercase
+        std::env::remove_var("https_proxy");
+        std::env::remove_var("http_proxy");
+        std::env::remove_var("no_proxy");
+
+        let yaml = r#"
+runtime: picoclaw
+provider: openai
+providers:
+  openai:
+    api_key: sk-pico-proxy
+channels:
+  tg:
+    type: telegram
+    token: tg-proxy-token
+"#;
+        let mut config = ClawDenYaml::parse_yaml(yaml).expect("yaml parse");
+        config.resolve_env_vars().expect("resolve env");
+
+        let dir = generate_config_dir(&config, "picoclaw", "picoclaw-proxy-ph", None)
+            .expect("config dir")
+            .expect("supported runtime");
+        let body = fs::read_to_string(dir.join("config.json")).expect("read config");
+        let parsed: serde_json::Value = serde_json::from_str(&body).expect("valid json");
+
+        let proxy = parsed.get("proxy").expect("proxy section present");
+        assert_eq!(proxy.get("enabled").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(
+            proxy.get("scope").and_then(|v| v.as_str()),
+            Some("environment")
+        );
+        assert_eq!(
+            proxy.get("httpsProxy").and_then(|v| v.as_str()),
+            Some("http://proxy.corp:3128")
+        );
+        assert_eq!(
+            proxy.get("httpProxy").and_then(|v| v.as_str()),
+            Some("http://proxy.corp:3128")
+        );
+        let no_proxy = proxy
+            .get("noProxy")
+            .and_then(|v| v.as_array())
+            .expect("noProxy array");
+        assert_eq!(no_proxy.len(), 3);
+        assert_eq!(no_proxy[0].as_str(), Some("localhost"));
+        assert_eq!(no_proxy[1].as_str(), Some("127.0.0.1"));
+        assert_eq!(no_proxy[2].as_str(), Some(".internal"));
+
+        // Restore env
+        macro_rules! restore_var {
+            ($name:expr, $orig:expr) => {
+                if let Some(v) = &$orig {
+                    std::env::set_var($name, v);
+                } else {
+                    std::env::remove_var($name);
+                }
+            };
+        }
+        restore_var!("HTTPS_PROXY", orig_https);
+        restore_var!("HTTP_PROXY", orig_http);
+        restore_var!("NO_PROXY", orig_no);
+        restore_var!("https_proxy", orig_https_lc);
+        restore_var!("http_proxy", orig_http_lc);
+        restore_var!("no_proxy", orig_no_lc);
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        let _ = fs::remove_dir_all(tmp_home);
+    }
+
+    #[test]
+    fn picoclaw_json_no_proxy_section_when_env_unset() {
+        let _guard = test_env_lock().lock().expect("env lock");
+        let orig_https = std::env::var("HTTPS_PROXY").ok();
+        let orig_http = std::env::var("HTTP_PROXY").ok();
+        let orig_https_lc = std::env::var("https_proxy").ok();
+        let orig_http_lc = std::env::var("http_proxy").ok();
+
+        std::env::remove_var("HTTPS_PROXY");
+        std::env::remove_var("HTTP_PROXY");
+        std::env::remove_var("https_proxy");
+        std::env::remove_var("http_proxy");
+
+        let yaml = r#"
+runtime: picoclaw
+provider: openai
+providers:
+  openai:
+    api_key: sk-pico-noproxy
+"#;
+        let mut config = ClawDenYaml::parse_yaml(yaml).expect("yaml parse");
+        config.resolve_env_vars().expect("resolve env");
+
+        let result = super::generate_picoclaw_config(&config, "picoclaw");
+        assert!(
+            result.get("proxy").is_none(),
+            "proxy section should not be present when no proxy env vars set"
+        );
+
+        macro_rules! restore_var {
+            ($name:expr, $orig:expr) => {
+                if let Some(v) = &$orig {
+                    std::env::set_var($name, v);
+                } else {
+                    std::env::remove_var($name);
+                }
+            };
+        }
+        restore_var!("HTTPS_PROXY", orig_https);
+        restore_var!("HTTP_PROXY", orig_http);
+        restore_var!("https_proxy", orig_https_lc);
+        restore_var!("http_proxy", orig_http_lc);
     }
 }
