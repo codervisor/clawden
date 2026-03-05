@@ -6,6 +6,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::{direct_install_descriptors, runtime_descriptor, InstallSource, VersionSource};
+
 #[derive(Debug, Clone, Serialize)]
 pub struct InstalledRuntime {
     pub runtime: String,
@@ -73,7 +75,8 @@ impl RuntimeInstaller {
         runtime: &str,
         requested_version: Option<&str>,
     ) -> Result<InstalledRuntime> {
-        ensure_runtime_supported(runtime)?;
+        let descriptor = ensure_runtime_supported(runtime)?;
+        let runtime = descriptor.slug;
         let _lock = InstallLock::acquire(&self.lock_path)?;
 
         self.report_progress(&format!("Resolving {runtime} version…"));
@@ -88,13 +91,23 @@ impl RuntimeInstaller {
 
         fs::create_dir_all(&tmp_dir)?;
         self.report_progress(&format!("Installing {runtime}@{version}…"));
-        let executable = match runtime {
-            "zeroclaw" => self.install_zeroclaw(&version, &tmp_dir)?,
-            "picoclaw" => self.install_picoclaw(&version, &tmp_dir)?,
-            "openclaw" => self.install_openclaw(&version, &tmp_dir)?,
-            "nanoclaw" => self.install_nanoclaw(&version, &tmp_dir)?,
-            "openfang" => self.install_openfang(&version, &tmp_dir)?,
-            _ => unreachable!("validated by ensure_runtime_supported"),
+        let executable = match &descriptor.install_source {
+            InstallSource::GithubRelease {
+                owner,
+                repo,
+                archive_ext,
+            } => {
+                self.install_github_release(runtime, owner, repo, archive_ext, &version, &tmp_dir)?
+            }
+            InstallSource::Npm { package } => {
+                self.install_npm_package(runtime, package, &version, &tmp_dir)?
+            }
+            InstallSource::GitClone { url } => {
+                self.install_git_clone(runtime, url, &version, &tmp_dir)?
+            }
+            InstallSource::NotAvailable => {
+                bail!("runtime '{runtime}' has no direct install implementation")
+            }
         };
         validate_runtime_artifact(runtime, &executable)?;
 
@@ -157,8 +170,8 @@ impl RuntimeInstaller {
 
     pub fn install_all(&self) -> Result<Vec<InstalledRuntime>> {
         let mut installed = Vec::new();
-        for runtime in ["zeroclaw", "openclaw", "picoclaw", "nanoclaw", "openfang"] {
-            installed.push(self.install_runtime(runtime, None)?);
+        for descriptor in direct_install_descriptors() {
+            installed.push(self.install_runtime(descriptor.slug, None)?);
         }
         Ok(installed)
     }
@@ -172,20 +185,19 @@ impl RuntimeInstaller {
     }
 
     pub fn query_latest_version(&self, runtime: &str) -> Result<String> {
-        ensure_runtime_supported(runtime)?;
-        match runtime {
-            "zeroclaw" => Ok(normalize_version(
-                &github_release_assets("zeroclaw-labs", "zeroclaw", "latest")?.tag,
+        let descriptor = ensure_runtime_supported(runtime)?;
+        match &descriptor.version_source {
+            VersionSource::GithubLatest { owner, repo } => Ok(normalize_version(
+                &github_release_assets(owner, repo, "latest")?.tag,
             )),
-            "picoclaw" => Ok(normalize_version(
-                &github_release_assets("picoclaw-labs", "picoclaw", "latest")?.tag,
-            )),
-            "openclaw" => query_latest_openclaw_version(),
-            "nanoclaw" => query_nanoclaw_head_branch(),
-            "openfang" => Ok(normalize_version(
-                &github_release_assets("RightNow-AI", "openfang", "latest")?.tag,
-            )),
-            _ => unreachable!("validated by ensure_runtime_supported"),
+            VersionSource::Npm { package } => query_latest_npm_version(package),
+            VersionSource::GitHead { url } => query_git_head_branch(url),
+            VersionSource::NotAvailable => {
+                bail!(
+                    "runtime '{}' does not support version resolution",
+                    descriptor.slug
+                )
+            }
         }
     }
 
@@ -205,13 +217,13 @@ impl RuntimeInstaller {
     }
 
     pub fn uninstall_runtime(&self, runtime: &str) -> Result<()> {
-        ensure_runtime_supported(runtime)?;
+        let descriptor = ensure_runtime_supported(runtime)?;
         let _lock = InstallLock::acquire(&self.lock_path)?;
-        let runtime_dir = self.runtimes_dir.join(runtime);
+        let runtime_dir = self.runtimes_dir.join(descriptor.slug);
         if runtime_dir.exists() {
             fs::remove_dir_all(&runtime_dir)?;
         }
-        self.append_audit("runtime.uninstall", runtime, "ok")?;
+        self.append_audit("runtime.uninstall", descriptor.slug, "ok")?;
         Ok(())
     }
 
@@ -255,136 +267,57 @@ impl RuntimeInstaller {
         executable.exists().then_some(executable)
     }
 
-    fn install_zeroclaw(&self, version: &str, tmp_dir: &Path) -> Result<PathBuf> {
+    fn install_github_release(
+        &self,
+        slug: &str,
+        owner: &str,
+        repo: &str,
+        archive_ext: &str,
+        version: &str,
+        tmp_dir: &Path,
+    ) -> Result<PathBuf> {
         let (os, arch) = host_os_arch()?;
-        let release = github_release_assets("zeroclaw-labs", "zeroclaw", version)?;
-
-        let mut patterns = Vec::new();
-        match (os, arch) {
-            ("linux", "x86_64") => {
-                patterns.push("x86_64-unknown-linux-gnu");
-                patterns.push("linux-x86_64");
-            }
-            ("linux", "aarch64") => {
-                patterns.push("aarch64-unknown-linux-gnu");
-                patterns.push("linux-aarch64");
-                patterns.push("linux-arm64");
-            }
-            ("darwin", "x86_64") => {
-                patterns.push("x86_64-apple-darwin");
-                patterns.push("darwin-x86_64");
-            }
-            ("darwin", "aarch64") => {
-                patterns.push("aarch64-apple-darwin");
-                patterns.push("darwin-aarch64");
-                patterns.push("darwin-arm64");
-            }
-            _ => {}
-        }
-
-        let asset = pick_asset(&release.assets, &patterns, ".tar.gz").ok_or_else(|| {
-            anyhow!(
-                "no zeroclaw release asset matched platform {}-{} in {}",
-                os,
-                arch,
-                release.tag
-            )
-        })?;
-
-        let archive_path = self.download_to_cache(
-            "zeroclaw",
-            release.tag.trim_start_matches('v'),
-            &asset.name,
-            &asset.url,
-        )?;
-        self.report_progress("Extracting zeroclaw archive…");
-        self.extract_tar_gz(&archive_path, tmp_dir)?;
-
-        let candidate = find_executable_by_name(tmp_dir, "zeroclaw")?.ok_or_else(|| {
-            anyhow!(
-                "Download validation failed for {}: archive is missing expected runtime binary",
-                asset.name
-            )
-        })?;
-
-        let target = tmp_dir.join("zeroclaw");
-        fs::rename(candidate, &target)?;
-        make_executable(&target)?;
-        Ok(target)
-    }
-
-    fn install_picoclaw(&self, version: &str, tmp_dir: &Path) -> Result<PathBuf> {
-        let (os, arch) = host_os_arch()?;
-        // PicoClaw uses a non-semver release tag ("picoclaw"), so the resolved
-        // version string won't start with a digit.  Fall back to "latest" to
-        // hit the /releases/latest endpoint instead of /releases/tags/v{...}.
+        // Some runtimes use a non-semver release tag; fall back to "latest"
+        // to hit the /releases/latest endpoint.
         let query_version = if version.starts_with(|c: char| c.is_ascii_digit()) {
             version
         } else {
             "latest"
         };
-        let release = github_release_assets("picoclaw-labs", "picoclaw", query_version)?;
+        let release = github_release_assets(owner, repo, query_version)?;
+        let patterns = platform_asset_patterns(os, arch);
 
-        let mut patterns = Vec::new();
-        match (os, arch) {
-            ("linux", "x86_64") => {
-                patterns.push("linux_x64");
-                patterns.push("linux_amd64");
-                patterns.push("linux-x86_64");
-            }
-            ("linux", "aarch64") => {
-                patterns.push("linux_arm64");
-                patterns.push("linux-aarch64");
-            }
-            ("darwin", "x86_64") => {
-                patterns.push("darwin_x64");
-                patterns.push("macos_x64");
-                patterns.push("darwin-x86_64");
-            }
-            ("darwin", "aarch64") => {
-                patterns.push("darwin_arm64");
-                patterns.push("macos_arm64");
-                patterns.push("darwin-aarch64");
-            }
-            _ => {}
-        }
-
-        // PicoClaw may publish a single platform-ambiguous asset (e.g.
-        // "picoclaw_x64.7z").  When no OS-specific pattern matched, check
-        // whether the sole asset is a native binary before falling back.
-        if pick_asset(&release.assets, &patterns, ".7z").is_none() && release.assets.len() == 1 {
+        // Some runtimes publish a single platform-ambiguous archive (e.g. a
+        // sole `.7z`).  When no OS-specific pattern matched, verify the
+        // binary format before accepting it.
+        let asset = if let Some(a) = pick_asset(&release.assets, &patterns, archive_ext) {
+            a
+        } else if archive_ext == ".7z" && release.assets.len() == 1 {
             let only = &release.assets[0];
             if only.name.ends_with(".7z") {
-                // Download to a temp location and verify the binary format
-                // before committing to the install.
-                let probe_path = self.download_to_cache(
-                    "picoclaw",
+                let probe = self.download_to_cache(
+                    slug,
                     release.tag.trim_start_matches('v'),
                     &only.name,
                     &only.url,
                 )?;
-                if !is_native_7z_archive(&probe_path)? {
+                if !is_native_7z_archive(&probe)? {
                     bail!(
-                        "picoclaw release asset '{}' does not contain a native {} binary \
-                         (it appears to be a Windows executable). \
-                         PicoClaw may not publish binaries for this platform.",
+                        "{slug} release asset '{}' does not contain a native {os} binary. \
+                         {slug} may not publish binaries for this platform.",
                         only.name,
-                        os,
                     );
                 }
-                // Archive contains a native binary — allow it through.
-                patterns.push("_x64");
-                patterns.push("_amd64");
-                patterns.push("_arm64");
+                only
+            } else {
+                bail!(
+                    "no {slug} release asset matched platform {os}-{arch} in {}",
+                    release.tag,
+                )
             }
-        }
-
-        let asset = pick_asset(&release.assets, &patterns, ".7z").ok_or_else(|| {
-            anyhow!(
-                "no picoclaw release asset matched platform {}-{} in {} (available: {}). \
-                 PicoClaw may not publish binaries for this platform.",
-                os,
-                arch,
+        } else {
+            bail!(
+                "no {slug} release asset matched platform {os}-{arch} in {} (available: {})",
                 release.tag,
                 release
                     .assets
@@ -393,49 +326,60 @@ impl RuntimeInstaller {
                     .collect::<Vec<_>>()
                     .join(", "),
             )
-        })?;
+        };
 
         let archive_path = self.download_to_cache(
-            "picoclaw",
+            slug,
             release.tag.trim_start_matches('v'),
             &asset.name,
             &asset.url,
         )?;
-        self.report_progress("Extracting picoclaw archive…");
-        sevenz_rust::decompress_file(&archive_path, tmp_dir).with_context(|| {
-            format!(
-                "failed to extract picoclaw 7z archive: {}",
-                archive_path.display()
-            )
-        })?;
+        self.report_progress(&format!("Extracting {slug} archive…"));
 
-        let candidate = find_executable_by_name(tmp_dir, "picoclaw")?.ok_or_else(|| {
+        if archive_ext == ".7z" {
+            sevenz_rust::decompress_file(&archive_path, tmp_dir).with_context(|| {
+                format!(
+                    "failed to extract {slug} 7z archive: {}",
+                    archive_path.display()
+                )
+            })?;
+        } else {
+            self.extract_tar_gz(&archive_path, tmp_dir)?;
+        }
+
+        let candidate = find_executable_by_name(tmp_dir, slug)?.ok_or_else(|| {
             anyhow!(
                 "Download validation failed for {}: archive is missing expected runtime binary",
                 asset.name
             )
         })?;
 
-        let target = tmp_dir.join("picoclaw");
+        let target = tmp_dir.join(slug);
         fs::rename(candidate, &target)?;
         make_executable(&target)?;
         Ok(target)
     }
 
-    fn install_openclaw(&self, version: &str, tmp_dir: &Path) -> Result<PathBuf> {
+    fn install_npm_package(
+        &self,
+        slug: &str,
+        package: &str,
+        version: &str,
+        tmp_dir: &Path,
+    ) -> Result<PathBuf> {
         ensure_command_available("node", "node")?;
         ensure_command_available("npm", "npm")?;
 
-        let install_prefix = tmp_dir.join("openclaw-prefix");
+        let install_prefix = tmp_dir.join(format!("{slug}-prefix"));
         fs::create_dir_all(&install_prefix)?;
 
         let package_spec = if version == "latest" {
-            "openclaw@latest".to_string()
+            format!("{package}@latest")
         } else {
-            format!("openclaw@{}", normalize_version(version))
+            format!("{package}@{}", normalize_version(version))
         };
 
-        self.report_progress("Installing openclaw via npm…");
+        self.report_progress(&format!("Installing {slug} via npm…"));
         run_command(
             Command::new("npm")
                 .arg("install")
@@ -443,23 +387,29 @@ impl RuntimeInstaller {
                 .arg("--prefix")
                 .arg(&install_prefix)
                 .arg(&package_spec),
-            "install openclaw with npm",
+            &format!("install {slug} with npm"),
         )?;
 
-        let runtime_root = tmp_dir.join("openclaw-runtime");
+        let runtime_root = tmp_dir.join(format!("{slug}-runtime"));
         fs::create_dir_all(&runtime_root)?;
         fs::rename(install_prefix, runtime_root.join("current"))?;
 
-        let launcher = tmp_dir.join("openclaw");
+        let launcher = tmp_dir.join(slug);
         write_launcher(
             &launcher,
-            "openclaw",
-            "\"$SCRIPT_DIR/openclaw-runtime/current/bin/openclaw\" \"$@\"",
+            slug,
+            &format!("\"$SCRIPT_DIR/{slug}-runtime/current/bin/{slug}\" \"$@\""),
         )?;
         Ok(launcher)
     }
 
-    fn install_nanoclaw(&self, version: &str, tmp_dir: &Path) -> Result<PathBuf> {
+    fn install_git_clone(
+        &self,
+        slug: &str,
+        url: &str,
+        version: &str,
+        tmp_dir: &Path,
+    ) -> Result<PathBuf> {
         ensure_command_available("git", "git")?;
         ensure_command_available("node", "node")?;
         ensure_command_available("pnpm", "pnpm")?;
@@ -470,8 +420,8 @@ impl RuntimeInstaller {
             normalize_version(version)
         };
 
-        self.report_progress("Cloning nanoclaw repository…");
-        let repo_dir = tmp_dir.join("nanoclaw-src");
+        self.report_progress(&format!("Cloning {slug} repository…"));
+        let repo_dir = tmp_dir.join(format!("{slug}-src"));
         run_command(
             Command::new("git")
                 .arg("clone")
@@ -479,15 +429,15 @@ impl RuntimeInstaller {
                 .arg("1")
                 .arg("--branch")
                 .arg(&ref_name)
-                .arg("https://github.com/qwibitai/nanoclaw.git")
+                .arg(url)
                 .arg(&repo_dir),
-            "clone nanoclaw repository",
+            &format!("clone {slug} repository"),
         )?;
 
-        self.report_progress("Installing nanoclaw dependencies…");
+        self.report_progress(&format!("Installing {slug} dependencies…"));
         run_command(
             command_in_dir("pnpm", &repo_dir).arg("install"),
-            "install nanoclaw dependencies",
+            &format!("install {slug} dependencies"),
         )?;
 
         // pnpm's content-addressable store may skip install scripts for
@@ -497,84 +447,26 @@ impl RuntimeInstaller {
         rebuild_native_modules(&repo_dir)?;
 
         if !repo_dir.join("package.json").exists() {
-            bail!("nanoclaw validation failed: expected package.json missing");
+            bail!("{slug} validation failed: expected package.json missing");
         }
 
-        self.report_progress("Building nanoclaw…");
+        self.report_progress(&format!("Building {slug}…"));
         run_command(
             command_in_dir("pnpm", &repo_dir).arg("run").arg("build"),
-            "build nanoclaw",
+            &format!("build {slug}"),
         )?;
 
         if !repo_dir.join("dist").join("index.js").exists() {
-            bail!("nanoclaw build failed: dist/index.js not produced");
+            bail!("{slug} build failed: dist/index.js not produced");
         }
 
-        let launcher = tmp_dir.join("nanoclaw");
+        let launcher = tmp_dir.join(slug);
         write_launcher(
             &launcher,
-            "nanoclaw",
-            "cd \"$SCRIPT_DIR/nanoclaw-src\" && pnpm start -- \"$@\"",
+            slug,
+            &format!("cd \"$SCRIPT_DIR/{slug}-src\" && pnpm start -- \"$@\""),
         )?;
         Ok(launcher)
-    }
-
-    fn install_openfang(&self, version: &str, tmp_dir: &Path) -> Result<PathBuf> {
-        let (os, arch) = host_os_arch()?;
-        let release = github_release_assets("RightNow-AI", "openfang", version)?;
-
-        let mut patterns = Vec::new();
-        match (os, arch) {
-            ("linux", "x86_64") => {
-                patterns.push("x86_64-unknown-linux-gnu");
-                patterns.push("linux-x86_64");
-            }
-            ("linux", "aarch64") => {
-                patterns.push("aarch64-unknown-linux-gnu");
-                patterns.push("linux-aarch64");
-                patterns.push("linux-arm64");
-            }
-            ("darwin", "x86_64") => {
-                patterns.push("x86_64-apple-darwin");
-                patterns.push("darwin-x86_64");
-            }
-            ("darwin", "aarch64") => {
-                patterns.push("aarch64-apple-darwin");
-                patterns.push("darwin-aarch64");
-                patterns.push("darwin-arm64");
-            }
-            _ => {}
-        }
-
-        let asset = pick_asset(&release.assets, &patterns, ".tar.gz").ok_or_else(|| {
-            anyhow!(
-                "no openfang release asset matched platform {}-{} in {}",
-                os,
-                arch,
-                release.tag
-            )
-        })?;
-
-        let archive_path = self.download_to_cache(
-            "openfang",
-            release.tag.trim_start_matches('v'),
-            &asset.name,
-            &asset.url,
-        )?;
-        self.report_progress("Extracting openfang archive…");
-        self.extract_tar_gz(&archive_path, tmp_dir)?;
-
-        let candidate = find_executable_by_name(tmp_dir, "openfang")?.ok_or_else(|| {
-            anyhow!(
-                "Download validation failed for {}: archive is missing expected runtime binary",
-                asset.name
-            )
-        })?;
-
-        let target = tmp_dir.join("openfang");
-        fs::rename(candidate, &target)?;
-        make_executable(&target)?;
-        Ok(target)
     }
 
     fn download_to_cache(
@@ -653,41 +545,24 @@ impl RuntimeInstaller {
 
 /// Whether this runtime supports `--config-dir` based config injection.
 pub fn runtime_supports_config_dir(runtime: &str) -> bool {
-    matches!(runtime, "zeroclaw" | "picoclaw" | "openfang" | "nullclaw")
+    runtime_descriptor(runtime)
+        .map(|descriptor| descriptor.supports_config_dir)
+        .unwrap_or(false)
 }
 
 /// Default start args for a runtime when no subcommand is provided.
 /// Used by both `clawden run` (smart default) and `clawden up` (managed start).
 pub fn runtime_default_start_args(runtime: &str) -> &'static [&'static str] {
-    match runtime {
-        "zeroclaw" => &["daemon"],
-        "picoclaw" => &["gateway"],
-        "openfang" => &["start"],
-        "nullclaw" => &["daemon"],
-        _ => &[],
-    }
+    runtime_descriptor(runtime)
+        .map(|descriptor| descriptor.default_start_args)
+        .unwrap_or(&[])
 }
 
 /// Common runtime subcommands for hint text only. Never inject these into argv.
 pub fn runtime_subcommand_hints(runtime: &str) -> &'static [(&'static str, &'static str)] {
-    match runtime {
-        "zeroclaw" => &[
-            ("daemon", "run as background daemon"),
-            ("repl", "interactive REPL"),
-            ("chat", "single-turn chat"),
-            ("serve", "HTTP API server"),
-        ],
-        "picoclaw" => &[
-            ("gateway", "HTTP gateway mode"),
-            ("proxy", "reverse proxy mode"),
-        ],
-        "openfang" => &[
-            ("start", "start the daemon"),
-            ("chat", "quick chat with default agent"),
-        ],
-        "nullclaw" => &[("daemon", "run as background daemon")],
-        _ => &[],
-    }
+    runtime_descriptor(runtime)
+        .map(|descriptor| descriptor.subcommand_hints)
+        .unwrap_or(&[])
 }
 
 pub fn version_satisfies(installed: &str, constraint: &str) -> bool {
@@ -823,15 +698,18 @@ fn validate_runtime_artifact(runtime: &str, executable: &Path) -> Result<()> {
     Ok(())
 }
 
-fn ensure_runtime_supported(runtime: &str) -> Result<()> {
-    let allowed = ["zeroclaw", "openclaw", "picoclaw", "nanoclaw", "openfang"];
-    if allowed.contains(&runtime) {
-        return Ok(());
+fn ensure_runtime_supported(runtime: &str) -> Result<&'static crate::RuntimeDescriptor> {
+    let Some(descriptor) = runtime_descriptor(runtime) else {
+        return Err(anyhow!("runtime '{}' not recognized", runtime));
+    };
+    if descriptor.direct_install_supported {
+        Ok(descriptor)
+    } else {
+        Err(anyhow!(
+            "runtime '{}' not supported by direct installer",
+            descriptor.slug
+        ))
     }
-    Err(anyhow!(
-        "runtime '{}' not supported by direct installer",
-        runtime
-    ))
 }
 
 fn clawden_root_dir() -> Result<PathBuf> {
@@ -906,6 +784,39 @@ fn host_os_arch() -> Result<(&'static str, &'static str)> {
     Ok((os, arch))
 }
 
+/// Comprehensive set of platform-specific substrings used to match release
+/// assets across different naming conventions (Rust target triples, shorthand).
+fn platform_asset_patterns(os: &str, arch: &str) -> Vec<&'static str> {
+    match (os, arch) {
+        ("linux", "x86_64") => vec![
+            "x86_64-unknown-linux-gnu",
+            "linux-x86_64",
+            "linux_x64",
+            "linux_amd64",
+        ],
+        ("linux", "aarch64") => vec![
+            "aarch64-unknown-linux-gnu",
+            "linux-aarch64",
+            "linux-arm64",
+            "linux_arm64",
+        ],
+        ("darwin", "x86_64") => vec![
+            "x86_64-apple-darwin",
+            "darwin-x86_64",
+            "darwin_x64",
+            "macos_x64",
+        ],
+        ("darwin", "aarch64") => vec![
+            "aarch64-apple-darwin",
+            "darwin-aarch64",
+            "darwin-arm64",
+            "darwin_arm64",
+            "macos_arm64",
+        ],
+        _ => vec![],
+    }
+}
+
 /// Extract a 7z archive to a temporary directory, find the largest file,
 /// and check whether its magic bytes indicate a native binary for the
 /// current host OS (ELF on Linux, Mach-O on macOS) rather than a Windows PE.
@@ -978,38 +889,33 @@ fn is_version_constraint(raw: &str) -> bool {
         || value.starts_with('=')
 }
 
-fn query_latest_openclaw_version() -> Result<String> {
+fn query_latest_npm_version(package: &str) -> Result<String> {
     ensure_command_available("npm", "npm")?;
     let output = Command::new("npm")
-        .args(["view", "openclaw", "version", "--json"])
+        .args(["view", package, "version", "--json"])
         .output()
-        .context("failed to query npm for openclaw latest version")?;
+        .with_context(|| format!("failed to query npm for {package} latest version"))?;
     if !output.status.success() {
         bail!(
-            "npm view openclaw version failed with status {}",
+            "npm view {package} version failed with status {}",
             output.status
         );
     }
 
     let parsed: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .context("npm returned invalid JSON for openclaw latest version")?;
+        .with_context(|| format!("npm returned invalid JSON for {package} latest version"))?;
     if let Some(version) = parsed.as_str() {
         return Ok(normalize_version(version));
     }
-    bail!("npm returned unexpected latest version payload for openclaw")
+    bail!("npm returned unexpected latest version payload for {package}")
 }
 
-fn query_nanoclaw_head_branch() -> Result<String> {
+fn query_git_head_branch(url: &str) -> Result<String> {
     ensure_command_available("git", "git")?;
     let output = Command::new("git")
-        .args([
-            "ls-remote",
-            "--symref",
-            "https://github.com/qwibitai/nanoclaw.git",
-            "HEAD",
-        ])
+        .args(["ls-remote", "--symref", url, "HEAD"])
         .output()
-        .context("failed to query nanoclaw remote HEAD")?;
+        .with_context(|| format!("failed to query remote HEAD for {url}"))?;
     if !output.status.success() {
         bail!(
             "git ls-remote for nanoclaw failed with status {}",

@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::runtime_descriptor;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExecutionMode {
     Docker,
@@ -577,14 +579,7 @@ fn runtime_health_url(runtime: &str) -> Option<String> {
         }
     }
 
-    match runtime {
-        "zeroclaw" => Some("http://127.0.0.1:42617/health".to_string()),
-        "openclaw" => Some("http://127.0.0.1:18789/health".to_string()),
-        "picoclaw" => Some("http://127.0.0.1:8080/health".to_string()),
-        "nullclaw" => Some("http://127.0.0.1:3000/health".to_string()),
-        "openfang" => Some("http://127.0.0.1:50051/health".to_string()),
-        _ => None,
-    }
+    runtime_descriptor(runtime).and_then(|descriptor| descriptor.health_url())
 }
 
 fn health_check_ok(url: &str) -> bool {

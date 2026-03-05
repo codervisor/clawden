@@ -32,6 +32,17 @@ ClawDen uses a **Rust backend + React frontend** architecture:
 
 All communication with claw runtimes goes through the **Claw Runtime Interface** (`crates/clawden-core`) — Rust traits where each runtime has a pluggable adapter.
 
+### Runtime Descriptor Pattern
+
+Per-runtime metadata (install source, config format, health port, CLI args, cost tier) is
+consolidated in `RuntimeDescriptor` structs in `crates/clawden-core/src/runtime_descriptor.rs`.
+Subsystems (`install.rs`, `process.rs`, `config_gen.rs`, `manager.rs`) all consume descriptors
+instead of per-runtime match statements. **Adding a new runtime's metadata is a single-entry
+addition to the `DESCRIPTORS` array** — no other Rust files need per-runtime edits.
+
+Full lifecycle adapters (`ClawAdapter` trait) live separately in `crates/clawden-adapters/` and
+are optional — a runtime can exist as descriptor-only until a full adapter is implemented.
+
 ## Project-Specific Rules
 
 - Rust for all backend code, strict clippy, rustfmt enforced

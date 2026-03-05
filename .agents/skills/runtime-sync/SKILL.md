@@ -19,8 +19,12 @@ follow an identical structure — only metadata values (language, channels, port
 ## Decision Tree
 
 - **Adding a new runtime?** → First run the [upstream research workflow](references/upstream-sources.md#research-workflow)
-  to gather accurate metadata, then follow [full-stack-checklist.md](references/full-stack-checklist.md)
-  using [adapter-template.md](references/adapter-template.md) for the canonical Rust pattern
+  to gather accurate metadata, then follow [full-stack-checklist.md](references/full-stack-checklist.md).
+  Most metadata goes in a single `RuntimeDescriptor` entry — only add a full adapter if the
+  runtime needs lifecycle ops beyond what the descriptor provides.
+- **Updating an existing runtime's metadata?** → Edit its entry in
+  `crates/clawden-core/src/runtime_descriptor.rs`. No other Rust files need changes for
+  metadata-only updates (install source, health port, config format, cost tier, etc.).
 - **Updating an existing adapter?** → Check [upstream-sources.md](references/upstream-sources.md)
   for the runtime's repo/npm, review recent releases for changes, then update metadata
 - **Modifying adapter behavior?** → Read [consistency-rules.md](references/consistency-rules.md)
@@ -47,25 +51,41 @@ Key repos:
 
 ## Architecture Quick Reference
 
-All adapters live in `crates/clawden-adapters/src/` and implement the `ClawAdapter` trait
-from `crates/clawden-core/src/lib.rs`. They delegate container execution to shared helpers
-in `docker_runtime.rs`.
+All per-runtime metadata is consolidated in `RuntimeDescriptor` structs in
+`crates/clawden-core/src/runtime_descriptor.rs`. This is the **single source of truth**
+for installation, config, health checks, CLI args, and cost tiers. Subsystems like
+`install.rs`, `process.rs`, `config_gen.rs`, and `manager.rs` all consume descriptors
+instead of hardcoding match statements per runtime.
 
-**Currently implemented:** ZeroClaw (Rust), OpenClaw (TypeScript), PicoClaw (Go), NanoClaw (TypeScript)
+Adapters live in `crates/clawden-adapters/src/` and implement the `ClawAdapter` trait
+for lifecycle operations (start, stop, health, send, etc.). They are separate from
+descriptors — a runtime can have a descriptor without a full adapter (e.g., stub runtimes).
 
-**Defined but unimplemented:** IronClaw, NullClaw, MicroClaw, MimiClaw
+**Currently implemented (adapter + descriptor):** ZeroClaw (Rust), OpenClaw (TypeScript), PicoClaw (Go), NanoClaw (TypeScript), OpenFang (Rust)
+
+**Descriptor-only (stub, no adapter):** IronClaw, NullClaw, MicroClaw, MimiClaw
 
 **Files that reference runtimes:**
 
 | Layer | File | What to update |
 |-------|------|---------------|
-| Core enum | `crates/clawden-core/src/lib.rs` | `ClawRuntime` enum + Display/from_str_loose/as_slug |
+| Core enum | `crates/clawden-core/src/lib.rs` | `ClawRuntime` enum variant |
+| Descriptor | `crates/clawden-core/src/runtime_descriptor.rs` | Add entry to `DESCRIPTORS` array |
 | Adapter | `crates/clawden-adapters/src/{slug}.rs` | New module implementing `ClawAdapter` |
 | Features | `crates/clawden-adapters/Cargo.toml` | Feature flag + default list |
 | Registry | `crates/clawden-adapters/src/lib.rs` | mod, pub use, builtin_registry() |
 | Docker | `docker/Dockerfile` | Version ARG + install command |
 | Entrypoint | `docker/entrypoint.sh` | Runtime case statement |
 | Dashboard | `dashboard/src/components/runtimes/RuntimeCatalog.tsx` | Language colors (only if new language) |
+
+**Files that are descriptor-driven (no per-runtime edits needed):**
+
+| File | Descriptor fields consumed |
+|------|---------------------------|
+| `crates/clawden-core/src/install.rs` | `install_source`, `version_source`, `default_start_args`, `subcommand_hints`, `supports_config_dir`, `direct_install_supported` |
+| `crates/clawden-core/src/process.rs` | `health_port` (via `health_url()`) |
+| `crates/clawden-cli/src/commands/config_gen.rs` | `config_format`, `config_dir_flag`, `has_onboard_command` |
+| `crates/clawden-core/src/manager.rs` | `cost_tier` |
 
 ## Critical Consistency Rules
 

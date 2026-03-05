@@ -424,12 +424,7 @@ fn backoff_ms(base_ms: u64, failures: u32) -> u64 {
 }
 
 fn runtime_cost_tier(runtime: &ClawRuntime) -> u8 {
-    match runtime {
-        ClawRuntime::NullClaw | ClawRuntime::PicoClaw | ClawRuntime::MicroClaw => 1,
-        ClawRuntime::ZeroClaw
-        | ClawRuntime::NanoClaw
-        | ClawRuntime::MimiClaw
-        | ClawRuntime::OpenFang => 2,
-        ClawRuntime::OpenClaw | ClawRuntime::IronClaw => 3,
-    }
+    crate::runtime_descriptor_for(runtime)
+        .map(|descriptor| descriptor.cost_tier)
+        .unwrap_or(2)
 }

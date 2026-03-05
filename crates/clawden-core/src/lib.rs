@@ -5,6 +5,7 @@ mod install;
 mod lifecycle;
 mod manager;
 mod process;
+mod runtime_descriptor;
 mod swarm;
 
 use anyhow::Result;
@@ -28,6 +29,10 @@ pub use process::{
     ExecutionMode, LogLine, LogStream, ProcessInfo, ProcessManager, RuntimeProcessStatus,
     StopOutcome,
 };
+pub use runtime_descriptor::{
+    direct_install_descriptors, runtime_descriptor, runtime_descriptor_for, runtime_descriptors,
+    ConfigDirFlag, ConfigFormat, InstallSource, RuntimeDescriptor, VersionSource,
+};
 pub use swarm::{SwarmCoordinator, SwarmMember, SwarmRole};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -44,52 +49,9 @@ pub enum ClawRuntime {
     OpenFang,
 }
 
-impl std::fmt::Display for ClawRuntime {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ClawRuntime::OpenClaw => write!(f, "OpenClaw"),
-            ClawRuntime::ZeroClaw => write!(f, "ZeroClaw"),
-            ClawRuntime::PicoClaw => write!(f, "PicoClaw"),
-            ClawRuntime::NanoClaw => write!(f, "NanoClaw"),
-            ClawRuntime::IronClaw => write!(f, "IronClaw"),
-            ClawRuntime::NullClaw => write!(f, "NullClaw"),
-            ClawRuntime::MicroClaw => write!(f, "MicroClaw"),
-            ClawRuntime::MimiClaw => write!(f, "MimiClaw"),
-            ClawRuntime::OpenFang => write!(f, "OpenFang"),
-        }
-    }
-}
-
-impl ClawRuntime {
-    pub fn from_str_loose(s: &str) -> Option<Self> {
-        match s.to_ascii_lowercase().as_str() {
-            "openclaw" | "open-claw" | "open" => Some(Self::OpenClaw),
-            "zeroclaw" | "zero-claw" | "zero" => Some(Self::ZeroClaw),
-            "picoclaw" | "pico-claw" | "pico" => Some(Self::PicoClaw),
-            "nanoclaw" | "nano-claw" | "nano" => Some(Self::NanoClaw),
-            "ironclaw" | "iron-claw" | "iron" => Some(Self::IronClaw),
-            "nullclaw" | "null-claw" | "null" => Some(Self::NullClaw),
-            "microclaw" | "micro-claw" | "micro" => Some(Self::MicroClaw),
-            "mimiclaw" | "mimi-claw" | "mimi" => Some(Self::MimiClaw),
-            "openfang" | "open-fang" | "fang" => Some(Self::OpenFang),
-            _ => None,
-        }
-    }
-
-    pub fn as_slug(&self) -> &'static str {
-        match self {
-            ClawRuntime::OpenClaw => "openclaw",
-            ClawRuntime::ZeroClaw => "zeroclaw",
-            ClawRuntime::PicoClaw => "picoclaw",
-            ClawRuntime::NanoClaw => "nanoclaw",
-            ClawRuntime::IronClaw => "ironclaw",
-            ClawRuntime::NullClaw => "nullclaw",
-            ClawRuntime::MicroClaw => "microclaw",
-            ClawRuntime::MimiClaw => "mimiclaw",
-            ClawRuntime::OpenFang => "openfang",
-        }
-    }
-}
+// Display, from_str_loose, and as_slug are implemented in
+// runtime_descriptor.rs — driven by descriptor data so adding a new
+// runtime only requires one DESCRIPTORS entry.
 
 // ---------------------------------------------------------------------------
 // Channel types

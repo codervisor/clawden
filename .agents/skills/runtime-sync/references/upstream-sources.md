@@ -11,11 +11,11 @@ ensure metadata (channels, capabilities, config format, default port) is accurat
 | **PicoClaw** | GitHub releases | [`picoclaw-labs/picoclaw`](https://github.com/picoclaw-labs/picoclaw) | GitHub Release API |
 | **OpenClaw** | npm package | [`openclaw`](https://www.npmjs.com/package/openclaw) | `npm view openclaw version --json` |
 | **NanoClaw** | Git repo | [`qwibitai/nanoclaw`](https://github.com/qwibitai/nanoclaw) | `git ls-remote` HEAD branch |
-| **OpenFang** | TBD | Referenced in specs/docker but no install logic | Not yet integrated |
-| **IronClaw** | TBD | Declared in `ClawRuntime` enum, no adapter | Not yet integrated |
-| **NullClaw** | TBD | Declared in `ClawRuntime` enum, has start_args | Not yet integrated |
-| **MicroClaw** | TBD | Declared in `ClawRuntime` enum only | Not yet integrated |
-| **MimiClaw** | TBD | Declared in `ClawRuntime` enum only | Not yet integrated |
+| **OpenFang** | GitHub releases | [`RightNow-AI/openfang`](https://github.com/RightNow-AI/openfang) | GitHub Release API |
+| **IronClaw** | TBD | Descriptor-only stub (`direct_install_supported: false`) | Not yet integrated |
+| **NullClaw** | TBD | Descriptor-only stub (`direct_install_supported: false`) | Not yet integrated |
+| **MicroClaw** | TBD | Descriptor-only stub (`direct_install_supported: false`) | Not yet integrated |
+| **MimiClaw** | TBD | Descriptor-only stub (`direct_install_supported: false`) | Not yet integrated |
 
 ## Research Workflow
 
@@ -111,13 +111,22 @@ curl -s https://api.github.com/repos/zeroclaw-labs/zeroclaw/readme | jq -r '.con
 
 ## Cross-Reference: Install Logic
 
-The install logic lives in `crates/clawden-core/src/install.rs`. Key functions per runtime:
+Install logic lives in `crates/clawden-core/src/install.rs` and is **descriptor-driven**.
+The installer dispatches on `descriptor.install_source` and `descriptor.version_source`
+enums — no per-runtime match arms exist. To change a runtime's install behavior, edit its
+`RuntimeDescriptor` entry in `crates/clawden-core/src/runtime_descriptor.rs`.
 
-| Runtime | Installer function | Source pattern |
-|---------|-------------------|----------------|
-| ZeroClaw | `install_zeroclaw()` | `github_release_assets("zeroclaw-labs", "zeroclaw", version)` → tar.gz |
-| PicoClaw | `install_picoclaw()` | Direct URL: `picoclaw-labs/picoclaw/releases/download/picoclaw/picoclaw_x64.7z` |
-| OpenClaw | `install_openclaw()` | `npm install -g --prefix` |
+| Runtime | `InstallSource` | `VersionSource` |
+|---------|-----------------|------------------|
+| ZeroClaw | `GithubRelease { owner: "zeroclaw-labs", repo: "zeroclaw" }` | `GithubLatest` |
+| PicoClaw | `GithubRelease { owner: "picoclaw-labs", repo: "picoclaw" }` | `GithubLatest` |
+| OpenClaw | `Npm { package: "openclaw" }` | `Npm` |
+| NanoClaw | `GitClone { url: "...nanoclaw.git" }` | `GitHead` |
+| OpenFang | `GithubRelease { owner: "RightNow-AI", repo: "openfang" }` | `GithubLatest` |
+| IronClaw | `NotAvailable` | `NotAvailable` |
+| NullClaw | `NotAvailable` | `NotAvailable` |
+| MicroClaw | `NotAvailable` | `NotAvailable` |
+| MimiClaw | `NotAvailable` | `NotAvailable` |
 | NanoClaw | `install_nanoclaw()` | `git clone --depth 1 https://github.com/qwibitai/nanoclaw.git` + `pnpm install` |
 
 When adding a new runtime, also add a corresponding `install_{slug}()` method in `install.rs`

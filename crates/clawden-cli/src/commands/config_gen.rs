@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clawden_config::{ChannelCredentialMapper, ClawDenYaml};
-use clawden_core::runtime_supports_config_dir;
+use clawden_core::{runtime_descriptor, ConfigDirFlag, ConfigFormat};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::fs;
@@ -26,9 +26,13 @@ pub(crate) fn generate_config_dir(
     let dir = runtime_config_dir(project_hash, runtime)?;
     fs::create_dir_all(&dir)?;
 
-    match runtime {
-        "zeroclaw" | "nullclaw" | "openfang" => {
-            let base = if has_onboard_command(runtime) {
+    let Some(descriptor) = runtime_descriptor(runtime) else {
+        return Ok(None);
+    };
+
+    match descriptor.config_format {
+        ConfigFormat::Toml => {
+            let base = if descriptor.has_onboard_command {
                 seed_template_config(executable, runtime, config, &dir)
             } else {
                 None
@@ -39,7 +43,7 @@ pub(crate) fn generate_config_dir(
                 toml::to_string_pretty(&body)?.as_bytes(),
             )?;
         }
-        "picoclaw" => {
+        ConfigFormat::Json => {
             let body = generate_picoclaw_config(config, runtime);
             write_secret_file(
                 &dir.join("config.json"),
@@ -55,7 +59,9 @@ pub(crate) fn generate_config_dir(
 /// Returns true for runtimes that support `<runtime> onboard --config-dir`
 /// to generate a template config with all required default fields.
 pub(crate) fn has_onboard_command(runtime: &str) -> bool {
-    matches!(runtime, "zeroclaw")
+    runtime_descriptor(runtime)
+        .map(|descriptor| descriptor.has_onboard_command)
+        .unwrap_or(false)
 }
 
 /// Run `<runtime> onboard --config-dir <dir> --force` to seed a template
@@ -152,16 +158,22 @@ pub(crate) fn inject_config_dir_arg(runtime: &str, args: &mut Vec<String>, confi
         .map(|idx| idx + 1)
         .unwrap_or(0);
 
-    // OpenFang accepts `--config <file>` rather than `--config-dir <dir>`.
-    if runtime == "openfang" {
-        args.insert(insert_at, "--config".to_string());
-        args.insert(
-            insert_at + 1,
-            config_dir.join("config.toml").to_string_lossy().to_string(),
-        );
-    } else {
-        args.insert(insert_at, "--config-dir".to_string());
-        args.insert(insert_at + 1, config_dir.to_string_lossy().to_string());
+    let Some(descriptor) = runtime_descriptor(runtime) else {
+        return;
+    };
+
+    match descriptor.config_dir_flag {
+        ConfigDirFlag::ConfigDir => {
+            args.insert(insert_at, "--config-dir".to_string());
+            args.insert(insert_at + 1, config_dir.to_string_lossy().to_string());
+        }
+        ConfigDirFlag::ConfigFile { filename } => {
+            args.insert(insert_at, "--config".to_string());
+            args.insert(
+                insert_at + 1,
+                config_dir.join(filename).to_string_lossy().to_string(),
+            );
+        }
     }
 }
 
@@ -524,7 +536,9 @@ fn write_secret_file(path: &Path, data: &[u8]) -> Result<()> {
 }
 
 fn supports_config_dir(runtime: &str) -> bool {
-    runtime_supports_config_dir(runtime)
+    runtime_descriptor(runtime)
+        .map(|descriptor| descriptor.supports_config_dir)
+        .unwrap_or(false)
 }
 
 fn clawden_root_dir() -> Result<PathBuf> {

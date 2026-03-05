@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-03-05
 priority: high
 tags:
@@ -12,9 +12,11 @@ tags:
 depends_on:
 - 010-claw-runtime-interface
 created_at: 2026-03-05T04:02:12.994673360Z
-updated_at: 2026-03-05T04:02:12.994673360Z
+updated_at: 2026-03-05T05:57:13.638189638Z
+transitions:
+- status: in-progress
+  at: 2026-03-05T05:08:49.901197031Z
 ---
-
 # Runtime Descriptor Refactor — Decouple Per-Runtime Metadata from Hardcoded Match Statements
 
 ## Overview
@@ -188,25 +190,25 @@ Two options (decide during implementation):
 
 ## Plan
 
-- [ ] Define `RuntimeDescriptor` trait and supporting enums in `clawden-core`
-- [ ] Implement `RuntimeDescriptor` for all 5 supported runtimes (ZeroClaw, OpenClaw, PicoClaw, NanoClaw, OpenFang)
-- [ ] Add stub descriptors for enum-only runtimes (IronClaw, NullClaw, MicroClaw, MimiClaw) with `is_direct_install_supported() = false`
-- [ ] Create `DescriptorRegistry` with lookup by slug and `ClawRuntime` enum
-- [ ] Refactor `install.rs` — replace all match statements with descriptor calls
-- [ ] Refactor `process.rs` — replace `runtime_health_url()` with descriptor
-- [ ] Refactor `config_gen.rs` — replace format/flag/onboard matches with descriptor
-- [ ] Refactor `manager.rs` — replace `runtime_cost_tier()` with descriptor
-- [ ] Delete dead per-runtime private methods in `install.rs` (consolidate into generic helpers)
-- [ ] Update tests to use descriptor-based API
+- [x] Define `RuntimeDescriptor` trait and supporting enums in `clawden-core`
+- [x] Implement `RuntimeDescriptor` for all 5 supported runtimes (ZeroClaw, OpenClaw, PicoClaw, NanoClaw, OpenFang)
+- [x] Add stub descriptors for enum-only runtimes (IronClaw, NullClaw, MicroClaw, MimiClaw) with `is_direct_install_supported() = false`
+- [x] Create `DescriptorRegistry` with lookup by slug and `ClawRuntime` enum
+- [x] Refactor `install.rs` — replace all match statements with descriptor calls
+- [x] Refactor `process.rs` — replace `runtime_health_url()` with descriptor
+- [x] Refactor `config_gen.rs` — replace format/flag/onboard matches with descriptor
+- [x] Refactor `manager.rs` — replace `runtime_cost_tier()` with descriptor
+- [x] Delete dead per-runtime private methods in `install.rs` (consolidate into generic helpers)
+- [x] Update tests to use descriptor-based API
 
 ## Test
 
-- [ ] `cargo test -p clawden-core` passes — descriptor trait + registry work
-- [ ] `cargo test -p clawden-cli` passes — all CLI integration tests pass with refactored code
-- [ ] `cargo clippy` clean across workspace
-- [ ] Adding a hypothetical new runtime requires only one new descriptor file (verify manually)
-- [ ] All existing `clawden run <runtime>` behaviors are preserved (no regression)
-- [ ] Feature-gated compilation still works (`cargo build --no-default-features`)
+- [x] `cargo test -p clawden-core` passes — descriptor trait + registry work
+- [x] `cargo test -p clawden-cli` passes — all CLI integration tests pass with refactored code
+- [x] `cargo clippy` clean across workspace
+- [x] Adding a hypothetical new runtime requires only one new descriptor file (verify manually)
+- [x] All existing `clawden run <runtime>` behaviors are preserved (no regression)
+- [x] Feature-gated compilation still works (`cargo build --no-default-features`)
 
 ## Notes
 
