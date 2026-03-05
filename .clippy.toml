@@ -1,0 +1,17 @@
+# Clippy configuration for the clawden workspace.
+# Relax lints that are too strict for common Rust patterns.
+
+# Allow functions with more arguments than the default limit of 7.
+too-many-arguments-threshold = 10
+
+# Allow more lines per function before triggering too-many-lines.
+too-many-lines-threshold = 150
+
+# Allow slightly longer type complexity.
+type-complexity-threshold = 300
+
+# Allow more items in a module before triggering the module_name_repetitions lint.
+# (not a numeric threshold — handled by allow attrs where needed)
+
+# Suppress cognitive complexity warnings for moderately complex functions.
+cognitive-complexity-threshold = 30
