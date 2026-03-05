@@ -462,8 +462,8 @@ mod tests {
         assert_eq!(pairs, vec![("marvzhang".to_string(), "123456".to_string())]);
     }
 
-    #[tokio::test]
-    async fn resolves_cached_username_for_openclaw_telegram_channel() {
+    #[test]
+    fn resolves_cached_username_for_openclaw_telegram_channel() {
         let _guard = test_env_lock().lock().expect("env lock");
         let original_cwd = std::env::current_dir().expect("cwd");
         let original_token = std::env::var("TELEGRAM_BOT_TOKEN").ok();
@@ -500,8 +500,14 @@ channels:
         .expect("yaml parse");
         cfg.resolve_env_vars().expect("resolve env");
 
-        resolve_openclaw_telegram_allowed_users_for_runtime(&mut cfg, "openclaw")
-            .await
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        runtime
+            .block_on(resolve_openclaw_telegram_allowed_users_for_runtime(
+                &mut cfg, "openclaw",
+            ))
             .expect("resolution");
         let generated = generate_openclaw_config(&cfg, "openclaw");
         assert_eq!(
