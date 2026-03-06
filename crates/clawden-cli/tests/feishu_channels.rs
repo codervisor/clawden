@@ -20,6 +20,16 @@ fn binary_path() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_clawden-cli"))
 }
 
+fn cli_command(dir: &PathBuf, home: &PathBuf) -> Command {
+    let mut command = Command::new(binary_path());
+    command
+        .current_dir(dir)
+        .env("HOME", home)
+        .env_remove("FEISHU_APP_ID")
+        .env_remove("FEISHU_APP_SECRET");
+    command
+}
+
 fn start_feishu_success_server(expected_app_id: Option<&str>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("server should bind");
     let addr = listener
@@ -135,9 +145,7 @@ fn feishu_verify_succeeds_with_flag_credentials() {
     fs::create_dir_all(&home).expect("home should exist");
     let base_url = start_feishu_success_server(Some("cli_test"));
 
-    let output = Command::new(binary_path())
-        .current_dir(&dir)
-        .env("HOME", &home)
+    let output = cli_command(&dir, &home)
         .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
         .args([
             "channels",
@@ -166,9 +174,7 @@ fn feishu_verify_reports_invalid_credentials() {
     fs::create_dir_all(&home).expect("home should exist");
     let base_url = start_feishu_invalid_credentials_server();
 
-    let output = Command::new(binary_path())
-        .current_dir(&dir)
-        .env("HOME", &home)
+    let output = cli_command(&dir, &home)
         .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
         .args([
             "channels",
@@ -194,9 +200,7 @@ fn feishu_verify_reports_missing_bot_capability() {
     fs::create_dir_all(&home).expect("home should exist");
     let base_url = start_feishu_bot_disabled_server();
 
-    let output = Command::new(binary_path())
-        .current_dir(&dir)
-        .env("HOME", &home)
+    let output = cli_command(&dir, &home)
         .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
         .args([
             "channels",
@@ -221,16 +225,62 @@ fn feishu_verify_reports_missing_config_without_flags() {
     let home = dir.join("home");
     fs::create_dir_all(&home).expect("home should exist");
 
-    let output = Command::new(binary_path())
-        .current_dir(&dir)
-        .env("HOME", &home)
+    let output = cli_command(&dir, &home)
         .args(["channels", "feishu", "verify"])
         .output()
         .expect("verify should run");
     assert!(!output.status.success());
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("no clawden.yaml found in current directory"));
+    assert!(stderr.contains("missing Feishu app_id"));
+}
+
+#[test]
+fn feishu_verify_succeeds_with_env_credentials_without_yaml() {
+    let dir = temp_dir("feishu-verify-env-only");
+    let home = dir.join("home");
+    fs::create_dir_all(&home).expect("home should exist");
+    let base_url = start_feishu_success_server(Some("env_test"));
+
+    let output = cli_command(&dir, &home)
+        .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
+        .env("FEISHU_APP_ID", "env_test")
+        .env("FEISHU_APP_SECRET", "env_secret")
+        .args(["channels", "feishu", "verify"])
+        .output()
+        .expect("verify should run");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("App ID:           env_test"));
+}
+
+#[test]
+fn feishu_verify_prefers_flags_over_env_credentials() {
+    let dir = temp_dir("feishu-verify-flags-over-env");
+    let home = dir.join("home");
+    fs::create_dir_all(&home).expect("home should exist");
+    let base_url = start_feishu_success_server(Some("cli_override"));
+
+    let output = cli_command(&dir, &home)
+        .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
+        .env("FEISHU_APP_ID", "env_test")
+        .env("FEISHU_APP_SECRET", "env_secret")
+        .args([
+            "channels",
+            "feishu",
+            "verify",
+            "--app-id",
+            "cli_override",
+            "--app-secret",
+            "override_secret",
+        ])
+        .output()
+        .expect("verify should run");
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("App ID:           cli_override"));
 }
 
 #[test]
@@ -257,9 +307,7 @@ channels:
     )
     .expect("yaml should be written");
 
-    let output = Command::new(binary_path())
-        .current_dir(&dir)
-        .env("HOME", &home)
+    let output = cli_command(&dir, &home)
         .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
         .args([
             "channels",
@@ -297,9 +345,7 @@ channels:
     )
     .expect("yaml should be written");
 
-    let output = Command::new(binary_path())
-        .current_dir(&dir)
-        .env("HOME", &home)
+    let output = cli_command(&dir, &home)
         .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
         .args([
             "channels",
@@ -342,9 +388,7 @@ channels:
     )
     .expect("yaml should be written");
 
-    let mut child = Command::new(binary_path())
-        .current_dir(&dir)
-        .env("HOME", &home)
+    let mut child = cli_command(&dir, &home)
         .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
         .args(["channels", "feishu", "verify"])
         .stdin(Stdio::piped())
@@ -374,9 +418,7 @@ fn feishu_setup_prints_steps_and_verifies_credentials() {
     fs::create_dir_all(&home).expect("home should exist");
     let base_url = start_feishu_success_server(Some("cli_setup"));
 
-    let mut child = Command::new(binary_path())
-        .current_dir(&dir)
-        .env("HOME", &home)
+    let mut child = cli_command(&dir, &home)
         .env("CLAWDEN_FEISHU_API_BASE_URL", &base_url)
         .args(["channels", "feishu", "setup"])
         .stdin(Stdio::piped())

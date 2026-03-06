@@ -201,16 +201,20 @@ fn resolve_feishu_credentials(
     app_secret_override: Option<&str>,
     channel_name: Option<&str>,
 ) -> Result<FeishuCredentials> {
-    let need_config_lookup =
-        channel_name.is_some() || app_id_override.is_none() || app_secret_override.is_none();
+    let env_app_id = env_credential("FEISHU_APP_ID");
+    let env_app_secret = env_credential("FEISHU_APP_SECRET");
+    let need_config_lookup = channel_name.is_some()
+        || app_id_override.is_none() && env_app_id.is_none()
+        || app_secret_override.is_none() && env_app_secret.is_none();
     let selected_channel = if need_config_lookup {
         let config = super::up::load_config_with_env_file(None)?;
-        let Some(config) = config else {
-            anyhow::bail!(
-                "no clawden.yaml found in current directory and no complete --app-id/--app-secret override was provided"
-            );
-        };
-        select_feishu_channel(&config, channel_name)?
+        match config {
+            Some(config) => select_feishu_channel(&config, channel_name)?,
+            None if channel_name.is_some() => {
+                anyhow::bail!("--channel requires clawden.yaml in the current directory");
+            }
+            None => None,
+        }
     } else {
         None
     };
@@ -220,24 +224,33 @@ fn resolve_feishu_credentials(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+        .or(env_app_id)
         .or_else(|| channel_field(channel_ref, "app_id"))
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "missing Feishu app_id; pass --app-id or configure channels.<name>.app_id"
+                "missing Feishu app_id; set FEISHU_APP_ID, pass --app-id, or configure channels.<name>.app_id"
             )
         })?;
     let app_secret = app_secret_override
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+        .or(env_app_secret)
         .or_else(|| channel_field(channel_ref, "app_secret"))
-        .ok_or_else(|| anyhow::anyhow!("missing Feishu app_secret; pass --app-secret or configure channels.<name>.app_secret"))?;
+        .ok_or_else(|| anyhow::anyhow!("missing Feishu app_secret; set FEISHU_APP_SECRET, pass --app-secret, or configure channels.<name>.app_secret"))?;
 
     Ok(FeishuCredentials {
         channel_name: selected_channel.map(|(name, _)| name),
         app_id,
         app_secret,
     })
+}
+
+fn env_credential(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn select_feishu_channel(
