@@ -1,3 +1,62 @@
 {
-    "name": "Clawden Dev"
+    "name": "ClawDen Dev",
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+    "features": {
+        // Install the Node.js and pnpm versions used by this workspace.
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "20",
+            "pnpmVersion": "10.30.2"
+        },
+        // Install the Rust toolchain used by the backend crates.
+        "ghcr.io/devcontainers/features/rust:1": {
+            "version": "latest",
+            "profile": "default"
+        },
+        // Expose the host Docker daemon so direct and Docker runtime flows both work.
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+        "ghcr.io/devcontainers/features/common-utils:1": {
+            "configureZshAsDefaultShell": true
+        }
+    },
+    // Keep environment defaults aligned with local development commands.
+    "containerEnv": {
+        "NODE_ENV": "development"
+    },
+    // Keep build outputs and package caches in named volumes for better container performance.
+    "mounts": [
+        "source=${localWorkspaceFolderBasename}-rust-target,target=${containerWorkspaceFolder}/target,type=volume",
+        "source=${localWorkspaceFolderBasename}-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
+        "source=${localWorkspaceFolderBasename}-pnpm-store,target=/home/vscode/.local/share/pnpm/store,type=volume"
+    ],
+    "forwardPorts": [5173, 8080],
+    "portsAttributes": {
+        "5173": {
+            "label": "ClawDen Dashboard (Vite)"
+        },
+        "8080": {
+            "label": "ClawDen Server"
+        }
+    },
+    // VS Code extension integration for the Rust backend and React dashboard.
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer", // Core Rust support
+                "tamasfe.even-better-toml", // TOML syntax highlighting
+                "dbaeumer.vscode-eslint", // TypeScript linting
+                "esbenp.prettier-vscode", // Code formatting
+                "bradlc.vscode-tailwindcss", // Tailwind support for the dashboard
+                "irongeek.vscode-rust-mod-generator",
+                "vadimcn.vscode-lldb" // Essential for Rust debugging
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "zsh",
+                "editor.formatOnSave": true,
+                "rust-analyzer.cargo.targetDir": true // Works with the volume mounts above
+            }
+        }
+    },
+    // Install workspace dependencies and common Rust tooling after the container is created.
+    "postCreateCommand": "pnpm install --frozen-lockfile && rustup component add rust-src rustfmt clippy",
+    "remoteUser": "vscode"
 }
