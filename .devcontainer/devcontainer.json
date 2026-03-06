@@ -1,0 +1,7 @@
+{
+    "name": "Clawden Dev",
+    "features": {
+        "ghcr.io/tailscale/codespace:latest": {}
+    },
+    "overrideCommand": false
+}
