@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-03-06
 priority: high
 tags:
@@ -12,7 +12,13 @@ tags:
 depends_on:
 - 018-channel-support-matrix
 created_at: 2026-03-06T01:45:36.461489394Z
-updated_at: 2026-03-06T01:45:36.461489394Z
+updated_at: 2026-03-06T02:00:52.754713056Z
+completed_at: 2026-03-06T02:00:52.754713056Z
+transitions:
+- status: in-progress
+  at: 2026-03-06T01:51:39.395544883Z
+- status: complete
+  at: 2026-03-06T02:00:52.754713056Z
 ---
 
 # Feishu Channel Onboarding & Credential Verification
@@ -172,26 +178,26 @@ Both are safe read-only calls with no side effects.
 
 ## Plan
 
-- [ ] Add `FeishuCommand` enum to `cli.rs` with `Verify` and `Setup` variants
-- [ ] Add `ChannelCommand::Feishu` arm mirroring `ChannelCommand::Telegram`
-- [ ] Create `feishu.rs` with `exec_feishu()` dispatcher
-- [ ] Implement `FeishuVerifier` — tenant token + bot info API calls
-- [ ] Implement `clawden channels feishu verify` — credential check + checklist output
-- [ ] Implement `clawden channels feishu setup` — interactive guided walkthrough
-- [ ] Route `ChannelCommand::Feishu` in `channels.rs`
-- [ ] Add unit tests for credential resolution and API response parsing
-- [ ] Add integration test: valid credentials → successful verification output
+- [x] Add `FeishuCommand` enum to `cli.rs` with `Verify` and `Setup` variants
+- [x] Add `ChannelCommand::Feishu` arm mirroring `ChannelCommand::Telegram`
+- [x] Create `feishu.rs` with `exec_feishu()` dispatcher
+- [x] Implement `FeishuVerifier` — tenant token + bot info API calls
+- [x] Implement `clawden channels feishu verify` — credential check + checklist output
+- [x] Implement `clawden channels feishu setup` — interactive guided walkthrough
+- [x] Route `ChannelCommand::Feishu` in `channels.rs`
+- [x] Add unit tests for credential resolution and API response parsing
+- [x] Add integration test: valid credentials → successful verification output
 
 ## Test
 
-- [ ] `clawden channels feishu verify` with valid credentials → "✓ valid" output
-- [ ] `clawden channels feishu verify` with invalid credentials → clear error message
-- [ ] `clawden channels feishu verify` with missing clawden.yaml → helpful error
-- [ ] `clawden channels feishu verify --app-id X --app-secret Y` → uses flag values over yaml
-- [ ] `clawden channels feishu verify --channel my-feishu-bot` → picks correct channel instance
-- [ ] `clawden channels feishu setup` → prints all 6 steps, prompts for credentials, runs verify
-- [ ] Bot not enabled → specific error message about enabling bot capability
-- [ ] Multiple feishu channels in yaml without `--channel` → prompts user to select
+- [x] `clawden channels feishu verify` with valid credentials → "✓ valid" output
+- [x] `clawden channels feishu verify` with invalid credentials → clear error message
+- [x] `clawden channels feishu verify` with missing clawden.yaml → helpful error
+- [x] `clawden channels feishu verify --app-id X --app-secret Y` → uses flag values over yaml
+- [x] `clawden channels feishu verify --channel my-feishu-bot` → picks correct channel instance
+- [x] `clawden channels feishu setup` → prints all 6 steps, prompts for credentials, runs verify
+- [x] Bot not enabled → specific error message about enabling bot capability
+- [x] Multiple feishu channels in yaml without `--channel` → prompts user to select
 
 ## Notes
 

@@ -21,6 +21,9 @@ pub async fn exec_channels(
         Some(ChannelCommand::Test { channel_type }) => {
             test_channels(channel_type.as_deref())?;
         }
+        Some(ChannelCommand::Feishu { command }) => {
+            super::feishu::exec_feishu(command).await?;
+        }
         Some(ChannelCommand::Telegram { command }) => {
             super::telegram::exec_telegram(command).await?;
         }

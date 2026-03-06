@@ -288,11 +288,34 @@ pub enum ChannelCommand {
         /// Specific channel type to test
         channel_type: Option<String>,
     },
+    /// Feishu/Lark-specific utilities
+    Feishu {
+        #[command(subcommand)]
+        command: FeishuCommand,
+    },
     /// Telegram-specific utilities
     Telegram {
         #[command(subcommand)]
         command: TelegramCommand,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum FeishuCommand {
+    /// Verify Feishu app credentials and bot readiness
+    Verify {
+        /// Override Feishu app ID
+        #[arg(long = "app-id")]
+        app_id: Option<String>,
+        /// Override Feishu app secret
+        #[arg(long = "app-secret")]
+        app_secret: Option<String>,
+        /// Feishu channel name from clawden.yaml when multiple are configured
+        #[arg(long)]
+        channel: Option<String>,
+    },
+    /// Guided Feishu app setup walkthrough
+    Setup,
 }
 
 #[derive(Debug, Subcommand)]

@@ -5,6 +5,7 @@ mod dashboard;
 mod docker;
 mod doctor;
 mod down;
+mod feishu;
 mod init;
 mod install;
 mod logs;
