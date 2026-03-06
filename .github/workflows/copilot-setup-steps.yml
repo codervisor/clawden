@@ -52,4 +52,4 @@ jobs:
       - name: Verify clawden CLI
         run: |
           echo "clawden CLI build output:"
-          ./target/debug/clawden-cli --help
+          ./target/debug/clawden --help

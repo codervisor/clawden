@@ -4,6 +4,10 @@ license.workspace = true
 name = "clawden-cli"
 version.workspace = true
 
+[[bin]]
+name = "clawden"
+path = "src/main.rs"
+
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true

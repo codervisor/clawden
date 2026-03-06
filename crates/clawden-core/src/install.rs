@@ -333,6 +333,16 @@ impl RuntimeInstaller {
             &asset.name,
             &asset.url,
         )?;
+
+        if archive_ext == ".7z" {
+            probe_runtime_archive(slug, &archive_path).with_context(|| {
+                format!(
+                    "{slug} release asset '{}' is not runnable on {os}-{arch}",
+                    asset.name
+                )
+            })?;
+        }
+
         self.report_progress(&format!("Extracting {slug} archive…"));
 
         if archive_ext == ".7z" {

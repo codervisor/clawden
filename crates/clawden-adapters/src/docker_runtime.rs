@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::Duration;
 
-const DEFAULT_IMAGE: &str = "ghcr.io/codervisor/clawden-runtime:latest";
+const DEFAULT_IMAGE: &str = "ghcr.io/codervisor/clawden:openclaw";
 const DEFAULT_STARTUP_GRACE_MS: u64 = 3_000;
 
 pub fn runtime_config_values(runtime: &str, config: &AgentConfig) -> RuntimeConfig {
@@ -327,7 +327,7 @@ mod tests {
             ClawRuntime::ZeroClaw,
             &cfg,
             "clawden-zeroclaw-alpha",
-            "ghcr.io/codervisor/clawden-runtime:latest",
+            "ghcr.io/codervisor/clawden:openclaw",
         );
 
         assert!(args.contains(&"run".to_string()));
@@ -369,7 +369,7 @@ mod tests {
             ClawRuntime::ZeroClaw,
             &cfg,
             "clawden-zeroclaw-alpha",
-            "ghcr.io/codervisor/clawden-runtime:latest",
+            "ghcr.io/codervisor/clawden:openclaw",
         );
 
         assert!(!args.contains(&"--rm".to_string()));

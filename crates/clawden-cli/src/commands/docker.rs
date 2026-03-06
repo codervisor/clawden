@@ -8,7 +8,7 @@ use crate::commands::run::{exec_run, RunOptions};
 use crate::commands::up::{exec_up, UpOptions};
 use crate::util::command_exists;
 
-const DEFAULT_RUNTIME_IMAGE: &str = "ghcr.io/codervisor/clawden-runtime:latest";
+const DEFAULT_RUNTIME_IMAGE: &str = "ghcr.io/codervisor/clawden:openclaw";
 
 pub async fn exec_docker(
     command: DockerCommand,

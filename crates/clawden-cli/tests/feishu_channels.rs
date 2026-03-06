@@ -17,7 +17,7 @@ fn temp_dir(name: &str) -> PathBuf {
 }
 
 fn binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_clawden-cli"))
+    PathBuf::from(env!("CARGO_BIN_EXE_clawden"))
 }
 
 fn cli_command(dir: &PathBuf, home: &PathBuf) -> Command {

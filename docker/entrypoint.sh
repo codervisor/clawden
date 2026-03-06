@@ -1,231 +1,102 @@
 #!/usr/bin/env bash
-# ClawDen Runtime Entrypoint
+# ClawDen Entrypoint
 #
-# Environment variables (set by `clawden` CLI):
-#   RUNTIME  — runtime to launch (zeroclaw, picoclaw, openclaw, nanoclaw, openfang)
-#   TOOLS    — comma-separated list of tools to set up (git, http, browser, gui)
+# The RUNTIME env var is pre-set by the Docker image (openclaw or zeroclaw).
+# Users just need to pass LLM provider API keys via environment variables.
 #
-# This script:
-#   1. Sources tool setup scripts for each requested tool
-#   2. Applies runtime-specific defaults
-#   3. Execs into the runtime binary/process
+# Usage:
+#   docker run -e OPENAI_API_KEY=sk-... ghcr.io/codervisor/clawden:openclaw
+#   docker run -e ANTHROPIC_API_KEY=sk-... ghcr.io/codervisor/clawden:zeroclaw
+#   docker run ghcr.io/codervisor/clawden:openclaw gateway --help
 
 set -euo pipefail
 
-EX_CONFIG=78
+trap 'echo "[clawden] Interrupted"; exit 130' INT TERM
 
 RUNTIME="${RUNTIME:-}"
-TOOLS="${TOOLS:-}"
-SUPPORTED_RUNTIMES=(zeroclaw picoclaw openclaw nanoclaw openfang)
-
-supported_runtimes_csv() {
-    local joined=""
-    local runtime
-    for runtime in "${SUPPORTED_RUNTIMES[@]}"; do
-        if [ -n "$joined" ]; then
-            joined+=", "
-        fi
-        joined+="${runtime}"
-    done
-    printf '%s\n' "$joined"
-}
-
-print_supported_runtimes() {
-    printf '%s\n' "${SUPPORTED_RUNTIMES[@]}"
-}
-
-is_supported_runtime() {
-    local candidate="$1"
-    local runtime
-    for runtime in "${SUPPORTED_RUNTIMES[@]}"; do
-        if [ "$runtime" = "$candidate" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-print_usage() {
-    cat <<EOF
-ClawDen runtime image
-
-Usage:
-  docker run ghcr.io/codervisor/clawden-runtime:latest <runtime> [runtime-args...]
-  docker run -e RUNTIME=<runtime> ghcr.io/codervisor/clawden-runtime:latest [runtime-args...]
-
-Supported runtimes:
-  $(supported_runtimes_csv)
-
-Examples:
-  docker run --rm ghcr.io/codervisor/clawden-runtime:latest zeroclaw
-  docker run --rm ghcr.io/codervisor/clawden-runtime:latest zeroclaw --help
-  docker run --rm -e RUNTIME=openclaw ghcr.io/codervisor/clawden-runtime:latest gateway
-
-Wrapper commands:
-  --help           Show this help
-  --list-runtimes  Print supported runtime slugs
-EOF
-}
-
-if [ -z "$RUNTIME" ]; then
-    if [ $# -eq 0 ]; then
-        echo "Error: missing runtime name." >&2
-        print_usage >&2
-        exit 1
-    fi
-
-    case "$1" in
-        --help|-h)
-            print_usage
-            exit 0
-            ;;
-        --list-runtimes)
-            print_supported_runtimes
-            exit 0
-            ;;
-    esac
-
-    if is_supported_runtime "$1"; then
-        RUNTIME="$1"
-        shift
-    else
-        echo "Error: Unknown runtime '$1'." >&2
-        print_usage >&2
-        exit 1
-    fi
-fi
-
-export RUNTIME
-
-# --- Tool setup ---
-TOOLS_STATE_DIR="/run/clawden"
-if ! mkdir -p "$TOOLS_STATE_DIR" 2>/dev/null; then
-    TOOLS_STATE_DIR="${HOME}/.clawden/run"
-    mkdir -p "$TOOLS_STATE_DIR"
-fi
-ACTIVATED_TOOLS=()
-TOOLS_JSON='{}'
-
-if [ -n "$TOOLS" ]; then
-    IFS=',' read -ra TOOL_LIST <<< "$TOOLS"
-
-    has_requested_tool() {
-        local required="$1"
-        for requested in "${TOOL_LIST[@]}"; do
-            if [ "$(echo "$requested" | xargs)" = "$required" ]; then
-                return 0
-            fi
-        done
-        return 1
-    }
-
-    for tool in "${TOOL_LIST[@]}"; do
-        tool="$(echo "$tool" | xargs)"  # trim whitespace
-        setup_script="/opt/clawden/tools/${tool}/setup.sh"
-        manifest="/opt/clawden/tools/${tool}/manifest.toml"
-
-        if [ -f "$manifest" ]; then
-            # NOTE: this parser supports single-line requires arrays only (e.g. requires = ["browser"]).
-            requires_raw="$(awk -F= '/^requires[[:space:]]*=/{print $2; exit}' "$manifest" | tr -d '[]"')"
-            if [ -n "$requires_raw" ]; then
-                IFS=',' read -ra REQUIRES <<< "$requires_raw"
-                for dep in "${REQUIRES[@]}"; do
-                    dep="$(echo "$dep" | xargs)"
-                    if [ -n "$dep" ] && ! has_requested_tool "$dep"; then
-                        echo "[clawden] Error: Tool '${tool}' requires '${dep}'. Add it to TOOLS." >&2
-                        exit 1
-                    fi
-                done
-            fi
-        fi
-
-        if [ -f "$setup_script" ]; then
-            echo "[clawden] Setting up tool: ${tool}"
-            # shellcheck disable=SC1090
-            source "$setup_script"
-            ACTIVATED_TOOLS+=("$tool")
-            TOOLS_JSON="$(jq --arg tool "$tool" --arg bin "$setup_script" \
-                '. + {($tool): {"version": "unknown", "bin": $bin}}' <<<"$TOOLS_JSON")"
-        else
-            echo "[clawden] Warning: Unknown tool '${tool}', skipping" >&2
-        fi
-    done
-fi
-
-CLAWDEN_TOOLS="$(IFS=,; echo "${ACTIVATED_TOOLS[*]}")"
-export CLAWDEN_TOOLS
-
-ACTIVATED_JSON="$(printf '%s\n' "${ACTIVATED_TOOLS[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
-jq -n --argjson activated "$ACTIVATED_JSON" --argjson tools "$TOOLS_JSON" \
-    '{activated: $activated, tools: $tools}' > "${TOOLS_STATE_DIR}/tools.json"
-
-# --- Runtime launch ---
-# Runtimes are installed by `clawden-cli install` into $HOME/.clawden/runtimes/
-# Each runtime has a versioned dir with a `current` symlink and a launcher/binary.
 CLAWDEN_RUNTIMES="${HOME}/.clawden/runtimes"
 
-echo "[clawden] Starting runtime: ${RUNTIME}"
+# --- Help ---
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    cat <<'EOF'
+ClawDen Docker Image
 
-# Default start subcommand per runtime (used when no args are passed)
-runtime_default_args() {
-    case "$1" in
-        zeroclaw)  echo "daemon" ;;
-        picoclaw)  echo "gateway" ;;
-        openclaw)  echo "gateway --allow-unconfigured" ;;
-        openfang)  echo "daemon" ;;
-        nullclaw)  echo "daemon" ;;
-        *)         echo "" ;;
-    esac
-}
+Usage:
+  docker run -e OPENAI_API_KEY=sk-... ghcr.io/codervisor/clawden:openclaw
+  docker run -e ANTHROPIC_API_KEY=sk-... ghcr.io/codervisor/clawden:zeroclaw
+  docker run ghcr.io/codervisor/clawden:openclaw [runtime-args...]
 
-has_any_env_var() {
-    for env_var in "$@"; do
-        if [ -n "${!env_var:-}" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
+Environment variables:
+  OPENAI_API_KEY          OpenAI API key
+  ANTHROPIC_API_KEY       Anthropic API key
+  OPENROUTER_API_KEY      OpenRouter API key (access many providers)
+  GEMINI_API_KEY          Google Gemini API key
+  MISTRAL_API_KEY         Mistral API key
+  GROQ_API_KEY            Groq API key
 
-validate_runtime_env() {
-    case "$1" in
+The container auto-detects which runtime to start from the image tag.
+All tools (git, python, ripgrep, etc.) are pre-installed.
+EOF
+    exit 0
+fi
+
+# --- Resolve runtime ---
+if [ -z "$RUNTIME" ]; then
+    # Allow positional override for flexibility
+    if [ $# -gt 0 ] && { [ "$1" = "openclaw" ] || [ "$1" = "zeroclaw" ]; }; then
+        RUNTIME="$1"
+        shift
+    elif [ $# -gt 0 ]; then
+        echo "[clawden] Error: Unknown runtime '$1'. Use openclaw or zeroclaw." >&2
+        echo "  docker run ghcr.io/codervisor/clawden:openclaw" >&2
+        echo "  docker run ghcr.io/codervisor/clawden:zeroclaw" >&2
+        exit 1
+    else
+        echo "[clawden] Error: RUNTIME not set. Use a runtime-specific image:" >&2
+        echo "  docker run ghcr.io/codervisor/clawden:openclaw" >&2
+        echo "  docker run ghcr.io/codervisor/clawden:zeroclaw" >&2
+        exit 1
+    fi
+fi
+export RUNTIME
+
+# --- Resolve binary ---
+LAUNCHER="${CLAWDEN_RUNTIMES}/${RUNTIME}/current/${RUNTIME}"
+if [ ! -x "$LAUNCHER" ]; then
+    echo "[clawden] Error: ${RUNTIME} binary not found at ${LAUNCHER}" >&2
+    exit 1
+fi
+
+# --- ZeroClaw: auto-generate config if none exists ---
+if [ "$RUNTIME" = "zeroclaw" ]; then
+    ZEROCLAW_CONFIG_DIR="${ZEROCLAW_CONFIG_DIR:-${HOME}/.clawden/zeroclaw}"
+    ZEROCLAW_CONFIG="${ZEROCLAW_CONFIG_DIR}/config.toml"
+    if [ ! -f "$ZEROCLAW_CONFIG" ]; then
+        mkdir -p "$ZEROCLAW_CONFIG_DIR"
+        cat > "$ZEROCLAW_CONFIG" <<'TOML'
+[channels_config]
+cli = true
+
+[security]
+mode = "managed"
+TOML
+        echo "[clawden] Generated default config at ${ZEROCLAW_CONFIG}"
+    fi
+fi
+
+# --- Start runtime ---
+if [ $# -eq 0 ]; then
+    case "$RUNTIME" in
         openclaw)
-            if ! has_any_env_var \
-                OPENROUTER_API_KEY \
-                OPENAI_API_KEY \
-                ANTHROPIC_API_KEY \
-                GEMINI_API_KEY \
-                GOOGLE_API_KEY \
-                MISTRAL_API_KEY \
-                GROQ_API_KEY; then
-                echo "[clawden] Error: openclaw requires at least one LLM provider API key." >&2
-                echo "[clawden] Set one of: OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, GOOGLE_API_KEY, MISTRAL_API_KEY, GROQ_API_KEY" >&2
-                exit "$EX_CONFIG"
-            fi
+            echo "[clawden] Starting OpenClaw gateway on port 18789"
+            exec "$LAUNCHER" gateway --allow-unconfigured
+            ;;
+        zeroclaw)
+            echo "[clawden] Starting ZeroClaw daemon on port 42617"
+            exec "$LAUNCHER" daemon --config-dir "$ZEROCLAW_CONFIG_DIR"
             ;;
     esac
-}
+fi
 
-case "$RUNTIME" in
-    zeroclaw|picoclaw|openclaw|nanoclaw|openfang)
-        LAUNCHER="${CLAWDEN_RUNTIMES}/${RUNTIME}/current/${RUNTIME}"
-        if [ ! -x "$LAUNCHER" ]; then
-            echo "Error: ${RUNTIME} not found at ${LAUNCHER}" >&2
-            echo "Run: clawden-cli install ${RUNTIME}" >&2
-            exit 1
-        fi
-        validate_runtime_env "$RUNTIME"
-        if [ $# -eq 0 ]; then
-            DEFAULT_ARGS="$(runtime_default_args "$RUNTIME")"
-            if [ -n "$DEFAULT_ARGS" ]; then
-                exec "$LAUNCHER" $DEFAULT_ARGS
-            fi
-        fi
-        exec "$LAUNCHER" "$@"
-        ;;
-    *)
-        echo "Error: Unknown runtime '${RUNTIME}'" >&2
-        echo "Supported runtimes: $(supported_runtimes_csv)" >&2
-        exit 1
-        ;;
-esac
+echo "[clawden] Starting ${RUNTIME}: $*"
+exec "$LAUNCHER" "$@"

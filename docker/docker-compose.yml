@@ -1,0 +1,51 @@
+# ClawDen Docker Compose
+#
+# Quick start:
+#   cp .env.example .env        # add your API key(s)
+#   docker compose up openclaw  # or: docker compose up zeroclaw
+#
+# Build from source (instead of pulling from registry):
+#   docker compose build openclaw
+#   docker compose up openclaw
+
+services:
+  openclaw:
+    image: ghcr.io/codervisor/clawden:openclaw
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: openclaw
+    ports:
+      - "18789:18789"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    volumes:
+      - workspace:/home/clawden/workspace
+    restart: unless-stopped
+
+  zeroclaw:
+    image: ghcr.io/codervisor/clawden:zeroclaw
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: zeroclaw
+    ports:
+      - "42617:42617"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+    volumes:
+      - workspace:/home/clawden/workspace
+    restart: unless-stopped
+
+volumes:
+  workspace:

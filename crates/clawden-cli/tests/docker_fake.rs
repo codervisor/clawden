@@ -15,7 +15,7 @@ fn temp_dir(name: &str) -> PathBuf {
 }
 
 fn binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_clawden-cli"))
+    PathBuf::from(env!("CARGO_BIN_EXE_clawden"))
 }
 
 fn entrypoint_path() -> PathBuf {
@@ -346,8 +346,8 @@ fn run_docker_fails_when_container_exits_during_startup_grace_period() {
 }
 
 #[test]
-fn entrypoint_openclaw_requires_provider_key() {
-    let dir = temp_dir("entrypoint-openclaw-missing-provider");
+fn entrypoint_openclaw_starts_without_provider_key() {
+    let dir = temp_dir("entrypoint-openclaw-no-provider");
     let home = dir.join("home");
     let runtime_dir = home.join(".clawden/runtimes/openclaw/current");
     let launcher_log = dir.join("launcher.log");
@@ -375,14 +375,11 @@ fn entrypoint_openclaw_requires_provider_key() {
         .output()
         .expect("entrypoint should execute");
 
-    assert!(!output.status.success());
-    assert_eq!(output.status.code(), Some(78));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("openclaw requires at least one LLM provider API key"));
-    assert!(stderr.contains("OPENAI_API_KEY"));
+    // Runtime handles its own API key validation; entrypoint just starts it
+    assert!(output.status.success());
     assert!(
-        !launcher_log.exists(),
-        "launcher should not run when provider key is missing"
+        launcher_log.exists(),
+        "launcher should run even without provider keys"
     );
 }
 

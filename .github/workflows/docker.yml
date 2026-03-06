@@ -1,4 +1,4 @@
-name: Build & Push Docker Runtime Image
+name: Build & Push ClawDen Docker Image
 
 on:
   push:
@@ -16,10 +16,12 @@ on:
         type: choice
         options:
           - all
-          - latest
-          - browser
-          - computer
-          - full
+          - openclaw
+          - zeroclaw
+          - openclaw-browser
+          - zeroclaw-browser
+          - openclaw-computer
+          - zeroclaw-computer
 
 permissions:
   contents: read
@@ -27,7 +29,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: codervisor/clawden-runtime
+  IMAGE_NAME: codervisor/clawden
 
 jobs:
   build-and-push:
@@ -36,18 +38,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: latest
+          - target: openclaw
             suffix: ""
-            floating: latest
-          - target: browser
-            suffix: "-browser"
-            floating: browser
-          - target: computer
-            suffix: "-computer"
-            floating: computer
-          - target: full
-            suffix: "-full"
-            floating: full
+            tags: "openclaw,latest"
+          - target: zeroclaw
+            suffix: ""
+            tags: "zeroclaw"
+          - target: openclaw-browser
+            suffix: ""
+            tags: "openclaw-browser"
+          - target: zeroclaw-browser
+            suffix: ""
+            tags: "zeroclaw-browser"
+          - target: openclaw-computer
+            suffix: ""
+            tags: "openclaw-computer"
+          - target: zeroclaw-computer
+            suffix: ""
+            tags: "zeroclaw-computer"
     steps:
       - uses: actions/checkout@v4
 
@@ -79,11 +87,13 @@ jobs:
         id: tags
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
-          SUFFIX="${{ matrix.suffix }}"
-          FLOATING="${{ matrix.floating }}"
-
-          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}${SUFFIX}"
-          TAGS+=$'\n'"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${FLOATING}"
+          IFS=',' read -ra TAG_LIST <<< "${{ matrix.tags }}"
+          TAGS=""
+          for tag in "${TAG_LIST[@]}"; do
+            [ -n "$TAGS" ] && TAGS+=$'\n'
+            TAGS+="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-${tag}"
+            TAGS+=$'\n'"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}"
+          done
 
           {
             echo "tags<<EOF"

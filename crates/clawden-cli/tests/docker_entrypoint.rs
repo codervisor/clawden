@@ -36,22 +36,6 @@ fn entrypoint_path() -> PathBuf {
     repo_root().join("docker/entrypoint.sh")
 }
 
-fn setup_fake_jq(bin_dir: &Path) {
-    let script = r#"#!/usr/bin/env sh
-set -eu
-if [ "${1:-}" = "-Rsc" ]; then
-  printf '[]\n'
-  exit 0
-fi
-if [ "${1:-}" = "-n" ]; then
-  printf '{"activated":[],"tools":{}}\n'
-  exit 0
-fi
-printf '{}\n'
-"#;
-    write_executable(&bin_dir.join("jq"), script);
-}
-
 fn setup_fake_runtime(home: &Path, runtime: &str) {
     let launcher = home
         .join(".clawden/runtimes")
@@ -67,15 +51,12 @@ printf 'launcher runtime=%s args=%s env_runtime=%s\n' "$(basename "$0")" "$*" "$
     write_executable(&launcher, script);
 }
 
-fn run_entrypoint(home: &Path, bin_dir: &Path, args: &[&str], runtime_env: Option<&str>) -> Output {
-    let base_path = std::env::var("PATH").unwrap_or_default();
-    let path = format!("{}:{}", bin_dir.display(), base_path);
+fn run_entrypoint(home: &Path, args: &[&str], runtime_env: Option<&str>) -> Output {
     let mut command = Command::new("bash");
     command
         .arg(entrypoint_path())
         .current_dir(repo_root())
         .env("HOME", home)
-        .env("PATH", path)
         .args(args);
     if let Some(runtime) = runtime_env {
         command.env("RUNTIME", runtime);
@@ -94,91 +75,59 @@ fn combined_output(output: &Output) -> String {
 }
 
 #[test]
-fn entrypoint_requires_runtime_or_wrapper_command() {
+fn entrypoint_requires_runtime() {
     let dir = temp_dir("missing-runtime");
     let home = dir.join("home");
-    let bin_dir = dir.join("bin");
     fs::create_dir_all(&home).expect("home should be created");
-    fs::create_dir_all(&bin_dir).expect("bin dir should be created");
-    setup_fake_jq(&bin_dir);
 
-    let output = run_entrypoint(&home, &bin_dir, &[], None);
+    let output = run_entrypoint(&home, &[], None);
     assert!(!output.status.success());
 
     let combined = combined_output(&output);
-    assert!(combined.contains("ClawDen runtime image"));
-    assert!(combined.contains("missing runtime name"));
-    assert!(combined.contains("Supported runtimes:"));
+    assert!(combined.contains("RUNTIME not set"));
+    assert!(combined.contains("clawden:openclaw"));
+    assert!(combined.contains("clawden:zeroclaw"));
 }
 
 #[test]
 fn entrypoint_help_is_self_describing() {
     let dir = temp_dir("help");
     let home = dir.join("home");
-    let bin_dir = dir.join("bin");
     fs::create_dir_all(&home).expect("home should be created");
-    fs::create_dir_all(&bin_dir).expect("bin dir should be created");
-    setup_fake_jq(&bin_dir);
 
-    let output = run_entrypoint(&home, &bin_dir, &["--help"], None);
+    let output = run_entrypoint(&home, &["--help"], None);
     assert!(output.status.success());
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("ClawDen runtime image"));
-    assert!(stdout.contains("docker run ghcr.io/codervisor/clawden-runtime:latest <runtime>"));
-    assert!(stdout.contains("--list-runtimes"));
-    assert!(!stdout.contains("[clawden] Starting runtime:"));
-}
-
-#[test]
-fn entrypoint_lists_supported_runtimes() {
-    let dir = temp_dir("list-runtimes");
-    let home = dir.join("home");
-    let bin_dir = dir.join("bin");
-    fs::create_dir_all(&home).expect("home should be created");
-    fs::create_dir_all(&bin_dir).expect("bin dir should be created");
-    setup_fake_jq(&bin_dir);
-
-    let output = run_entrypoint(&home, &bin_dir, &["--list-runtimes"], None);
-    assert!(output.status.success());
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("zeroclaw"));
-    assert!(stdout.contains("picoclaw"));
-    assert!(stdout.contains("openclaw"));
-    assert!(stdout.contains("nanoclaw"));
-    assert!(stdout.contains("openfang"));
+    assert!(stdout.contains("ClawDen Docker Image"));
+    assert!(stdout.contains("ghcr.io/codervisor/clawden:openclaw"));
+    assert!(stdout.contains("ghcr.io/codervisor/clawden:zeroclaw"));
 }
 
 #[test]
 fn entrypoint_supports_positional_runtime_with_default_args() {
     let dir = temp_dir("positional-default");
     let home = dir.join("home");
-    let bin_dir = dir.join("bin");
     fs::create_dir_all(&home).expect("home should be created");
-    fs::create_dir_all(&bin_dir).expect("bin dir should be created");
-    setup_fake_jq(&bin_dir);
     setup_fake_runtime(&home, "zeroclaw");
 
-    let output = run_entrypoint(&home, &bin_dir, &["zeroclaw"], None);
+    let output = run_entrypoint(&home, &["zeroclaw"], None);
     assert!(output.status.success());
 
     let combined = combined_output(&output);
-    assert!(combined.contains("[clawden] Starting runtime: zeroclaw"));
-    assert!(combined.contains("launcher runtime=zeroclaw args=daemon env_runtime=zeroclaw"));
+    assert!(combined.contains("Starting ZeroClaw daemon"));
+    assert!(combined.contains("launcher runtime=zeroclaw"));
+    assert!(combined.contains("daemon --config-dir"));
 }
 
 #[test]
 fn entrypoint_passes_positional_runtime_args_through() {
     let dir = temp_dir("positional-help");
     let home = dir.join("home");
-    let bin_dir = dir.join("bin");
     fs::create_dir_all(&home).expect("home should be created");
-    fs::create_dir_all(&bin_dir).expect("bin dir should be created");
-    setup_fake_jq(&bin_dir);
     setup_fake_runtime(&home, "zeroclaw");
 
-    let output = run_entrypoint(&home, &bin_dir, &["zeroclaw", "--help"], None);
+    let output = run_entrypoint(&home, &["zeroclaw", "--help"], None);
     assert!(output.status.success());
 
     let combined = combined_output(&output);
@@ -189,34 +138,64 @@ fn entrypoint_passes_positional_runtime_args_through() {
 fn entrypoint_preserves_env_driven_runtime_mode() {
     let dir = temp_dir("env-mode");
     let home = dir.join("home");
-    let bin_dir = dir.join("bin");
     fs::create_dir_all(&home).expect("home should be created");
-    fs::create_dir_all(&bin_dir).expect("bin dir should be created");
-    setup_fake_jq(&bin_dir);
     setup_fake_runtime(&home, "zeroclaw");
 
-    let output = run_entrypoint(&home, &bin_dir, &[], Some("zeroclaw"));
+    let output = run_entrypoint(&home, &[], Some("zeroclaw"));
     assert!(output.status.success());
 
     let combined = combined_output(&output);
-    assert!(combined.contains("[clawden] Starting runtime: zeroclaw"));
-    assert!(combined.contains("launcher runtime=zeroclaw args=daemon env_runtime=zeroclaw"));
+    assert!(combined.contains("Starting ZeroClaw daemon"));
+    assert!(combined.contains("launcher runtime=zeroclaw"));
 }
 
 #[test]
-fn entrypoint_rejects_unknown_runtime_with_usage() {
+fn entrypoint_openclaw_default_args() {
+    let dir = temp_dir("openclaw-default");
+    let home = dir.join("home");
+    fs::create_dir_all(&home).expect("home should be created");
+    setup_fake_runtime(&home, "openclaw");
+
+    let output = run_entrypoint(&home, &[], Some("openclaw"));
+    assert!(output.status.success());
+
+    let combined = combined_output(&output);
+    assert!(combined.contains("Starting OpenClaw gateway"));
+    assert!(combined.contains("launcher runtime=openclaw args=gateway --allow-unconfigured"));
+}
+
+#[test]
+fn entrypoint_rejects_unknown_runtime() {
     let dir = temp_dir("invalid-runtime");
     let home = dir.join("home");
-    let bin_dir = dir.join("bin");
     fs::create_dir_all(&home).expect("home should be created");
-    fs::create_dir_all(&bin_dir).expect("bin dir should be created");
-    setup_fake_jq(&bin_dir);
 
-    let output = run_entrypoint(&home, &bin_dir, &["mysteryclaw"], None);
+    let output = run_entrypoint(&home, &["mysteryclaw"], None);
     assert!(!output.status.success());
 
     let combined = combined_output(&output);
-    assert!(combined.contains("Unknown runtime 'mysteryclaw'"));
-    assert!(combined.contains("Supported runtimes:"));
-    assert!(combined.contains("zeroclaw, picoclaw, openclaw, nanoclaw, openfang"));
+    assert!(combined.contains("Unknown runtime"));
+    assert!(combined.contains("openclaw"));
+    assert!(combined.contains("zeroclaw"));
+}
+
+#[test]
+fn entrypoint_zeroclaw_generates_config() {
+    let dir = temp_dir("zeroclaw-config");
+    let home = dir.join("home");
+    fs::create_dir_all(&home).expect("home should be created");
+    setup_fake_runtime(&home, "zeroclaw");
+
+    let output = run_entrypoint(&home, &[], Some("zeroclaw"));
+    assert!(output.status.success());
+
+    let config_path = home.join(".clawden/zeroclaw/config.toml");
+    assert!(
+        config_path.exists(),
+        "ZeroClaw config should be auto-generated"
+    );
+
+    let config_content = fs::read_to_string(&config_path).expect("config should be readable");
+    assert!(config_content.contains("[channels_config]"));
+    assert!(config_content.contains("cli = true"));
 }

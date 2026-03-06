@@ -41,7 +41,7 @@ async function resolveTargetVersion(): Promise<string> {
 
 async function generateManifests(platformKey: string, version: string): Promise<void> {
   const isWindows = platformKey.startsWith('windows-');
-  const binaryFileName = isWindows ? 'clawden-cli.exe' : 'clawden-cli';
+  const binaryFileName = isWindows ? 'clawden.exe' : 'clawden';
   const platformInfo = getPlatformInfo(platformKey);
   const packageName = `@clawden/cli-${platformKey}`;
 

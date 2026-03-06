@@ -7,10 +7,10 @@ set -euo pipefail
 #   ./scripts/copy-platform-binaries.sh <artifacts-dir>
 #
 # Expected layout:
-#   <artifacts-dir>/binaries-darwin-x64/clawden-cli
-#   <artifacts-dir>/binaries-darwin-arm64/clawden-cli
-#   <artifacts-dir>/binaries-linux-x64/clawden-cli
-#   <artifacts-dir>/binaries-windows-x64/clawden-cli.exe
+#   <artifacts-dir>/binaries-darwin-x64/clawden
+#   <artifacts-dir>/binaries-darwin-arm64/clawden
+#   <artifacts-dir>/binaries-linux-x64/clawden
+#   <artifacts-dir>/binaries-windows-x64/clawden.exe
 
 ARTIFACTS_DIR="${1:?Usage: $0 <artifacts-dir>}"
 DEST_BASE="npm/clawden/binaries"
@@ -32,9 +32,9 @@ for platform in "${PLATFORMS[@]}"; do
   mkdir -p "$dest"
 
   if [[ "$platform" == windows-* ]]; then
-    binary_name="clawden-cli.exe"
+    binary_name="clawden.exe"
   else
-    binary_name="clawden-cli"
+    binary_name="clawden"
   fi
 
   if [[ -f "${src}/${binary_name}" ]]; then

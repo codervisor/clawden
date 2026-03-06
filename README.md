@@ -38,17 +38,20 @@ Rules:
 
 ### Docker runtime image
 
-ClawDen-managed Docker remains the preferred path:
+ClawDen Docker images are runtime-specific — pick the one you need:
 
-- Preferred: `cargo run -p clawden-cli -- docker run zeroclaw`
-- Direct Docker: `docker run --rm ghcr.io/codervisor/clawden-runtime:latest zeroclaw`
-- Advanced env contract: `docker run --rm -e RUNTIME=openclaw ghcr.io/codervisor/clawden-runtime:latest gateway`
+- OpenClaw: `docker run -e OPENAI_API_KEY=sk-... ghcr.io/codervisor/clawden:openclaw`
+- ZeroClaw: `docker run -e ANTHROPIC_API_KEY=sk-... ghcr.io/codervisor/clawden:zeroclaw`
+- Via CLI: `cargo run -p clawden-cli -- docker run openclaw`
 
-The published image is also self-describing for ad-hoc usage:
+Image variants: `:openclaw`, `:zeroclaw`, `:openclaw-browser`, `:zeroclaw-browser`, `:openclaw-computer`, `:zeroclaw-computer`.
 
-- `docker run --rm ghcr.io/codervisor/clawden-runtime:latest --help`
-- `docker run --rm ghcr.io/codervisor/clawden-runtime:latest --list-runtimes`
-- `docker run --rm ghcr.io/codervisor/clawden-runtime:latest zeroclaw --help`
+Docker Compose (in `docker/`):
+
+```bash
+cp docker/.env.example docker/.env  # add your API key(s)
+cd docker && docker compose up openclaw
+```
 
 ### Config translation pipeline
 

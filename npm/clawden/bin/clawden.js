@@ -6,8 +6,8 @@
  * Rust binary with the provided arguments.
  *
  * Resolution order:
- * 1. target/debug/clawden-cli   (local cargo build)
- * 2. target/release/clawden-cli (local cargo build --release)
+ * 1. target/debug/clawden   (local cargo build)
+ * 2. target/release/clawden (local cargo build --release)
  * 3. @clawden/cli-{platform}    (npm-installed platform package)
  * 4. binaries/{platform}/       (local fallback)
  */
@@ -82,7 +82,7 @@ function getBinaryPath() {
   }
 
   const isWindows = platform === 'win32';
-  const binaryName = isWindows ? 'clawden-cli.exe' : 'clawden-cli';
+  const binaryName = isWindows ? 'clawden.exe' : 'clawden';
   const packageName = `@clawden/cli-${platformKey}`;
 
   debug('Binary info:', { platformKey, binaryName, packageName });

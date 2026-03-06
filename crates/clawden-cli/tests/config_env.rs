@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_clawden-cli"))
+    PathBuf::from(env!("CARGO_BIN_EXE_clawden"))
 }
 
 /// Spawn `clawden config env` with a clean environment (only PATH preserved) plus any
