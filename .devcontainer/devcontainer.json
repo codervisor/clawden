@@ -28,13 +28,19 @@
         "source=${localWorkspaceFolderBasename}-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume",
         "source=${localWorkspaceFolderBasename}-pnpm-store,target=/home/vscode/.local/share/pnpm/store,type=volume"
     ],
-    "forwardPorts": [5173, 8080],
+    "forwardPorts": [5173, 8080, 18789, 42617],
     "portsAttributes": {
         "5173": {
             "label": "ClawDen Dashboard (Vite)"
         },
         "8080": {
             "label": "ClawDen Server"
+        },
+        "18789": {
+            "label": "OpenClaw Gateway"
+        },
+        "42617": {
+            "label": "ZeroClaw Gateway"
         }
     },
     // VS Code extension integration for the Rust backend and React dashboard.
