@@ -300,11 +300,7 @@ fn select_feishu_channel(
                     format!("{name} ({app_id})")
                 })
                 .collect::<Vec<_>>();
-            let selection = Select::new()
-                .with_prompt("Select Feishu channel to verify")
-                .items(&labels)
-                .default(0)
-                .interact()?;
+            let selection = prompt_select("Select Feishu channel to verify", &labels, 0)?;
             Ok(channels.into_iter().nth(selection))
         }
     }
@@ -408,6 +404,41 @@ fn prompt_text(prompt: &str) -> Result<String> {
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer)?;
     Ok(buffer.trim().to_string())
+}
+
+fn prompt_select(prompt: &str, labels: &[String], default: usize) -> Result<usize> {
+    if io::stdin().is_terminal() {
+        return Ok(Select::new()
+            .with_prompt(prompt)
+            .items(labels)
+            .default(default)
+            .interact()?);
+    }
+
+    println!("{prompt}:");
+    for (index, label) in labels.iter().enumerate() {
+        println!("  {}. {label}", index + 1);
+    }
+    print!("Selection [{}]: ", default + 1);
+    io::stdout().flush()?;
+
+    let mut buffer = String::new();
+    io::stdin().read_line(&mut buffer)?;
+    let trimmed = buffer.trim();
+    if trimmed.is_empty() {
+        return Ok(default);
+    }
+
+    if let Ok(index) = trimmed.parse::<usize>() {
+        if (1..=labels.len()).contains(&index) {
+            return Ok(index - 1);
+        }
+    }
+
+    labels
+        .iter()
+        .position(|label| label == trimmed)
+        .ok_or_else(|| anyhow::anyhow!("invalid selection '{trimmed}'"))
 }
 
 fn prompt_secret(prompt: &str) -> Result<String> {
