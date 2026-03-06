@@ -1,6 +1,6 @@
 {
     "name": "Clawden Dev",
-    "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+    "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
     "features": {
         "ghcr.io/tailscale/codespace:latest": {},
         "ghcr.io/devcontainers/features/sshd:1": {
