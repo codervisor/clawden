@@ -3,6 +3,10 @@ name: Build & Push ClawDen Docker Image
 on:
   push:
     tags: ["v*"]
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       variant:
@@ -47,7 +51,15 @@ jobs:
           - target: openclaw-computer
           - target: zeroclaw-computer
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out triggering commit
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Check out repository
+        if: github.event_name != 'workflow_run'
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -123,6 +135,9 @@ jobs:
       - name: Build, smoke test, and push
         if: >-
           (github.event_name == 'push' && matrix.target == 'openclaw') ||
+          (github.event_name == 'workflow_run' &&
+            github.event.workflow_run.conclusion == 'success' &&
+            matrix.target == 'openclaw') ||
           (github.event_name == 'workflow_dispatch' && (
             inputs.variant == 'all' ||
             (inputs.variant == 'preview' && matrix.target == 'openclaw') ||
