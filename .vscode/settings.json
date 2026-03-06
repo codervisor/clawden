@@ -1,5 +1,8 @@
 {
   "rust-analyzer.linkedProjects": [
     "./Cargo.toml"
+  ],
+  "github-actions.workflows.pinned.workflows": [
+    ".github/workflows/docker.yml"
   ]
 }
