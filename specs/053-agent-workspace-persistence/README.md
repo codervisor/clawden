@@ -9,9 +9,9 @@ tags:
 - workspace
 - git
 depends_on:
-- 050-agent-fleet-execution-layer
+- 054-agent-fleet-execution-layer
 created_at: 2026-03-06T07:10:43.312124552Z
-updated_at: 2026-03-06T07:10:43.312226612Z
+updated_at: 2026-03-06T07:49:44.060892272Z
 ---
 
 # Agent Workspace Persistence — Git-Backed Memory Sync & Recovery
