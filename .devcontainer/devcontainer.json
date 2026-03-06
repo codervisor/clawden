@@ -1,7 +1,26 @@
 {
     "name": "Clawden Dev",
+    "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
     "features": {
-        "ghcr.io/tailscale/codespace:latest": {}
+        "ghcr.io/tailscale/codespace:latest": {},
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "20"
+        },
+        "ghcr.io/devcontainers/features/rust:1": {
+            "version": "stable",
+            "profile": "default",
+            "components": "rustfmt clippy"
+        }
     },
-    "overrideCommand": false
+    "overrideCommand": false,
+    "postCreateCommand": "corepack enable && pnpm install && cargo fetch",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "vadimcn.vscode-lldb",
+                "tamasfe.even-better-toml"
+            ]
+        }
+    }
 }
