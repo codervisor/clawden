@@ -3,6 +3,7 @@
     "./Cargo.toml"
   ],
   "github-actions.workflows.pinned.workflows": [
-    ".github/workflows/docker.yml"
+    ".github/workflows/docker.yml",
+    ".github/workflows/ci.yml"
   ]
 }
