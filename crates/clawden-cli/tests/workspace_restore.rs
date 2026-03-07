@@ -220,3 +220,42 @@ fn workspace_restore_detects_installed_runtime_without_config() {
     assert!(target.join("MEMORY.md").exists());
     assert_symlink_points_to(&home.join(".openclaw/workspace"), &target);
 }
+
+#[test]
+fn workspace_restore_creates_symlinks_in_docker_workspace() {
+    // Regression: when ~/workspace already exists (Docker image pre-creates it),
+    // bridge_runtime_workspaces must still create runtime workspace symlinks
+    // (e.g. ~/.openclaw/workspace -> ~/workspace).
+    let dir = temp_dir("workspace-restore-docker-ws");
+    let home = dir.join("home");
+    let docker_workspace = home.join("workspace");
+    let repo_url = init_memory_repo(&dir);
+
+    // Simulate Docker environment: ~/workspace pre-exists
+    fs::create_dir_all(&docker_workspace).expect("docker workspace should be created");
+
+    fs::write(
+        dir.join("clawden.yaml"),
+        format!("runtime: openclaw\nworkspace:\n  repo: \"{repo_url}\"\n"),
+    )
+    .expect("config should be written");
+
+    let output = Command::new(binary_path())
+        .current_dir(&dir)
+        .env("HOME", &home)
+        .args(["workspace", "restore"])
+        .output()
+        .expect("workspace restore should run");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Memory should be cloned into ~/workspace (Docker default)
+    assert!(docker_workspace.join(".git").exists());
+    assert!(docker_workspace.join("MEMORY.md").exists());
+    // Runtime symlink must exist even though ~/workspace was pre-created
+    assert_symlink_points_to(&home.join(".openclaw/workspace"), &docker_workspace);
+}

@@ -375,11 +375,6 @@ fn bridge_runtime_workspaces(target_dir: &Path, runtimes: &[String]) -> Result<(
         return Ok(());
     }
 
-    if should_skip_runtime_workspace_bridging(&home_dir()) {
-        println!("[clawden] Docker workspace detected; skipping runtime workspace symlinks");
-        return Ok(());
-    }
-
     let mut linked = std::collections::HashSet::new();
 
     for runtime in runtimes {
@@ -429,10 +424,6 @@ fn bridge_runtime_workspaces(target_dir: &Path, runtimes: &[String]) -> Result<(
     }
 
     Ok(())
-}
-
-fn should_skip_runtime_workspace_bridging(home: &Path) -> bool {
-    docker_workspace_dir(home).exists()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1060,19 +1051,6 @@ mod tests {
         assert!(backup_path.exists());
         assert!(backup_path.join("MEMORY.md").exists());
         assert_eq!(symlink_target_path(&link).unwrap(), target);
-
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn should_skip_runtime_workspace_bridging_when_docker_workspace_exists() {
-        let root = std::env::temp_dir().join(format!(
-            "clawden-workspace-docker-{}",
-            chrono_free_timestamp()
-        ));
-        std::fs::create_dir_all(root.join("workspace")).unwrap();
-
-        assert!(should_skip_runtime_workspace_bridging(&root));
 
         let _ = std::fs::remove_dir_all(root);
     }

@@ -21,14 +21,14 @@ updated_at: 2026-03-07T15:11:55.678101Z
 
 ClawDen has shipped 50+ specs worth of features — 9 runtimes, 6 validated channels, 6 LLM providers, Docker/direct/npm deployment modes, a React dashboard, a skill SDK, workspace persistence, and a 20+ subcommand CLI — but the entire user-facing documentation is a single README.md. Users cannot discover `clawden.yaml` fields without reading Rust source, have no channel setup guides, no runtime comparison, no deployment depth beyond brief README examples, and no contributor guidance.
 
-This spec establishes a `docs/` site with structured user documentation covering all shipped features.
+This spec establishes a `docs/` site with structured user documentation covering **only shipped and stable features**. In-progress and planned features (specs 024, 028, 038, 039, 042, 047, 053, 054) are explicitly excluded — their docs will be added when those specs reach `complete`.
 
 ## Problem
 
 ### No discoverability beyond README
 
 The README.md covers quick-start examples for the most common paths (direct install, Docker, Docker Compose) but:
-- **`clawden.yaml` is undocumented** — the config file is the primary interface for multi-runtime orchestration, yet users have no reference for available fields, channel config structure, provider definitions, tool lists, or workspace persistence settings
+- **`clawden.yaml` is undocumented** — the config file is the primary interface for multi-runtime orchestration, yet users have no reference for available fields, channel config structure, or provider definitions
 - **CLI flags are only in `--help`** — 20+ subcommands with dozens of flags; no searchable reference
 - **Env vars are scattered** — 30+ environment variables across entrypoint.sh, .env.example, and code; no consolidated reference
 - **Channel setup is opaque** — Telegram, Discord, Slack, Feishu, Signal, and WhatsApp each have unique onboarding steps, credential formats, and gotchas; Feishu has a dedicated `clawden channels feishu setup` wizard but zero docs
@@ -70,18 +70,11 @@ docs/
 │   │   ├── direct.md            # Direct install deployment
 │   │   └── railway.md           # Railway / cloud container platforms
 │   ├── multi-runtime.md         # Running multiple runtimes with clawden up
-│   ├── tools.md                 # Built-in tools configuration
-│   ├── workspace-persistence.md # Git-backed workspace sync
 │   └── troubleshooting.md       # Common issues & doctor command
 ├── reference/
 │   ├── cli.md                   # Full CLI command reference (auto-generated from clap)
 │   ├── config.md                # clawden.yaml schema reference
-│   ├── env-vars.md              # Environment variable reference
-│   └── api.md                   # REST & WebSocket API reference
-├── sdk/
-│   ├── getting-started.md       # SDK installation & first skill
-│   ├── skill-authoring.md       # defineSkill() guide
-│   └── marketplace.md           # Publishing skills
+│   └── env-vars.md              # Environment variable reference
 ├── contributing/
 │   ├── CONTRIBUTING.md          # How to contribute (also symlinked to repo root)
 │   ├── architecture.md          # Human-readable architecture overview
@@ -109,9 +102,7 @@ docs/
 
 6. **Env var reference** — consolidate all `CLAWDEN_*`, provider, and channel env vars with descriptions, defaults, and which deployment mode they apply to.
 
-7. **SDK guide** — tutorial-style docs for `defineSkill()` and `testSkill()`, plus marketplace publishing flow.
-
-8. **Contributing** — dev setup (Rust + pnpm), testing commands, PR checklist, architecture overview.
+7. **Contributing** — dev setup (Rust + pnpm), testing commands, PR checklist, architecture overview.
 
 ### Approach
 
@@ -134,17 +125,25 @@ Phase 2 (High — channel onboarding):
 - `docs/guides/providers.md`
 - `docs/guides/deployment/` (Docker, direct, Railway)
 
-Phase 3 (Medium — contributor & SDK):
+Phase 3 (Medium — contributor experience):
 - `docs/contributing/` (CONTRIBUTING.md, architecture, development)
-- `docs/sdk/` (skill authoring guide)
 - `docs/CHANGELOG.md`
 - `docs/guides/troubleshooting.md`
-
-Phase 4 (Low — completeness):
 - `docs/guides/multi-runtime.md`
-- `docs/guides/tools.md`
-- `docs/guides/workspace-persistence.md`
-- `docs/reference/api.md` (REST/WS API)
+
+### Deferred until underlying feature specs complete
+
+The following docs are **excluded from this spec** and will be added when their backing features ship:
+
+| Doc page                               | Blocked by                                                 | Feature status |
+| -------------------------------------- | ---------------------------------------------------------- | -------------- |
+| `docs/guides/tools.md`                 | spec 024 (built-in-tool-layer)                             | in-progress    |
+| `docs/guides/workspace-persistence.md` | spec 053 (agent-workspace-persistence)                     | in-progress    |
+| `docs/reference/api.md`                | spec 021 (runtime-channel-dashboard)                       | in-progress    |
+| `docs/sdk/`                            | SDK is type-exports-only; no stable authoring workflow yet | —              |
+| Proxy env vars                         | spec 038 (proxy-auto-detection)                            | in-progress    |
+| `--security-profile` flag              | spec 047 (cli-security-profile-flag)                       | planned        |
+| Fleet orchestration docs               | spec 054 (agent-fleet-execution-layer)                     | planned        |
 
 ## Plan
 
@@ -168,9 +167,8 @@ Phase 4 (Low — completeness):
 - [ ] Write `docs/contributing/CONTRIBUTING.md` and symlink to repo root
 - [ ] Write `docs/contributing/architecture.md` — human-readable architecture
 - [ ] Write `docs/contributing/development.md` — dev setup and testing
-- [ ] Write `docs/sdk/getting-started.md` and `skill-authoring.md`
 - [ ] Write `docs/guides/troubleshooting.md`
-- [ ] Write `docs/guides/multi-runtime.md`, `tools.md`, `workspace-persistence.md`
+- [ ] Write `docs/guides/multi-runtime.md` — multi-runtime orchestration with `clawden up`
 - [ ] Trim README.md to concise overview with links to docs/
 - [ ] Create `docs/CHANGELOG.md` with version history
 
@@ -198,8 +196,12 @@ Data sources for auto-generation:
 - Provider descriptors: `crates/clawden-core/src/provider.rs` (PROVIDERS)
 - Env vars: grep for `CLAWDEN_` across codebase
 
+### Scope rule
+
+Only document features backed by a spec with status `complete`. When an in-progress spec reaches `complete`, add its docs as a follow-up PR and check off the deferred item above.
+
 Related specs:
 - 026 (guided-onboarding) — first-run UX that docs should reference
 - 033 (product-positioning) — framing for docs tone and user personas
 - 049 (feishu-channel-onboarding) — Feishu setup wizard to document
-- 058 (container-safe-runtime-execution) — new `--exec` flag to document
+- 058 (container-safe-runtime-execution) — new `--exec` flag to document (exec mode is shipped; broader overhaul still in-progress)
