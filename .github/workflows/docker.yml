@@ -41,22 +41,35 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.decide.outputs.should_run }}
+      matrix: ${{ steps.decide.outputs.matrix }}
     steps:
-      - name: Decide whether image build should run
+      - name: Decide whether image build should run and which targets
         id: decide
         shell: bash
         run: |
           SHOULD_RUN=false
+          MATRIX='[]'
+
+          ALL_TARGETS='[{"target":"openclaw"},{"target":"zeroclaw"},{"target":"openclaw-browser"},{"target":"zeroclaw-browser"},{"target":"openclaw-computer"},{"target":"zeroclaw-computer"}]'
 
           if [ "${{ github.event_name }}" = "push" ]; then
             SHOULD_RUN=true
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            SHOULD_RUN=true
+            MATRIX='[{"target":"openclaw"}]'
           elif [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
             SHOULD_RUN=true
+            MATRIX='[{"target":"openclaw"}]'
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SHOULD_RUN=true
+            TARGET="${{ inputs.target }}"
+            if [ "$TARGET" = "all" ]; then
+              MATRIX="$ALL_TARGETS"
+            else
+              MATRIX="[{\"target\":\"${TARGET}\"}]"
+            fi
           fi
 
           echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
 
   build-and-push:
     needs: precheck
@@ -65,13 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: openclaw
-          - target: zeroclaw
-          - target: openclaw-browser
-          - target: zeroclaw-browser
-          - target: openclaw-computer
-          - target: zeroclaw-computer
+        include: ${{ fromJson(needs.precheck.outputs.matrix) }}
     steps:
       - name: Check out triggering commit
         if: github.event_name == 'workflow_run'
@@ -182,13 +189,6 @@ jobs:
           fi
 
       - name: Build, smoke test, and push
-        if: >-
-          (github.event_name == 'push' && matrix.target == 'openclaw') ||
-          (github.event_name == 'workflow_run' && matrix.target == 'openclaw') ||
-          (github.event_name == 'workflow_dispatch' && (
-            inputs.target == 'all' ||
-            inputs.target == matrix.target
-          ))
         uses: docker/build-push-action@v6
         with:
           context: .
