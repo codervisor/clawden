@@ -71,6 +71,10 @@ pub struct ClawDenYaml {
     /// Execution mode: "docker" or "direct". Omitted defaults to auto-detect.
     #[serde(default)]
     pub mode: Option<String>,
+
+    /// Single-runtime workspace persistence config.
+    #[serde(default)]
+    pub workspace: Option<WorkspaceYaml>,
 }
 
 /// A channel instance entry in `clawden.yaml`.
@@ -143,6 +147,86 @@ pub struct RuntimeEntryYaml {
     pub model: Option<String>,
     #[serde(default)]
     pub config: HashMap<String, Value>,
+    /// Per-runtime workspace persistence config.
+    #[serde(default)]
+    pub workspace: Option<WorkspaceYaml>,
+}
+
+/// Workspace persistence configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceYaml {
+    /// Git repo URL or `owner/repo` shorthand.
+    pub repo: String,
+    /// Auth token for private repos (supports `$ENV_VAR` syntax).
+    #[serde(default)]
+    pub token: Option<String>,
+    /// Subdirectory path within the repo (for multi-agent layout).
+    #[serde(default)]
+    pub path: Option<String>,
+    /// Git branch (default: main).
+    #[serde(default)]
+    pub branch: Option<String>,
+    /// Sync interval (e.g. "30m", "1h", "15m"). Default: 30m.
+    #[serde(default)]
+    pub sync_interval: Option<String>,
+    /// Automatically restore on startup. Default: true.
+    #[serde(default)]
+    pub auto_restore: Option<bool>,
+}
+
+impl WorkspaceYaml {
+    /// Parse sync_interval string to seconds. Supports "30m", "1h", "2h30m", "90s".
+    pub fn sync_interval_secs(&self) -> u64 {
+        self.sync_interval
+            .as_deref()
+            .map(parse_duration_secs)
+            .unwrap_or(1800) // default 30m
+    }
+
+    /// Whether auto-restore is enabled (default: true).
+    pub fn auto_restore_enabled(&self) -> bool {
+        self.auto_restore.unwrap_or(true)
+    }
+
+    /// Get branch, defaulting to "main".
+    pub fn branch_or_default(&self) -> &str {
+        self.branch.as_deref().unwrap_or("main")
+    }
+}
+
+/// Parse a human-friendly duration string to seconds.
+/// Supports: "30m", "1h", "2h30m", "90s", "1h30m15s".
+fn parse_duration_secs(input: &str) -> u64 {
+    let mut total = 0u64;
+    let mut current_num = String::new();
+    for ch in input.chars() {
+        if ch.is_ascii_digit() {
+            current_num.push(ch);
+        } else {
+            let n: u64 = current_num.parse().unwrap_or(0);
+            current_num.clear();
+            match ch {
+                'h' | 'H' => total += n * 3600,
+                'm' | 'M' => total += n * 60,
+                's' | 'S' => total += n,
+                _ => {}
+            }
+        }
+    }
+    // If only digits with no unit, treat as minutes for backwards compatibility
+    if !current_num.is_empty() {
+        let n: u64 = current_num.parse().unwrap_or(0);
+        if total == 0 {
+            total = n * 60; // bare number = minutes
+        } else {
+            total += n;
+        }
+    }
+    if total == 0 {
+        1800
+    } else {
+        total
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -516,6 +600,21 @@ impl ClawDenYaml {
                 }
             }
             *provider_ref = ProviderRefYaml::Inline(resolved_provider);
+        }
+        // Resolve workspace token env vars
+        if let Some(ws) = &mut self.workspace {
+            resolve_field(
+                &mut ws.token,
+                "Workspace",
+                "workspace",
+                "token",
+                &mut errors,
+            );
+        }
+        for rt in &mut self.runtimes {
+            if let Some(ws) = &mut rt.workspace {
+                resolve_field(&mut ws.token, "Workspace", &rt.name, "token", &mut errors);
+            }
         }
         if errors.is_empty() {
             Ok(())
@@ -1532,7 +1631,7 @@ mod tests {
         diff_configs, ChannelCredentialMapper, ChannelInstanceYaml, ClawDenConfig, ClawDenYaml,
         LlmProvider, ModelConfig, NanoClawConfigTranslator, OpenClawConfigTranslator,
         PicoClawConfigTranslator, ProviderRefYaml, RuntimeConfigTranslator, SecretVault,
-        ZeroClawConfigTranslator,
+        WorkspaceYaml, ZeroClawConfigTranslator,
     };
     use crate::{AgentConfig, ChannelConfig, SecurityConfig, ToolConfig};
     use clawden_core::ClawRuntime;
@@ -2234,5 +2333,124 @@ runtimes:
                 .and_then(|v| v.as_str()),
             Some("+18885550123")
         );
+    }
+
+    #[test]
+    fn parse_duration_30m() {
+        assert_eq!(super::parse_duration_secs("30m"), 1800);
+    }
+
+    #[test]
+    fn parse_duration_1h() {
+        assert_eq!(super::parse_duration_secs("1h"), 3600);
+    }
+
+    #[test]
+    fn parse_duration_2h30m() {
+        assert_eq!(super::parse_duration_secs("2h30m"), 9000);
+    }
+
+    #[test]
+    fn parse_duration_90s() {
+        assert_eq!(super::parse_duration_secs("90s"), 90);
+    }
+
+    #[test]
+    fn parse_duration_1h30m15s() {
+        assert_eq!(super::parse_duration_secs("1h30m15s"), 5415);
+    }
+
+    #[test]
+    fn parse_duration_bare_number_as_minutes() {
+        assert_eq!(super::parse_duration_secs("15"), 900);
+    }
+
+    #[test]
+    fn parse_duration_empty_defaults() {
+        assert_eq!(super::parse_duration_secs(""), 1800);
+    }
+
+    #[test]
+    fn workspace_yaml_defaults() {
+        let ws = WorkspaceYaml {
+            repo: "owner/repo".to_string(),
+            token: None,
+            path: None,
+            branch: None,
+            sync_interval: None,
+            auto_restore: None,
+        };
+        assert_eq!(ws.sync_interval_secs(), 1800);
+        assert!(ws.auto_restore_enabled());
+        assert_eq!(ws.branch_or_default(), "main");
+    }
+
+    #[test]
+    fn workspace_yaml_custom_values() {
+        let ws = WorkspaceYaml {
+            repo: "owner/repo".to_string(),
+            token: None,
+            path: Some("agents/coder".to_string()),
+            branch: Some("dev".to_string()),
+            sync_interval: Some("15m".to_string()),
+            auto_restore: Some(false),
+        };
+        assert_eq!(ws.sync_interval_secs(), 900);
+        assert!(!ws.auto_restore_enabled());
+        assert_eq!(ws.branch_or_default(), "dev");
+    }
+
+    #[test]
+    fn workspace_yaml_roundtrip() {
+        let yaml = r#"
+runtime: zeroclaw
+channels:
+  telegram:
+    token: test-token
+workspace:
+  repo: codervisor/agent-memory
+  token: $GITHUB_TOKEN
+  path: agents/main
+  branch: main
+  sync_interval: 15m
+  auto_restore: true
+"#;
+        let cfg: ClawDenYaml = serde_yaml::from_str(yaml).expect("should parse");
+        let ws = cfg.workspace.expect("workspace should be present");
+        assert_eq!(ws.repo, "codervisor/agent-memory");
+        assert_eq!(ws.token.as_deref(), Some("$GITHUB_TOKEN"));
+        assert_eq!(ws.path.as_deref(), Some("agents/main"));
+        assert_eq!(ws.sync_interval_secs(), 900);
+        assert!(ws.auto_restore_enabled());
+    }
+
+    #[test]
+    fn multi_runtime_workspace_yaml() {
+        let yaml = r#"
+channels:
+  telegram:
+    token: test-token
+runtimes:
+  - name: openclaw
+    channels: [telegram]
+    workspace:
+      repo: codervisor/agent-memory
+      path: agents/coordinator
+      sync_interval: 15m
+  - name: zeroclaw
+    channels: []
+    workspace:
+      repo: codervisor/agent-memory
+      path: agents/coder-1
+      sync_interval: 1h
+"#;
+        let cfg: ClawDenYaml = serde_yaml::from_str(yaml).expect("should parse");
+        assert_eq!(cfg.runtimes.len(), 2);
+        let ws0 = cfg.runtimes[0].workspace.as_ref().expect("ws0");
+        assert_eq!(ws0.path.as_deref(), Some("agents/coordinator"));
+        assert_eq!(ws0.sync_interval_secs(), 900);
+        let ws1 = cfg.runtimes[1].workspace.as_ref().expect("ws1");
+        assert_eq!(ws1.path.as_deref(), Some("agents/coder-1"));
+        assert_eq!(ws1.sync_interval_secs(), 3600);
     }
 }

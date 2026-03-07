@@ -653,6 +653,7 @@ fn empty_clawden_yaml(runtime: &str) -> ClawDenYaml {
         model: None,
         version: None,
         mode: None,
+        workspace: None,
     }
 }
 

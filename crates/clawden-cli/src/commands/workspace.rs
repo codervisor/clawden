@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
@@ -12,13 +14,15 @@ pub fn exec_workspace(command: WorkspaceCommand) -> Result<()> {
             token,
             target,
             branch,
-        } => exec_restore(repo, token, target, branch),
+            agent,
+        } => exec_restore(repo, token, target, branch, agent),
         WorkspaceCommand::Sync {
             target,
             message,
             token,
-        } => exec_sync(target, message, token),
-        WorkspaceCommand::Status { target } => exec_status(target),
+            agent,
+        } => exec_sync(target, message, token, agent),
+        WorkspaceCommand::Status { target, agent } => exec_status(target, agent),
     }
 }
 
@@ -27,13 +31,62 @@ pub fn exec_workspace(command: WorkspaceCommand) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 fn exec_restore(
-    repo: String,
+    repo: Option<String>,
     token: Option<String>,
     target: Option<String>,
-    branch: String,
+    branch: Option<String>,
+    agent: Option<String>,
 ) -> Result<()> {
-    let target_dir = resolve_target(target.as_deref())?;
-    let repo_url = build_repo_url(&repo, token.as_deref())?;
+    // Resolve config: CLI flags override config values
+    let ws_cfg = resolve_workspace_config(agent.as_deref())?;
+
+    let repo = repo
+        .or_else(|| ws_cfg.as_ref().map(|w| w.repo.clone()))
+        .or_else(|| {
+            std::env::var("CLAWDEN_MEMORY_REPO")
+                .ok()
+                .filter(|v| !v.is_empty())
+        });
+    let Some(repo) = repo else {
+        bail!(
+            "No workspace repo specified. Use --repo, configure workspace.repo in clawden.yaml, \
+             or set CLAWDEN_MEMORY_REPO."
+        );
+    };
+
+    let token = token
+        .or_else(|| ws_cfg.as_ref().and_then(|w| w.token.clone()))
+        .or_else(|| {
+            std::env::var("CLAWDEN_MEMORY_TOKEN")
+                .ok()
+                .filter(|v| !v.is_empty())
+        });
+    let branch = branch
+        .or_else(|| ws_cfg.as_ref().and_then(|w| w.branch.clone()))
+        .or_else(|| {
+            std::env::var("CLAWDEN_MEMORY_BRANCH")
+                .ok()
+                .filter(|v| !v.is_empty())
+        })
+        .unwrap_or_else(|| "main".to_string());
+    let target = target.or_else(|| {
+        std::env::var("CLAWDEN_MEMORY_PATH")
+            .ok()
+            .filter(|v| !v.is_empty())
+    });
+
+    do_restore(&repo, token.as_deref(), target.as_deref(), &branch)
+}
+
+/// Core restore implementation, reusable by auto-sync and entrypoint delegation.
+pub(crate) fn do_restore(
+    repo: &str,
+    token: Option<&str>,
+    target: Option<&str>,
+    branch: &str,
+) -> Result<()> {
+    let target_dir = resolve_target(target)?;
+    let repo_url = build_repo_url(repo, token)?;
 
     if target_dir.join(".git").is_dir() {
         println!(
@@ -41,7 +94,7 @@ fn exec_restore(
             target_dir.display()
         );
         let output = Command::new("git")
-            .args(["pull", "--ff-only", "origin", &branch])
+            .args(["pull", "--ff-only", "origin", branch])
             .current_dir(&target_dir)
             .env("GIT_TERMINAL_PROMPT", "0")
             .output()?;
@@ -68,7 +121,7 @@ fn exec_restore(
                 "clone",
                 "--single-branch",
                 "--branch",
-                &branch,
+                branch,
                 &repo_url,
                 &target_dir.to_string_lossy(),
             ])
@@ -98,8 +151,29 @@ fn exec_restore(
 // Sync: commit and push workspace changes back to the remote
 // ---------------------------------------------------------------------------
 
-fn exec_sync(target: Option<String>, message: Option<String>, token: Option<String>) -> Result<()> {
-    let target_dir = resolve_target(target.as_deref())?;
+fn exec_sync(
+    target: Option<String>,
+    message: Option<String>,
+    token: Option<String>,
+    agent: Option<String>,
+) -> Result<()> {
+    let ws_cfg = resolve_workspace_config(agent.as_deref())?;
+    let token = token.or_else(|| ws_cfg.as_ref().and_then(|w| w.token.clone()));
+    let target = target.or_else(|| {
+        std::env::var("CLAWDEN_MEMORY_PATH")
+            .ok()
+            .filter(|v| !v.is_empty())
+    });
+    do_sync(target.as_deref(), message, token.as_deref())
+}
+
+/// Core sync implementation, reusable by auto-sync background task.
+pub(crate) fn do_sync(
+    target: Option<&str>,
+    message: Option<String>,
+    token: Option<&str>,
+) -> Result<()> {
+    let target_dir = resolve_target(target)?;
 
     if !target_dir.join(".git").is_dir() {
         bail!(
@@ -109,7 +183,7 @@ fn exec_sync(target: Option<String>, message: Option<String>, token: Option<Stri
     }
 
     // Inject credentials if provided (for push auth)
-    if let Some(tok) = &token {
+    if let Some(tok) = token {
         let remote_url = get_remote_url(&target_dir)?;
         let authed_url = inject_token_into_url(&remote_url, tok)?;
         run_git(&target_dir, &["remote", "set-url", "origin", &authed_url])?;
@@ -152,7 +226,28 @@ fn exec_sync(target: Option<String>, message: Option<String>, token: Option<Stri
 // Status: show workspace git state
 // ---------------------------------------------------------------------------
 
-fn exec_status(target: Option<String>) -> Result<()> {
+fn exec_status(target: Option<String>, agent: Option<String>) -> Result<()> {
+    let ws_cfg = resolve_workspace_config(agent.as_deref())?;
+    let target = target.or_else(|| {
+        std::env::var("CLAWDEN_MEMORY_PATH")
+            .ok()
+            .filter(|v| !v.is_empty())
+    });
+
+    // If agent specified, show config info
+    if let Some(ws) = &ws_cfg {
+        println!(
+            "Config:    repo={} branch={} sync_interval={}s auto_restore={}",
+            ws.repo,
+            ws.branch_or_default(),
+            ws.sync_interval_secs(),
+            ws.auto_restore_enabled(),
+        );
+        if let Some(path) = &ws.path {
+            println!("Path:      {}", path);
+        }
+    }
+
     let target_dir = resolve_target(target.as_deref())?;
 
     if !target_dir.join(".git").is_dir() {
@@ -342,6 +437,184 @@ fn chrono_free_timestamp() -> String {
         .unwrap_or_default()
         .as_secs();
     format!("{secs}")
+}
+
+// ---------------------------------------------------------------------------
+// Config-aware workspace resolution (Phase 6)
+// ---------------------------------------------------------------------------
+
+/// Load workspace config from clawden.yaml for a specific agent/runtime,
+/// or the top-level workspace config if no agent is specified.
+fn resolve_workspace_config(agent: Option<&str>) -> Result<Option<clawden_config::WorkspaceYaml>> {
+    let yaml_path = std::env::current_dir()?.join("clawden.yaml");
+    if !yaml_path.exists() {
+        return Ok(None);
+    }
+
+    let cfg =
+        clawden_config::ClawDenYaml::from_file(&yaml_path).map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    if let Some(agent_name) = agent {
+        // Multi-runtime: look up workspace config for the specific runtime
+        for rt in &cfg.runtimes {
+            if rt.name == agent_name {
+                return Ok(rt.workspace.clone());
+            }
+        }
+        // Check if it matches the single-runtime shorthand
+        if cfg.runtime.as_deref() == Some(agent_name) {
+            return Ok(cfg.workspace.clone());
+        }
+        bail!(
+            "No runtime '{}' found in clawden.yaml. Available: {}",
+            agent_name,
+            available_runtimes(&cfg)
+        );
+    }
+
+    // No agent specified: use top-level workspace config, or first runtime's workspace
+    if cfg.workspace.is_some() {
+        return Ok(cfg.workspace.clone());
+    }
+    // Fall back to the first runtime with workspace config
+    for rt in &cfg.runtimes {
+        if rt.workspace.is_some() {
+            return Ok(rt.workspace.clone());
+        }
+    }
+    Ok(None)
+}
+
+fn available_runtimes(cfg: &clawden_config::ClawDenYaml) -> String {
+    if let Some(rt) = &cfg.runtime {
+        return rt.clone();
+    }
+    cfg.runtimes
+        .iter()
+        .map(|r| r.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+// ---------------------------------------------------------------------------
+// Auto-sync background task (Phase 4)
+// ---------------------------------------------------------------------------
+
+/// Workspace sync task configuration, derived from clawden.yaml or env vars.
+pub(crate) struct WorkspaceSyncTask {
+    pub target: Option<String>,
+    pub token: Option<String>,
+    pub interval_secs: u64,
+}
+
+/// Collect workspace sync tasks from config for all runtimes being started.
+/// Returns a list of sync tasks (one per unique workspace target).
+pub(crate) fn collect_sync_tasks(
+    config: Option<&clawden_config::ClawDenYaml>,
+    target_runtimes: &[String],
+) -> Vec<WorkspaceSyncTask> {
+    let mut tasks = Vec::new();
+    let mut seen_targets = std::collections::HashSet::new();
+
+    if let Some(cfg) = config {
+        // Single-runtime mode
+        if let Some(ws) = &cfg.workspace {
+            let target = ws.path.clone();
+            let key = target.clone().unwrap_or_default();
+            if seen_targets.insert(key) {
+                tasks.push(WorkspaceSyncTask {
+                    target,
+                    token: ws.token.clone(),
+                    interval_secs: ws.sync_interval_secs(),
+                });
+            }
+        }
+
+        // Multi-runtime mode: collect per-runtime workspace configs
+        for rt in &cfg.runtimes {
+            if !target_runtimes.contains(&rt.name) {
+                continue;
+            }
+            if let Some(ws) = &rt.workspace {
+                let target = ws.path.clone();
+                let key = target.clone().unwrap_or_default();
+                if seen_targets.insert(key) {
+                    tasks.push(WorkspaceSyncTask {
+                        target,
+                        token: ws.token.clone(),
+                        interval_secs: ws.sync_interval_secs(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Also check env-based workspace (Docker entrypoint path)
+    if tasks.is_empty() {
+        if let Ok(repo) = std::env::var("CLAWDEN_MEMORY_REPO") {
+            if !repo.is_empty() {
+                let target = std::env::var("CLAWDEN_MEMORY_PATH")
+                    .ok()
+                    .filter(|v| !v.is_empty());
+                let token = std::env::var("CLAWDEN_MEMORY_TOKEN")
+                    .ok()
+                    .filter(|v| !v.is_empty());
+                let key = target.clone().unwrap_or_default();
+                if seen_targets.insert(key) {
+                    tasks.push(WorkspaceSyncTask {
+                        target,
+                        token,
+                        interval_secs: 1800, // default 30m
+                    });
+                }
+            }
+        }
+    }
+
+    tasks
+}
+
+/// Spawn a background auto-sync loop. Returns a shutdown flag that can be set
+/// to stop the loop. The task runs `do_sync` at each interval.
+pub(crate) fn spawn_auto_sync(
+    tasks: Vec<WorkspaceSyncTask>,
+    shutdown: Arc<AtomicBool>,
+) -> Vec<std::thread::JoinHandle<()>> {
+    tasks
+        .into_iter()
+        .map(|task| {
+            let shutdown = shutdown.clone();
+            std::thread::spawn(move || {
+                auto_sync_loop(&task, &shutdown);
+            })
+        })
+        .collect()
+}
+
+fn auto_sync_loop(task: &WorkspaceSyncTask, shutdown: &AtomicBool) {
+    let interval = std::time::Duration::from_secs(task.interval_secs);
+    let mut elapsed = std::time::Duration::ZERO;
+    let tick = std::time::Duration::from_secs(1);
+
+    while !shutdown.load(Ordering::Relaxed) {
+        std::thread::sleep(tick);
+        elapsed += tick;
+
+        if elapsed >= interval {
+            elapsed = std::time::Duration::ZERO;
+            match do_sync(task.target.as_deref(), None, task.token.as_deref()) {
+                Ok(()) => {}
+                Err(e) => {
+                    eprintln!("[clawden] Auto-sync warning: {e}");
+                }
+            }
+        }
+    }
+
+    // Final sync on shutdown
+    if let Err(e) = do_sync(task.target.as_deref(), None, task.token.as_deref()) {
+        eprintln!("[clawden] Final sync warning: {e}");
+    }
 }
 
 #[cfg(test)]

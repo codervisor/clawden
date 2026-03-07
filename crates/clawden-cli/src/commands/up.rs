@@ -7,10 +7,13 @@ use clawden_core::{
     LifecycleManager, ProcessInfo, ProcessManager, ProviderDescriptor, RuntimeInstaller,
 };
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, warn};
 
 use crate::commands::config_gen::{generate_config_dir, inject_config_dir_arg, state_dir_env_vars};
+use crate::commands::workspace::{collect_sync_tasks, spawn_auto_sync};
 use crate::commands::InitOptions;
 use crate::util::{
     append_audit_file, ensure_installed_runtime, get_provider_key_from_vault, is_first_run_context,
@@ -191,6 +194,14 @@ pub async fn exec_up(
     }
 
     if opts.detach {
+        // Start auto-sync in detach mode too (runs until process exits)
+        let sync_tasks = collect_sync_tasks(config.as_ref(), &started_runtimes);
+        if !sync_tasks.is_empty() {
+            let shutdown = Arc::new(AtomicBool::new(false));
+            let _handles = spawn_auto_sync(sync_tasks, shutdown);
+            // In detach mode, sync threads are abandoned when the CLI process exits.
+            // The sync will happen next time via `clawden workspace sync` or at next `up`.
+        }
         print_status_table(process_manager)?;
         return Ok(());
     }
@@ -198,6 +209,18 @@ pub async fn exec_up(
     if started_runtimes.is_empty() {
         return Ok(());
     }
+
+    // Start workspace auto-sync background threads
+    let sync_shutdown = Arc::new(AtomicBool::new(false));
+    let sync_tasks = collect_sync_tasks(config.as_ref(), &started_runtimes);
+    let sync_handles = if !sync_tasks.is_empty() {
+        let count = sync_tasks.len();
+        let handles = spawn_auto_sync(sync_tasks, sync_shutdown.clone());
+        println!("Workspace auto-sync started ({count} workspace(s))");
+        handles
+    } else {
+        Vec::new()
+    };
 
     println!("Attaching logs. Press Ctrl+C to stop.");
     let stream = process_manager.stream_logs(&started_runtimes)?;
@@ -209,6 +232,10 @@ pub async fn exec_up(
         tokio::select! {
             _ = &mut ctrl_c => {
                 println!("Gracefully stopping...");
+
+                // Signal auto-sync threads to stop (triggers final sync)
+                sync_shutdown.store(true, Ordering::Relaxed);
+
                 let to_stop = started_runtimes.clone();
                 let timeout = opts.timeout;
                 let stop_task = tokio::task::spawn_blocking(move || {
@@ -237,6 +264,12 @@ pub async fn exec_up(
                         result.map_err(|e| anyhow::anyhow!("shutdown task failed: {e}"))??;
                     }
                 }
+
+                // Wait for sync threads to complete their final sync
+                for handle in sync_handles {
+                    let _ = handle.join();
+                }
+
                 break;
             }
             _ = tick.tick() => {

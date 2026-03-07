@@ -389,9 +389,10 @@ pub enum ConfigCommand {
 pub enum WorkspaceCommand {
     /// Restore agent workspace from a git repository
     Restore {
-        /// Git repo URL or owner/repo shorthand (e.g. codervisor/agent-memory)
+        /// Git repo URL or owner/repo shorthand (e.g. codervisor/agent-memory).
+        /// Falls back to workspace.repo in clawden.yaml or CLAWDEN_MEMORY_REPO env var.
         #[arg(long)]
-        repo: String,
+        repo: Option<String>,
         /// Auth token for private repos (e.g. GitHub PAT)
         #[arg(long)]
         token: Option<String>,
@@ -399,8 +400,11 @@ pub enum WorkspaceCommand {
         #[arg(long)]
         target: Option<String>,
         /// Git branch to clone (default: main)
-        #[arg(long, default_value = "main")]
-        branch: String,
+        #[arg(long)]
+        branch: Option<String>,
+        /// Agent/runtime name for multi-agent workspace lookup from clawden.yaml
+        #[arg(long)]
+        agent: Option<String>,
     },
     /// Sync (commit and push) workspace changes back to the remote
     Sync {
@@ -413,12 +417,18 @@ pub enum WorkspaceCommand {
         /// Auth token for push (if not stored in git remote URL)
         #[arg(long)]
         token: Option<String>,
+        /// Agent/runtime name for multi-agent workspace lookup from clawden.yaml
+        #[arg(long)]
+        agent: Option<String>,
     },
     /// Show workspace repository status
     Status {
         /// Target directory (default: auto-detected workspace dir)
         #[arg(long)]
         target: Option<String>,
+        /// Agent/runtime name for multi-agent workspace lookup from clawden.yaml
+        #[arg(long)]
+        agent: Option<String>,
     },
 }
 
