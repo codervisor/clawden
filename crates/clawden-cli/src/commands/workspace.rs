@@ -446,13 +446,9 @@ fn chrono_free_timestamp() -> String {
 /// Load workspace config from clawden.yaml for a specific agent/runtime,
 /// or the top-level workspace config if no agent is specified.
 fn resolve_workspace_config(agent: Option<&str>) -> Result<Option<clawden_config::WorkspaceYaml>> {
-    let yaml_path = std::env::current_dir()?.join("clawden.yaml");
-    if !yaml_path.exists() {
+    let Some(cfg) = super::up::load_config()? else {
         return Ok(None);
-    }
-
-    let cfg =
-        clawden_config::ClawDenYaml::from_file(&yaml_path).map_err(|e| anyhow::anyhow!("{}", e))?;
+    };
 
     if let Some(agent_name) = agent {
         // Multi-runtime: look up workspace config for the specific runtime

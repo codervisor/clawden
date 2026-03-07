@@ -1,5 +1,4 @@
 use anyhow::Result;
-use clawden_config::ClawDenYaml;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::io::{self, IsTerminal, Write};
@@ -17,15 +16,9 @@ pub async fn exec_providers(command: Option<ProviderCommand>) -> Result<()> {
 }
 
 fn list_providers() -> Result<()> {
-    let yaml_path = std::env::current_dir()?.join("clawden.yaml");
-    if !yaml_path.exists() {
+    let Some(config) = super::up::load_config()? else {
         return list_detected_providers();
-    }
-
-    let mut config = ClawDenYaml::from_file(&yaml_path).map_err(anyhow::Error::msg)?;
-    config
-        .resolve_env_vars()
-        .map_err(|errs| anyhow::anyhow!(errs.join("\n")))?;
+    };
 
     if config.providers.is_empty() {
         println!("No providers configured in clawden.yaml");
@@ -77,15 +70,9 @@ fn list_detected_providers() -> Result<()> {
 }
 
 async fn test_providers(only: Option<String>) -> Result<()> {
-    let yaml_path = std::env::current_dir()?.join("clawden.yaml");
-    if !yaml_path.exists() {
+    let Some(config) = super::up::load_config()? else {
         return test_detected_providers(only).await;
-    }
-
-    let mut config = ClawDenYaml::from_file(&yaml_path).map_err(anyhow::Error::msg)?;
-    config
-        .resolve_env_vars()
-        .map_err(|errs| anyhow::anyhow!(errs.join("\n")))?;
+    };
 
     let mut any = false;
     for (name, provider) in &config.providers {

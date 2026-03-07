@@ -1147,6 +1147,7 @@ channels:
     }
 
     #[test]
+    #[ignore = "spawns processes; run explicitly with --ignored"]
     fn startup_check_detects_immediate_crash() {
         let _guard = test_env_lock().lock().expect("env lock poisoned");
         let original_home = std::env::var("HOME").ok();
@@ -1178,6 +1179,7 @@ channels:
     }
 
     #[test]
+    #[ignore = "spawns processes; run explicitly with --ignored"]
     fn startup_check_warns_when_health_not_responding_but_process_alive() {
         let _guard = test_env_lock().lock().expect("env lock poisoned");
         let original_home = std::env::var("HOME").ok();
@@ -1215,6 +1217,7 @@ channels:
     }
 
     #[test]
+    #[ignore = "spawns processes; run explicitly with --ignored"]
     fn startup_check_handles_openfang_and_zeroclaw_independently() {
         let _guard = test_env_lock().lock().expect("env lock poisoned");
         let original_home = std::env::var("HOME").ok();

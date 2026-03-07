@@ -32,16 +32,10 @@ pub async fn exec_channels(
 }
 
 fn test_channels(filter_type: Option<&str>) -> Result<()> {
-    let yaml_path = std::env::current_dir()?.join("clawden.yaml");
-    if !yaml_path.exists() {
+    let Some(config) = super::up::load_config()? else {
         println!("No clawden.yaml found in current directory");
         return Ok(());
-    }
-
-    let mut config = ClawDenYaml::from_file(&yaml_path).map_err(anyhow::Error::msg)?;
-    config
-        .resolve_env_vars()
-        .map_err(|errs| anyhow::anyhow!(errs.join("\n")))?;
+    };
 
     if config.channels.is_empty() {
         println!("No channels configured in clawden.yaml");
