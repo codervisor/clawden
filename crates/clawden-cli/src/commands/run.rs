@@ -36,6 +36,7 @@ pub struct RunOptions {
     pub allow_missing_credentials: bool,
     pub tools: Option<String>,
     pub detach: bool,
+    pub exec_mode: bool,
     pub extra_args: Vec<String>,
     pub force_docker: bool,
 }
@@ -291,6 +292,24 @@ pub async fn exec_run(
         combined_env.push(("CLAWDEN_TOOLS".to_string(), effective_tools.join(",")));
     }
     combined_env = merge_env_overrides(combined_env, &env_overrides);
+
+    // Exec mode: replace the current process with the runtime binary.
+    // Ideal for containers where the runtime should be PID 1 and
+    // stdout/stderr should go directly to the container log collector.
+    if opts.exec_mode {
+        use std::os::unix::process::CommandExt;
+        append_audit_file("runtime.start", &opts.runtime, "exec")?;
+        let mut command = std::process::Command::new(&installed.executable);
+        command.args(&args);
+        command.envs(combined_env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        let err = command.exec();
+        // exec() only returns on error
+        return Err(anyhow::anyhow!(
+            "failed to exec {}: {}",
+            installed.executable.display(),
+            err
+        ));
+    }
 
     let info = process_manager.start_direct_with_env_and_project(
         &opts.runtime,
@@ -726,6 +745,7 @@ mod tests {
             allow_missing_credentials: false,
             tools: None,
             detach: false,
+            exec_mode: false,
             extra_args: Vec::new(),
             force_docker: false,
         }

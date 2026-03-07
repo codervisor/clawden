@@ -92,6 +92,7 @@ pub async fn exec_docker(
                     allow_missing_credentials,
                     tools,
                     detach,
+                    exec_mode: false,
                     extra_args: args.to_vec(),
                     force_docker: true,
                 },

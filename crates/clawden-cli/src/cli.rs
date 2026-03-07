@@ -146,6 +146,9 @@ pub enum Commands {
         /// Run in background and return immediately
         #[arg(short = 'd', long, default_value_t = false)]
         detach: bool,
+        /// Replace the current process with the runtime (exec). Ideal for containers.
+        #[arg(long, default_value_t = false)]
+        exec: bool,
         /// Runtime name followed by runtime args; include runtime subcommands explicitly
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         runtime_and_args: Vec<String>,
@@ -280,6 +283,33 @@ mod tests {
                     runtime_and_args,
                     vec!["zeroclaw".to_string(), "--help".to_string()]
                 );
+            }
+            _ => panic!("expected run command"),
+        }
+    }
+
+    #[test]
+    fn run_parses_exec_flag() {
+        let cli = Cli::try_parse_from([
+            "clawden",
+            "run",
+            "--exec",
+            "--channel",
+            "telegram",
+            "openclaw",
+        ])
+        .expect("parse run command with --exec");
+
+        match cli.command {
+            Commands::Run {
+                exec,
+                runtime_and_args,
+                channel,
+                ..
+            } => {
+                assert!(exec);
+                assert_eq!(channel, vec!["telegram".to_string()]);
+                assert_eq!(runtime_and_args, vec!["openclaw".to_string()]);
             }
             _ => panic!("expected run command"),
         }

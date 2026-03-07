@@ -147,8 +147,8 @@ if [ "$CLAWDEN_USE_CLI" = "1" ]; then
     # Allow proceeding without credentials when explicitly requested
     [ "${CLAWDEN_ALLOW_MISSING_CREDENTIALS:-0}" = "1" ] && CLI_ARGS+=(--allow-missing-credentials)
 
-    echo "[clawden] Starting ${RUNTIME} via CLI: clawden run ${CLI_ARGS[*]} ${RUNTIME} $*"
-    exec clawden run "${CLI_ARGS[@]}" "$RUNTIME" "$@"
+    echo "[clawden] Starting ${RUNTIME} via CLI: clawden run --exec ${CLI_ARGS[*]} ${RUNTIME} $*"
+    exec clawden run --exec "${CLI_ARGS[@]}" "$RUNTIME" "$@"
 fi
 
 # ============================================================

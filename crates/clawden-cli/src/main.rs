@@ -101,6 +101,7 @@ async fn main() -> Result<()> {
             allow_missing_credentials,
             tools,
             detach,
+            exec,
             runtime_and_args,
         } => {
             let (runtime, args) = runtime_and_args.split_first().ok_or_else(|| {
@@ -125,6 +126,7 @@ async fn main() -> Result<()> {
                     allow_missing_credentials,
                     tools,
                     detach,
+                    exec_mode: exec,
                     extra_args: args.to_vec(),
                     force_docker: false,
                 },
