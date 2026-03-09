@@ -9,7 +9,7 @@ tags:
 - enterprise
 depends_on:
 - 065-agent-message-bus-task-orchestration
-- 072-ai-native-coordination-model
+- 074-coordination-model-design
 parent: 054-agent-fleet-execution-layer
 created_at: 2026-03-09T06:10:00.624611698Z
 updated_at: 2026-03-09T06:10:00.624611698Z

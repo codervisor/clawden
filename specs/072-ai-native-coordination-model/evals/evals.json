@@ -1,0 +1,138 @@
+{
+  "skill_name": "coordination-model",
+  "description": "Deterministic schema validation tests for the AI-native coordination model. All tests run validate.py against fixture files and assert exit codes / output strings.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "valid-playbook-explore-harden-maintain",
+      "prompt": "Validate explore-harden-maintain.yaml against playbook schema",
+      "command": "python scripts/validate.py fixtures/explore-harden-maintain.yaml",
+      "expected_exit_code": 0,
+      "assertions": [
+        {
+          "id": "schema-valid",
+          "type": "exit_code",
+          "expected": 0
+        },
+        {
+          "id": "no-anti-pattern-warnings",
+          "type": "stderr_absent",
+          "pattern": "WARNING"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "valid-playbook-mesh-fractal-swarm",
+      "prompt": "Validate mesh-fractal-swarm.yaml against playbook schema",
+      "command": "python scripts/validate.py fixtures/mesh-fractal-swarm.yaml",
+      "expected_exit_code": 0,
+      "assertions": [
+        {
+          "id": "schema-valid",
+          "type": "exit_code",
+          "expected": 0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "valid-conformance-clawden",
+      "prompt": "Validate ClawDen conformance declaration",
+      "command": "python scripts/validate.py --schema conformance fixtures/clawden-conformance.json",
+      "expected_exit_code": 0,
+      "assertions": [
+        {
+          "id": "schema-valid",
+          "type": "exit_code",
+          "expected": 0
+        },
+        {
+          "id": "conformant",
+          "type": "stdout_contains",
+          "pattern": "CONFORMANT"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "invalid-playbook-missing-budget",
+      "prompt": "Reject playbook with missing budget block",
+      "command": "python scripts/validate.py fixtures/invalid-missing-budget.yaml",
+      "expected_exit_code": 1,
+      "assertions": [
+        {
+          "id": "rejects-missing-budget",
+          "type": "exit_code",
+          "expected": 1
+        },
+        {
+          "id": "error-mentions-budget",
+          "type": "stderr_contains",
+          "pattern": "budget"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "invalid-playbook-unknown-primitive",
+      "prompt": "Reject playbook with unknown primitive value",
+      "command": "python scripts/validate.py fixtures/invalid-unknown-primitive.yaml",
+      "expected_exit_code": 1,
+      "assertions": [
+        {
+          "id": "rejects-unknown-primitive",
+          "type": "exit_code",
+          "expected": 1
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "antipattern-swarm-in-swarm",
+      "prompt": "Detect swarm-in-swarm anti-pattern composition",
+      "command": "python scripts/validate.py fixtures/antipattern-swarm-swarm.yaml",
+      "expected_exit_code": 0,
+      "assertions": [
+        {
+          "id": "schema-valid",
+          "type": "exit_code",
+          "expected": 0
+        },
+        {
+          "id": "anti-pattern-warned",
+          "type": "stderr_contains",
+          "pattern": "Anti-pattern"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "antipattern-stigmergic-no-debounce",
+      "prompt": "Reject stigmergic stage missing reaction_debounce",
+      "command": "python scripts/validate.py fixtures/antipattern-no-debounce.yaml",
+      "expected_exit_code": 1,
+      "assertions": [
+        {
+          "id": "rejects-missing-debounce",
+          "type": "exit_code",
+          "expected": 1
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "schema-cross-consistency",
+      "prompt": "Verify primitive enums match across playbook and primitives schemas",
+      "command": "python -c \"import json; p=json.load(open('references/playbook.schema.json')); r=json.load(open('references/primitives.schema.json')); assert set(p['$defs']['stage']['properties']['primitive']['enum']) == set(r['properties']['primitive']['enum'])\"",
+      "expected_exit_code": 0,
+      "assertions": [
+        {
+          "id": "enums-match",
+          "type": "exit_code",
+          "expected": 0
+        }
+      ]
+    }
+  ]
+}

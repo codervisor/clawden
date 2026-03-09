@@ -1,0 +1,483 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coordination-model.clawden.dev/schemas/primitives.schema.json",
+  "title": "Coordination Primitives",
+  "description": "Configuration schemas for all coordination patterns — both organizational (Category A) and AI-native (Category B).",
+  "type": "object",
+  "properties": {
+    "primitive": {
+      "type": "string",
+      "enum": [
+        "speculative-swarm",
+        "context-mesh",
+        "fractal-decomposition",
+        "generative-adversarial",
+        "stigmergic",
+        "hierarchical",
+        "pipeline",
+        "committee",
+        "departmental",
+        "marketplace",
+        "matrix"
+      ]
+    },
+    "config": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/speculative_swarm_config"
+        },
+        {
+          "$ref": "#/$defs/context_mesh_config"
+        },
+        {
+          "$ref": "#/$defs/fractal_decomposition_config"
+        },
+        {
+          "$ref": "#/$defs/generative_adversarial_config"
+        },
+        {
+          "$ref": "#/$defs/stigmergic_config"
+        },
+        {
+          "$ref": "#/$defs/hierarchical_config"
+        },
+        {
+          "$ref": "#/$defs/pipeline_config"
+        },
+        {
+          "$ref": "#/$defs/committee_config"
+        },
+        {
+          "$ref": "#/$defs/departmental_config"
+        },
+        {
+          "$ref": "#/$defs/marketplace_config"
+        },
+        {
+          "$ref": "#/$defs/matrix_config"
+        }
+      ]
+    }
+  },
+  "required": [
+    "primitive",
+    "config"
+  ],
+  "$defs": {
+    "budget": {
+      "type": "object",
+      "properties": {
+        "max_agents": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of concurrent agents."
+        },
+        "max_cost": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum cost in abstract units."
+        },
+        "max_time": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m|h)$",
+          "description": "Maximum wall-clock time (e.g. '30s', '5m', '2h')."
+        }
+      },
+      "required": [
+        "max_agents",
+        "max_cost",
+        "max_time"
+      ]
+    },
+    "speculative_swarm_config": {
+      "type": "object",
+      "properties": {
+        "strategies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "description": "Divergent strategy parameters, one per fork."
+        },
+        "checkpoint_interval": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m|h)$",
+          "description": "How often cross-pollination occurs."
+        },
+        "convergence_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Similarity score (0–1) above which branches are considered redundant."
+        },
+        "merge_strategy": {
+          "type": "string",
+          "enum": [
+            "fragment-fusion",
+            "winner-take-all",
+            "weighted-blend"
+          ]
+        },
+        "budget": {
+          "$ref": "#/$defs/budget"
+        }
+      },
+      "required": [
+        "strategies",
+        "convergence_threshold",
+        "merge_strategy",
+        "budget"
+      ],
+      "additionalProperties": false
+    },
+    "context_mesh_config": {
+      "type": "object",
+      "properties": {
+        "graph_storage": {
+          "type": "string",
+          "description": "Abstract backing store identifier for the shared DAG."
+        },
+        "propagation": {
+          "type": "string",
+          "enum": [
+            "reactive",
+            "polling"
+          ]
+        },
+        "conflict_strategy": {
+          "type": "string",
+          "enum": [
+            "compete-and-compare",
+            "last-write-wins",
+            "manual"
+          ]
+        },
+        "agent_subscriptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/agent_subscription"
+          },
+          "description": "Per-agent watch patterns for graph regions."
+        }
+      },
+      "required": [
+        "propagation",
+        "conflict_strategy"
+      ],
+      "additionalProperties": false
+    },
+    "fractal_decomposition_config": {
+      "type": "object",
+      "properties": {
+        "split_strategy": {
+          "type": "string",
+          "description": "How to identify orthogonal sub-problems."
+        },
+        "max_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum recursion depth."
+        },
+        "max_children_per_level": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "Fan-out limit at each level."
+        },
+        "reunification": {
+          "type": "string",
+          "enum": [
+            "lossless-merge",
+            "summary-merge"
+          ]
+        },
+        "scope_isolation": {
+          "type": "boolean",
+          "description": "Whether to prevent cross-scope writes."
+        }
+      },
+      "required": [
+        "max_depth",
+        "max_children_per_level",
+        "reunification"
+      ],
+      "additionalProperties": false
+    },
+    "generative_adversarial_config": {
+      "type": "object",
+      "properties": {
+        "escalation_modes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Ordered list of increasing attack sophistication."
+        },
+        "max_rounds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Upper bound on adversarial cycles."
+        },
+        "termination": {
+          "type": "object",
+          "properties": {
+            "consecutive_clean_rounds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "quality_threshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "consecutive_clean_rounds"
+              ]
+            },
+            {
+              "required": [
+                "quality_threshold"
+              ]
+            }
+          ]
+        },
+        "progressive_difficulty": {
+          "type": "boolean",
+          "description": "Whether critic increases effort budget each round."
+        }
+      },
+      "required": [
+        "escalation_modes",
+        "max_rounds",
+        "termination"
+      ],
+      "additionalProperties": false
+    },
+    "stigmergic_config": {
+      "type": "object",
+      "properties": {
+        "agent_subscriptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/agent_subscription"
+          },
+          "description": "Per-agent artifact watch patterns and production targets."
+        },
+        "marker_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Metadata tags agents can attach to artifacts."
+        },
+        "marker_decay": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m|h)$",
+          "description": "Time-to-live for pheromone markers."
+        },
+        "reaction_debounce": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m|h|ms)$",
+          "description": "Minimum interval between reactions to prevent storms."
+        }
+      },
+      "required": [
+        "agent_subscriptions",
+        "reaction_debounce"
+      ],
+      "additionalProperties": false
+    },
+    "hierarchical_config": {
+      "type": "object",
+      "properties": {
+        "max_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum depth of leader-worker tree."
+        },
+        "decomposition": {
+          "type": "string",
+          "description": "Strategy for task decomposition."
+        }
+      },
+      "required": [
+        "max_depth"
+      ],
+      "additionalProperties": false
+    },
+    "pipeline_config": {
+      "type": "object",
+      "properties": {
+        "on_stage_failure": {
+          "type": "string",
+          "enum": [
+            "halt",
+            "retry",
+            "skip"
+          ],
+          "description": "Behavior when a stage fails."
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "on_stage_failure"
+      ],
+      "additionalProperties": false
+    },
+    "committee_config": {
+      "type": "object",
+      "properties": {
+        "member_count": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "Number of deliberating agents."
+        },
+        "max_rounds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum deliberation rounds."
+        },
+        "termination": {
+          "type": "string",
+          "enum": [
+            "consensus",
+            "quorum",
+            "max-rounds"
+          ]
+        },
+        "quorum": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 1,
+          "description": "Fraction of members required for quorum (if termination is 'quorum')."
+        }
+      },
+      "required": [
+        "member_count",
+        "max_rounds",
+        "termination"
+      ],
+      "additionalProperties": false
+    },
+    "departmental_config": {
+      "type": "object",
+      "properties": {
+        "departments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "capabilities"
+            ]
+          },
+          "minItems": 2,
+          "description": "Department definitions with capability boundaries."
+        }
+      },
+      "required": [
+        "departments"
+      ],
+      "additionalProperties": false
+    },
+    "marketplace_config": {
+      "type": "object",
+      "properties": {
+        "bid_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m|h)$",
+          "description": "Timeout on bids before re-auction."
+        },
+        "allocation_strategy": {
+          "type": "string",
+          "enum": [
+            "best-fit",
+            "first-fit",
+            "auction"
+          ],
+          "description": "How bids are evaluated."
+        }
+      },
+      "required": [
+        "bid_timeout"
+      ],
+      "additionalProperties": false
+    },
+    "matrix_config": {
+      "type": "object",
+      "properties": {
+        "teams": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "capacity_split": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "name",
+              "capacity_split"
+            ]
+          },
+          "minItems": 2
+        },
+        "preemption_priority": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Team names in priority order for conflict resolution."
+        },
+        "release_timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m|h)$"
+        }
+      },
+      "required": [
+        "teams"
+      ],
+      "additionalProperties": false
+    },
+    "agent_subscription": {
+      "type": "object",
+      "properties": {
+        "agent_template": {
+          "type": "string"
+        },
+        "watch_pattern": {
+          "type": "string"
+        },
+        "production_target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "watch_pattern"
+      ]
+    }
+  }
+}

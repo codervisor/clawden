@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coordination-model.clawden.dev/schemas/operations.schema.json",
+  "title": "AI-Native Coordination Operations",
+  "description": "The six abstract operations that form the foundation of AI-native agent coordination.",
+  "type": "object",
+  "properties": {
+    "operations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/operation"
+      },
+      "minItems": 6,
+      "maxItems": 6
+    }
+  },
+  "required": [
+    "operations"
+  ],
+  "$defs": {
+    "agent_id": {
+      "type": "string",
+      "description": "Opaque identifier for an agent instance."
+    },
+    "operation": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "spawn",
+            "fork",
+            "merge",
+            "observe",
+            "convergence",
+            "prune"
+          ]
+        },
+        "signature": {
+          "$ref": "#/$defs/signature"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "signature",
+        "description"
+      ]
+    },
+    "signature": {
+      "type": "object",
+      "properties": {
+        "params": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/param"
+          }
+        },
+        "returns": {
+          "$ref": "#/$defs/return_type"
+        }
+      },
+      "required": [
+        "params",
+        "returns"
+      ]
+    },
+    "param": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "return_type": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "merge_strategy": {
+      "type": "string",
+      "enum": [
+        "fragment-fusion",
+        "winner-take-all",
+        "weighted-blend",
+        "compete-and-compare",
+        "lossless-merge",
+        "summary-merge"
+      ],
+      "description": "Strategy for combining multiple agents' outputs."
+    },
+    "prune_criterion": {
+      "type": "string",
+      "enum": [
+        "convergence-based",
+        "budget-based",
+        "quality-based"
+      ],
+      "description": "Criterion for removing non-contributing agents."
+    }
+  }
+}

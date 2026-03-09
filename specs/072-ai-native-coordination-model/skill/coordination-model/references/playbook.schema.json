@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coordination-model.clawden.dev/schemas/playbook.schema.json",
+  "title": "Coordination Playbook",
+  "description": "A declarative composition of coordination primitives for a concrete domain workflow. Playbooks describe what coordination to apply, not how to wire it up.",
+  "type": "object",
+  "properties": {
+    "playbook": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Unique playbook identifier."
+        },
+        "domain": {
+          "type": "string",
+          "description": "Problem domain this playbook addresses."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this playbook does."
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stage"
+          },
+          "minItems": 1,
+          "description": "Ordered list of coordination stages."
+        },
+        "composition_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/composition_rule"
+          },
+          "description": "Rules for nesting primitives across stages."
+        }
+      },
+      "required": [
+        "name",
+        "domain",
+        "description",
+        "stages"
+      ]
+    }
+  },
+  "required": [
+    "playbook"
+  ],
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Stage identifier, unique within the playbook."
+        },
+        "primitive": {
+          "type": "string",
+          "enum": [
+            "speculative-swarm",
+            "context-mesh",
+            "fractal-decomposition",
+            "generative-adversarial",
+            "stigmergic",
+            "hierarchical",
+            "pipeline",
+            "committee",
+            "departmental",
+            "marketplace",
+            "matrix"
+          ]
+        },
+        "config": {
+          "type": "object",
+          "description": "Primitive-specific configuration. Must use only fields from the corresponding primitive's configuration surface in primitives.schema.json."
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "auto"
+          ],
+          "default": "auto"
+        },
+        "condition": {
+          "type": "string",
+          "description": "Optional expression that must evaluate to true for this stage to execute."
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "one-shot",
+            "persistent"
+          ],
+          "default": "one-shot"
+        },
+        "budget": {
+          "$ref": "#/$defs/budget"
+        }
+      },
+      "required": [
+        "name",
+        "primitive",
+        "config",
+        "budget"
+      ]
+    },
+    "composition_rule": {
+      "type": "object",
+      "properties": {
+        "outer": {
+          "type": "string",
+          "description": "Name of the outer stage."
+        },
+        "inner": {
+          "type": "string",
+          "description": "Name of the inner stage."
+        },
+        "binding": {
+          "type": "string",
+          "description": "How the inner stage feeds the outer stage."
+        }
+      },
+      "required": [
+        "outer",
+        "inner",
+        "binding"
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "max_agents": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of concurrent agents."
+        },
+        "max_cost": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum cost in abstract units."
+        },
+        "max_time": {
+          "type": "string",
+          "pattern": "^[0-9]+(s|m|h)$",
+          "description": "Maximum wall-clock time (e.g. '30s', '5m', '2h')."
+        }
+      },
+      "required": [
+        "max_agents",
+        "max_cost",
+        "max_time"
+      ]
+    },
+    "anti_patterns": {
+      "description": "Compositions known to produce poor results. Validators should warn on these.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "outer": {
+            "type": "string"
+          },
+          "inner": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "const": [
+        {
+          "outer": "speculative-swarm",
+          "inner": "speculative-swarm",
+          "reason": "Exponential agent count — N outer forks × M inner forks grows multiplicatively with nesting depth."
+        },
+        {
+          "outer": "generative-adversarial",
+          "inner": "generative-adversarial",
+          "reason": "Critic of a critic produces meta-critique without grounding; quality does not improve."
+        },
+        {
+          "outer": "stigmergic",
+          "inner": "stigmergic",
+          "reason": "Without debounce coordination, agents endlessly trigger each other in reaction storms."
+        }
+      ]
+    }
+  }
+}

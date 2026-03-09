@@ -11,7 +11,7 @@ tags:
 parent: 054-agent-fleet-execution-layer
 depends_on:
   - 067-advanced-coordination-patterns
-  - 072-ai-native-coordination-model
+  - 074-coordination-model-design
 created_at: 2026-03-09T06:25:01.610088324Z
 updated_at: 2026-03-09T06:25:01.610088324Z
 ---

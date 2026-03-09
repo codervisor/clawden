@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coordination-model.clawden.dev/schemas/conformance.schema.json",
+  "title": "Runtime Conformance Declaration",
+  "description": "A runtime's declaration of which coordination model capabilities it supports. Used for interoperability testing and certification.",
+  "type": "object",
+  "properties": {
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Runtime implementation name."
+        },
+        "version": {
+          "type": "string",
+          "description": "Runtime version."
+        },
+        "must": {
+          "type": "object",
+          "description": "Required capabilities. All must be true for conformance.",
+          "properties": {
+            "abstract_operations": {
+              "type": "object",
+              "description": "Support for all six abstract operations.",
+              "properties": {
+                "spawn": {
+                  "type": "boolean"
+                },
+                "fork": {
+                  "type": "boolean"
+                },
+                "merge": {
+                  "type": "boolean"
+                },
+                "observe": {
+                  "type": "boolean"
+                },
+                "convergence": {
+                  "type": "boolean"
+                },
+                "prune": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "spawn",
+                "fork",
+                "merge",
+                "observe",
+                "convergence",
+                "prune"
+              ]
+            },
+            "dynamic_lifecycle": {
+              "type": "boolean",
+              "description": "Agents can be created and destroyed mid-task (not fixed rosters)."
+            },
+            "state_observability": {
+              "type": "boolean",
+              "description": "Any agent's full state is inspectable by the coordinator."
+            },
+            "budget_enforcement": {
+              "type": "boolean",
+              "description": "Hard limits on agent count, cost, and time are enforced."
+            },
+            "composable_patterns": {
+              "type": "boolean",
+              "description": "Primitives can be nested (inner/outer) without framework changes."
+            },
+            "trace_capture": {
+              "type": "boolean",
+              "description": "Execution traces for any agent are capturable for distillation."
+            },
+            "declarative_playbooks": {
+              "type": "boolean",
+              "description": "Playbook configurations can be loaded and executed without code changes."
+            }
+          },
+          "required": [
+            "abstract_operations",
+            "dynamic_lifecycle",
+            "state_observability",
+            "budget_enforcement",
+            "composable_patterns",
+            "trace_capture",
+            "declarative_playbooks"
+          ]
+        },
+        "may": {
+          "type": "object",
+          "description": "Optional capabilities.",
+          "properties": {
+            "distributed_execution": {
+              "type": "boolean",
+              "description": "Agents can run across multiple hosts."
+            },
+            "persistent_state": {
+              "type": "boolean",
+              "description": "Agent state survives crashes."
+            },
+            "hot_swap_patterns": {
+              "type": "boolean",
+              "description": "Coordination patterns can change mid-execution."
+            }
+          }
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "must"
+      ]
+    }
+  },
+  "required": [
+    "runtime"
+  ]
+}
