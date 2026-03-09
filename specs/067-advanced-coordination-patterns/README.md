@@ -9,22 +9,23 @@ tags:
 - enterprise
 depends_on:
 - 065-agent-message-bus-task-orchestration
+- 072-ai-native-coordination-model
 parent: 054-agent-fleet-execution-layer
 created_at: 2026-03-09T06:10:00.624611698Z
 updated_at: 2026-03-09T06:10:00.624611698Z
 ---
 
-# Advanced Coordination Patterns — Enterprise-Scale Agent Organization
+# Advanced Coordination Patterns — ClawDen Implementation of Organizational Patterns
 
 ## Overview
 
-Spec 065 establishes master-worker as the foundational coordination pattern — a single leader delegates subtasks to flat workers and aggregates results. This is intuitive for small teams but doesn't model the richer organizational structures found in real enterprises.
+Spec 072 defines six organizational coordination patterns (hierarchical, pipeline, committee, departmental, marketplace, matrix) as implementation-agnostic algorithms. This spec is **ClawDen's implementation** of those patterns — the Rust trait bindings, `AgentEnvelope` protocol integration, `clawden.yaml` config schema, and CLI commands.
 
-This spec defines pluggable coordination patterns that map to how real organizations work: hierarchical delegation, cross-department collaboration, peer consensus, assembly-line pipelines, and market-driven task allocation.
+Spec 065 establishes master-worker as the foundational coordination pattern. This spec extends it with the full organizational pattern taxonomy from spec 072, implemented as pluggable `CoordinationPattern` trait objects on top of the same `AgentEnvelope` protocol and `MessageBus`.
 
-Child spec `068-ai-native-coordination-primitives` extends these with patterns that have no human organizational analogue — exploiting zero fork cost, lossless context transfer, and speculative parallelism to achieve outcomes impossible with human teams.
+Child spec `068-ai-native-coordination-primitives` extends these with ClawDen implementations of AI-native primitives (also defined abstractly in spec 072).
 
-All patterns build on the same `AgentEnvelope` protocol and `MessageBus` from spec 065 — they are coordination strategies, not transport changes.
+For the abstract pattern definitions, rationale, and invariants, see **spec 072**. This spec focuses on concrete implementation.
 
 ## Design
 

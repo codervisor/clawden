@@ -12,13 +12,16 @@ tags:
 parent: 054-agent-fleet-execution-layer
 depends_on:
   - 068-ai-native-coordination-primitives
+  - 072-ai-native-coordination-model
 created_at: 2026-03-09T08:16:40.771740021Z
 updated_at: 2026-03-09T08:16:40.771740021Z
 ---
 
-# AI-Native Coordination Applied — Domain Playbooks
+# AI-Native Coordination Applied — ClawDen Domain Playbook Templates
 
 ## Overview
+
+Spec 072 defines the abstract playbook schema and reference compositions (Explore-Harden-Maintain, Mesh-Fractal-Swarm, etc.) for mapping AI-native primitives to domain workflows. This spec is **ClawDen's implementation** — concrete playbook templates, the `clawden.yaml` playbook config loader, and `clawden fleet playbook` CLI commands.
 
 Spec 068 defines five coordination primitives (speculative swarm, context mesh, fractal decomposition, generative-adversarial, stigmergic) grounded in what AI agents can do that humans structurally cannot. But primitives alone don't ship value — **applied compositions** do.
 
@@ -265,14 +268,14 @@ fleet:
 
 Across all six domains, the same structural shift emerges:
 
-| Domain | Old model (human-shaped) | New model (AI-native) | Key primitive |
-|---|---|---|---|
-| **Coding** | Write → review → merge | Speculative explore → adversarial harden → stigmergic maintain | Swarm + GAN + Stigmergy |
-| **Finance** | One analyst, one model | Multi-thesis swarm, live market mesh, fractal deep-dive | Swarm + Mesh + Fractal |
-| **Marketing** | Brief → draft → edit → publish | Multi-angle swarm → audience-adversarial test → performance-reactive loop | Swarm + GAN + Stigmergy |
-| **Research** | Read → synthesize → write | Live literature mesh → fractal analysis → hypothesis swarm | Mesh + Fractal + Swarm |
-| **Legal** | Read → flag risks → review | Fractal clause analysis → adversarial stress-test → cross-corpus mesh | Fractal + GAN + Mesh |
-| **DevOps** | Alert → triage → escalate → fix | Multi-hypothesis swarm → stigmergic monitoring → incident mesh | Swarm + Stigmergy + Mesh |
+| Domain        | Old model (human-shaped)        | New model (AI-native)                                                     | Key primitive            |
+| ------------- | ------------------------------- | ------------------------------------------------------------------------- | ------------------------ |
+| **Coding**    | Write → review → merge          | Speculative explore → adversarial harden → stigmergic maintain            | Swarm + GAN + Stigmergy  |
+| **Finance**   | One analyst, one model          | Multi-thesis swarm, live market mesh, fractal deep-dive                   | Swarm + Mesh + Fractal   |
+| **Marketing** | Brief → draft → edit → publish  | Multi-angle swarm → audience-adversarial test → performance-reactive loop | Swarm + GAN + Stigmergy  |
+| **Research**  | Read → synthesize → write       | Live literature mesh → fractal analysis → hypothesis swarm                | Mesh + Fractal + Swarm   |
+| **Legal**     | Read → flag risks → review      | Fractal clause analysis → adversarial stress-test → cross-corpus mesh     | Fractal + GAN + Mesh     |
+| **DevOps**    | Alert → triage → escalate → fix | Multi-hypothesis swarm → stigmergic monitoring → incident mesh            | Swarm + Stigmergy + Mesh |
 
 The human role in every domain shifts from **executor** to **director**: setting objectives, defining taste, and making judgment calls that require values — not labor.
 
@@ -303,5 +306,7 @@ The human role in every domain shifts from **executor** to **director**: setting
 ## Notes
 
 These playbooks are **templates, not products.** ClawDen provides the primitives and the composition engine; users customize playbooks for their specific domain workflows, agent configurations, and quality thresholds.
+
+For the abstract playbook schema, reference compositions, and composability rules, see **spec 072**. This spec maps those abstractions to concrete ClawDen config and CLI.
 
 The boundary with spec 068: that spec owns the five AI-native primitives and their implementation. This spec owns the domain-specific compositions and the playbook config schema. A playbook is a recipe; the primitives are the ingredients.

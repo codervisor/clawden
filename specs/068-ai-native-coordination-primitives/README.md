@@ -11,41 +11,24 @@ tags:
 parent: 054-agent-fleet-execution-layer
 depends_on:
   - 067-advanced-coordination-patterns
+  - 072-ai-native-coordination-model
 created_at: 2026-03-09T06:25:01.610088324Z
 updated_at: 2026-03-09T06:25:01.610088324Z
 ---
 
-# AI-Native Coordination Primitives — Beyond Organizational Metaphors
+# AI-Native Coordination Primitives — ClawDen Implementation
 
 ## Overview
 
-Spec 067's Phase 1 maps real-world organizational structures (hierarchy, pipeline, committee, marketplace) onto agent fleets. This is valuable — and also exactly the mistake every industrial revolution's first wave makes. The spinning jenny mechanized hand-weaving. The first electric factories bolted motors onto the same belt-driven layouts designed for steam. The first digital offices scanned paper forms into PDFs.
+Spec 072 defines five AI-native coordination primitives (speculative swarm, context mesh, fractal decomposition, generative-adversarial, stigmergic) as implementation-agnostic algorithms, grounded in agent properties that have no human analogue. See spec 072 for the abstract model, the industrial-revolution analysis motivating the second-wave thesis, and the formal operation semantics (spawn/fork/merge/observe/convergence/prune).
 
-The **second wave** — the one that creates orders-of-magnitude value — invents production models that are impossible without the new technology. Ford didn't just replace horses with engines; he invented the assembly line, which only works because electric motors deliver power on demand at any point (steam's centralized shaft-and-belt couldn't do that). Amazon didn't just sell books online; they invented infrastructure-as-a-service, which only works because compute is fungible (physical stores aren't).
-
-This spec defines **coordination primitives that have no human organizational analogue** — they exploit properties unique to AI agents that humans fundamentally lack. These are not patterns borrowed from org charts. They are the assembly lines of the agent era.
-
-### Why Organizational Metaphors Hit a Ceiling
-
-Human coordination patterns exist because of **human constraints**:
-
-| Human constraint | Org pattern it created | AI agents don't have this constraint |
-|---|---|---|
-| Humans can't be cloned | Fixed team rosters, hiring | **Zero fork cost** — spawn/destroy agents freely |
-| Humans communicate in lossy natural language | Meetings, reports, handoff docs | **Lossless context transfer** — share full state, not summaries |
-| Humans have fixed identities and skills | Job titles, departments, training programs | **Elastic identity** — mutate role/expertise instantly |
-| Humans can only do one thing at a time | Sequential task assignment, scheduling | **Speculative parallelism** — execute N strategies, keep the best |
-| Humans have ego, status, and politics | Management layers, conflict resolution, HR | **No social overhead** — zero coordination tax for consensus |
-| Humans tire and context-switch with cognitive cost | 8-hour days, sprints, focus time | **Tireless and stateless** — no degradation over time |
-| Human thought is opaque | Status meetings, standups, reports | **Perfect observability** — inspect any agent's full internal state |
-
-Mapping agent fleets to org charts preserves all of these constraints by design. AI-native coordination starts by **discarding them**.
+This spec is **ClawDen's implementation** of those primitives — the `AINativeCoordination` Rust trait, `AgentEnvelope`-based message bus integration, `clawden.yaml` config schema, budget enforcement, and composability validation.
 
 ## Design
 
-### Extended Trait Surface
+### ClawDen Trait Surface
 
-The Phase 1 `CoordinationPattern` trait assumes fixed agent rosters and message-based coordination. AI-native patterns need additional capabilities:
+The spec 067 `CoordinationPattern` trait assumes fixed agent rosters and message-based coordination. ClawDen extends it with `AINativeCoordination` to implement the six abstract operations from spec 072:
 
 ```rust
 trait AINativeCoordination: CoordinationPattern {
@@ -235,66 +218,16 @@ fleet:
 
 ### Composability
 
-These primitives compose. A stigmergic fleet might use fractal decomposition within a single agent's reaction. A speculative swarm might use generative-adversarial loops to evaluate each branch. A context mesh might feed a speculative swarm's cross-pollination checkpoints.
+These primitives compose per the rules defined in spec 072 Part 4. ClawDen enforces composability at config parse time — anti-patterns (swarm-in-swarm, adversarial-in-adversarial, stigmergic without debounce) are rejected with actionable error messages.
 
-The `CoordinationPattern` trait from spec 067 remains the extension point — AI-native patterns just implement a richer surface area.
-
-## Analysis: The Industrial Revolution Lens
-
-### The Pattern Across Revolutions
-
-| Revolution | First wave (old model + new tech) | Second wave (new model only possible with new tech) |
-|---|---|---|
-| Steam (1760s) | Steam pumps replacing hand-pumps in mines | Factory system — centralized production with power-driven machinery |
-| Electricity (1880s) | Electric motors replacing steam belts in same factory layouts | Assembly line — unit drive motors at each station enable Ford Model T |
-| Information (1970s) | Computerized paper forms, digital filing cabinets | Internet-native business — Amazon, Google, SaaS, the long tail |
-| AI Agents (now) | **Agent fleets mimicking org charts** (hierarchy, departments, committees) | **AI-native primitives** — speculative swarm, context mesh, fractal decomposition, stigmergy |
-
-### What Assembly Lines Teach Us
-
-Ford's assembly line wasn't "hire more workers." It exploited properties unique to electric motors:
-- **Unit drive**: each machine has its own motor (no shared belt). Agents: each fork has its own context (no shared manager bottleneck).
-- **Any layout**: machines can be arranged by workflow, not by power source proximity. Agents: coordination topology is unconstrained by communication overhead.
-- **Continuous flow**: work moves to workers, not workers to work. Agents: context flows via mesh, not via meetings.
-
-The assembly line **made previous organizational patterns (craft guilds, putting-out system) obsolete** — not by being faster at the old model, but by making the old model irrelevant.
-
-### What This Means for Agent Coordination
-
-Organizational metaphors (spec 067 Phase 1) are the **first wave** — valuable, necessary, and fundamentally limited. They will hit a ceiling because they preserve human constraints that agents don't have.
-
-AI-native primitives are the **second wave** — they discard inapplicable constraints and exploit unique capabilities. The ceiling is much higher because the coordination model matches the medium.
-
-The practical implication: **don't just build both**. Build Phase 1 as the stable foundation, but design every abstraction (traits, config schema, message protocol) with Phase 2 in mind. The `CoordinationPattern` trait must accommodate dynamic spawn/merge/fork/observe from day one, even if Phase 1 patterns don't use those methods.
-
-## Plan
-
-- [ ] Design `AINativeCoordination` trait extension with spawn/merge/fork/observe/prune methods.
-- [ ] Extend `CoordinationAction` enum with `Spawn`, `Fork`, `Merge`, `Prune`, `Publish`, `Claim` variants.
-- [ ] Implement speculative swarm: fork manager, checkpoint broadcaster, convergence detector, fragment fuser.
-- [ ] Implement context mesh: shared context graph (DAG), gap detector, reactive propagator, conflict resolver.
-- [ ] Implement fractal decomposition: self-splitting with scope isolation, recursive depth control, lossless reunification.
-- [ ] Implement generative-adversarial: attack escalation engine, progressive difficulty modes, termination detector.
-- [ ] Implement stigmergic coordination: artifact watcher, pheromone marker system, reaction debouncer, emergent workflow tracker.
-- [ ] Integrate with budget controls: speculative swarm and fractal decomposition must respect max_total_agents and cost-tier limits.
-- [ ] Extend `clawden.yaml` fleet config schema for all five primitives.
-- [ ] Validate composability: at least one composed pattern (e.g., stigmergic + fractal) works end-to-end.
-
-## Test
-
-- [ ] Speculative swarm: 4 forks explore different strategies; cross-pollination at checkpoints incorporates sibling fragments; convergence prunes one redundant branch; fragment fusion assembles final output from 3 survivors' best parts.
-- [ ] Context mesh: 3 agents observe shared graph; researcher publishes finding → architect reactively updates design; architect detects dependency gap → claims and fills it; implementer receives delta notification.
-- [ ] Context mesh conflict: two agents fill the same gap simultaneously; compete-and-compare resolves within one cycle; losing agent is notified and can redirect effort.
-- [ ] Fractal decomposition: agent splits into 3 scoped children; children produce results with scope isolation (no cross-writes); parent reunifies losslessly; output is coherent.
-- [ ] Fractal depth limiting: agent attempts recursive split beyond max_depth; split is rejected; agent completes at current depth.
-- [ ] Generative-adversarial: generator produces code; critic finds 3 issues in round 1 (syntax-level); generator fixes all 3; critic escalates to edge-cases in round 2; generator preempts 2 of 3 attacks; round 3 critic finds no new issues; terminates.
-- [ ] Stigmergic: implementer writes new function (artifact change) → tester detects it and auto-generates tests → documenter detects undocumented API and adds docs → security auditor scans for vulnerabilities. No explicit task assignment occurred.
-- [ ] Marker decay: pheromone marker set at t=0 loses influence by t=decay_interval; agents re-prioritize accordingly.
-- [ ] Budget enforcement: speculative swarm with max_total_agents=6 refuses to fork a 7th agent; graceful degradation continues with 6.
-- [ ] Composability: pipeline with speculative-swarm inner stage produces correct output; stigmergic fleet with fractal inner decomposition handles recursive artifact reactions.
+The `CoordinationPattern` trait from spec 067 remains the extension point — AI-native patterns implement a richer surface area.
 
 ## Notes
 
+For the abstract primitive algorithms, composability rules, and the industrial-revolution analysis motivating this design, see **spec 072**.
+
 This spec deliberately does not cover distributed execution of AI-native patterns. Running a speculative swarm across multiple hosts requires spec 062's remote control channel. That's a future extension — get the single-host primitives right first.
+
+The boundary with spec 067: that spec owns the `CoordinationPattern` trait and organizational patterns (hierarchy, pipeline, committee, departmental, marketplace, matrix). This spec owns the `AINativeCoordination` extension and the five AI-native primitive implementations. Both share the same `AgentEnvelope` protocol and `MessageBus` from spec 065.
 
 The boundary with spec 067 Phase 1: that spec owns the `CoordinationPattern` trait and organizational patterns (hierarchy, pipeline, committee, departmental, marketplace, matrix). This spec owns the `AINativeCoordination` extension and the five AI-native primitives. Both share the same `AgentEnvelope` protocol and `MessageBus` from spec 065.

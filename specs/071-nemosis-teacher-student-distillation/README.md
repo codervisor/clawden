@@ -12,6 +12,7 @@ tags:
 depends_on:
 - 068-ai-native-coordination-primitives
 - 069-ai-native-domain-playbooks
+- 072-ai-native-coordination-model
 parent: 054-agent-fleet-execution-layer
 created_at: 2026-03-09T09:20:25.854864694Z
 updated_at: 2026-03-09T09:20:25.854864694Z
@@ -29,12 +30,12 @@ This spec integrates Nemosis into ClawDen's fleet execution layer so that AI-nat
 
 ### Why This Matters for ClawDen
 
-| Fleet primitive | Cost without Nemosis | Cost with Nemosis |
-|---|---|---|
-| Speculative swarm (8 forks) | 8× frontier model | 1× frontier teacher + 7× distilled student |
-| Stigmergic maintenance (5 watchers) | 5× frontier 24/7 | 5× student after initial skill distillation |
-| Generative-adversarial (6 rounds) | 12× frontier (generator + critic) | 2× frontier for novel rounds + student for patterns already distilled |
-| Fractal decomposition (15 agents) | 15× frontier | 1–3× frontier for splitting logic + 12× student for leaf execution |
+| Fleet primitive                     | Cost without Nemosis              | Cost with Nemosis                                                     |
+| ----------------------------------- | --------------------------------- | --------------------------------------------------------------------- |
+| Speculative swarm (8 forks)         | 8× frontier model                 | 1× frontier teacher + 7× distilled student                            |
+| Stigmergic maintenance (5 watchers) | 5× frontier 24/7                  | 5× student after initial skill distillation                           |
+| Generative-adversarial (6 rounds)   | 12× frontier (generator + critic) | 2× frontier for novel rounds + student for patterns already distilled |
+| Fractal decomposition (15 agents)   | 15× frontier                      | 1–3× frontier for splitting logic + 12× student for leaf execution    |
 
 The key insight: **most agent work within a fleet is repetitive pattern execution, not novel reasoning.** Nemosis captures the patterns; students replay them. The teacher only fires when the student encounters something outside its distilled skill set.
 
@@ -261,27 +262,4 @@ The fleet scheduler (spec 064's process supervisor + spec 065's task orchestrati
 - This spec intentionally avoids mandating *which* student/teacher models to use — that's a config decision. The architecture is model-agnostic.
 - Relationship to spec 025 (LLM Provider API Key Management): the scheduler's model selection needs access to multiple provider API keys to route between teacher and student tiers.
 - Distributed fleet scenario (spec 062): trace capture works the same way over remote agent control channels — the `AgentEnvelope` protocol already carries agent outputs that include the traces.
-
-## Plan
-
-<!-- Break down implementation into steps -->
-
-<!-- 💡 TIP: If your plan has >6 phases or this spec approaches 
-     400 lines, consider using sub-spec files:
-     - IMPLEMENTATION.md for detailed implementation
-     - See spec 012-sub-spec-files for guidance on splitting -->
-
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-
-## Test
-
-<!-- How will we verify this works? -->
-
-- [ ] Test criteria 1
-- [ ] Test criteria 2
-
-## Notes
-
-<!-- Optional: Research findings, alternatives considered, open questions -->
+- For the abstract cost optimization model, model-tier abstraction, and per-primitive cost reduction projections, see **spec 072 Part 6**.

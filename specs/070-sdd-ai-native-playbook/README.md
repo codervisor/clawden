@@ -13,6 +13,7 @@ parent: 054-agent-fleet-execution-layer
 depends_on:
   - 068-ai-native-coordination-primitives
   - 069-ai-native-domain-playbooks
+  - 072-ai-native-coordination-model
 created_at: 2026-03-09T17:06:00Z
 updated_at: 2026-03-09T17:06:00Z
 ---
@@ -31,13 +32,13 @@ This spec defines playbooks for the SDD lifecycle as practiced with [LeanSpec](h
 
 SDD looks like "just writing documents" from the outside. From the inside, it involves activities with fundamentally different coordination needs than any domain in spec 069:
 
-| SDD activity | Why it's hard | Why current practice is limited |
-|---|---|---|
-| **Scoping** — deciding what a spec covers | Requires simultaneous awareness of the entire project graph | Humans scope sequentially, one spec at a time, missing overlaps |
+| SDD activity                                                        | Why it's hard                                                                  | Why current practice is limited                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| **Scoping** — deciding what a spec covers                           | Requires simultaneous awareness of the entire project graph                    | Humans scope sequentially, one spec at a time, missing overlaps                    |
 | **Decomposition** — splitting large concerns into spec-sized pieces | Requires exploring multiple decomposition strategies and evaluating trade-offs | Humans pick the first reasonable decomposition; can't try 4 strategies in parallel |
-| **Consistency** — ensuring specs don't contradict each other | Scales quadratically with spec count (N specs = N² potential conflicts) | Humans rely on memory and ad-hoc cross-referencing |
-| **Liveness** — keeping specs accurate as implementation evolves | Requires continuous monitoring of code, PRs, and test results | Humans update specs as an afterthought, if at all |
-| **Gap detection** — finding what's not specified | Requires inference over the spec graph + implementation artifacts | Humans can't see negative space; only notice gaps when they cause bugs |
+| **Consistency** — ensuring specs don't contradict each other        | Scales quadratically with spec count (N specs = N² potential conflicts)        | Humans rely on memory and ad-hoc cross-referencing                                 |
+| **Liveness** — keeping specs accurate as implementation evolves     | Requires continuous monitoring of code, PRs, and test results                  | Humans update specs as an afterthought, if at all                                  |
+| **Gap detection** — finding what's not specified                    | Requires inference over the spec graph + implementation artifacts              | Humans can't see negative space; only notice gaps when they cause bugs             |
 
 Each of these maps cleanly to one or more AI-native primitives.
 
@@ -304,15 +305,15 @@ fleet:
 
 All playbooks interact with the LeanSpec project through its MCP server tools:
 
-| Playbook action | LeanSpec MCP tool |
-|---|---|
-| Check existing specs before creating | `search`, `list` |
-| View related specs for cross-referencing | `view`, `deps` |
-| Create new specs from swarm output | `create` |
-| Update spec metadata (status, tags) | `update` |
-| Link generated dependencies | `link` |
-| Validate token budget compliance | `tokens`, `validate` |
-| Monitor project health | `board`, `stats` |
+| Playbook action                          | LeanSpec MCP tool    |
+| ---------------------------------------- | -------------------- |
+| Check existing specs before creating     | `search`, `list`     |
+| View related specs for cross-referencing | `view`, `deps`       |
+| Create new specs from swarm output       | `create`             |
+| Update spec metadata (status, tags)      | `update`             |
+| Link generated dependencies              | `link`               |
+| Validate token budget compliance         | `tokens`, `validate` |
+| Monitor project health                   | `board`, `stats`     |
 
 The MCP integration means playbooks operate on the same spec substrate that human developers use — there's no separate "AI spec format." Specs created by swarms, hardened by adversarial loops, and maintained by stigmergic agents are standard LeanSpec markdown files, visible on the kanban board, searchable, and human-editable.
 
@@ -352,5 +353,7 @@ This is a **meta-playbook** — it produces the specs that other playbooks consu
 The boundary with spec 069: that spec owns the domain playbook schema and the six domain playbooks (coding, finance, marketing, research, legal, devops). This spec owns the SDD-specific playbooks that operate on the spec layer itself. The composed lifecycle here *feeds into* spec 069's coding playbook — once specs are explored, hardened, and decomposed, they become inputs to the coding swarm.
 
 The boundary with spec 068: that spec owns the five AI-native primitives and their implementation. This spec composes those primitives into SDD-specific configurations but does not extend the primitive trait surface.
+
+For the abstract coordination model, primitive definitions, and composability rules, see **spec 072**. This spec applies those abstractions to the SDD domain using LeanSpec as the spec substrate.
 
 LeanSpec integration is via MCP tools, not direct library coupling. ClawDen playbooks invoke `@leanspec/mcp` the same way a human developer's AI assistant would — through the standard tool protocol. This keeps LeanSpec and ClawDen independently evolvable.
