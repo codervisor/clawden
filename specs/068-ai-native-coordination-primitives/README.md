@@ -216,6 +216,186 @@ fleet:
     reaction_debounce: 5s
 ```
 
+## Claude Code Implementation Notes
+
+This section documents how each AI-native primitive can be implemented using Claude Code's native agent system. For conformance tier definitions and the full gap analysis, see spec 092.
+
+### Primitive 1: Speculative Swarm — Claude Code
+
+**Conformance tier:** ⚠️ Partial
+
+**What works natively:**
+- N variant prompts → N sequential `Agent` tool calls, each with a different strategy suffix
+- Parent agent performs fragment fusion in its context window after all subagents complete
+- Each subagent writes to its own scoped output file (e.g., `output-strategy-N.md`)
+
+**What doesn't work:**
+- Claude Code subagents run sequentially, not in parallel — losing the cost advantage of early pruning
+- No mid-execution cross-pollination between branches
+- No convergence-based pruning: all N branches run to completion regardless of similarity
+- No typed `fragment-fusion` merge: parent must express the fusion strategy as natural language prompt instructions
+
+**Canonical emulation pattern:**
+
+```python
+# Pseudocode — expressed as parent agent orchestration prompt
+strategies = [
+    "approach via divide-and-conquer",
+    "approach via constraint propagation",
+    "approach via first-principles decomposition",
+]
+outputs = []
+for i, strategy in enumerate(strategies):
+    result = spawn_subagent(
+        prompt=f"{base_prompt}\n\nYour specific approach: {strategy}",
+        output_file=f"output-swarm-{i}.md"
+    )
+    outputs.append(result)
+
+# Fragment fusion in parent
+synthesize(outputs, strategy="select best fragment per sub-problem section")
+```
+
+**When to use ClawDen fleet instead:** For latency-sensitive tasks or large N (>4 branches), use spec 068's `AINativeCoordination::fork()` through the ClawDen fleet layer, which achieves true parallelism.
+
+---
+
+### Primitive 2: Context Mesh — Claude Code
+
+**Conformance tier:** ⚠️ Partial
+
+**What works natively:**
+- Shared filesystem IS the mesh substrate — all agents read/write the same workspace
+- MCP servers (e.g., `@leanspec/mcp`) provide shared structured knowledge
+- CLAUDE.md functions as a persistent, shared context declaration
+- Agents can detect knowledge gaps via semantic search returning no results
+
+**What doesn't work:**
+- No reactive propagation — agent B is not notified when agent A writes a file
+- Parent must explicitly orchestrate information flow: read updated files, inject into next subagent prompt
+- No pheromone markers or confidence metadata on knowledge nodes
+- No conflict resolution protocol — concurrent writes require manual management
+
+**Canonical emulation pattern:**
+
+Structure the knowledge graph as a directory of markdown files. Each subagent reads the full knowledge directory before producing output. Parent stitches updates manually:
+
+```
+knowledge/
+  requirements.md     # produced by researcher agent
+  constraints.md      # produced by researcher agent
+  design.md           # produced by architect agent (reads requirements.md)
+  interfaces.md       # produced by architect agent
+  implementation.md   # produced by coder agent (reads design.md + interfaces.md)
+```
+
+---
+
+### Primitive 3: Fractal Decomposition — Claude Code
+
+**Conformance tier:** ⚠️ Partial (strongest AI-native fit)
+
+**What works natively:**
+- `Agent` tool natively models the split/reunify cycle
+- Children have full workspace access (all files, all tools)
+- Children can recursively spawn their own subagents (depth-bounded by token budget)
+- Results reunify in parent via file artifacts + returned messages
+
+**What doesn't work:**
+- Children start from system-prompt context only, **not** from the parent's full mid-execution state
+- This breaks the "lossless inheritance" guarantee: children receive a *textual snapshot* of context, not true state clone
+- In practice: parent must carefully craft the child prompt to include all relevant context explicitly
+
+**Canonical emulation pattern:**
+
+```
+Parent agent:
+1. Analyze task, identify 3 orthogonal sub-problems: [auth, storage, API]
+2. Write context-snapshot.md: full reasoning, constraints, decisions so far
+3. Spawn child-auth with prompt: "[context-snapshot content]\nYou handle only: auth subsystem"
+4. Spawn child-storage with prompt: "[context-snapshot content]\nYou handle only: storage subsystem"
+5. Spawn child-api with prompt: "[context-snapshot content]\nYou handle only: API layer"
+6. After all children complete, read their output files and reunify
+```
+
+**Depth limit:** Each level of recursion adds the full parent context to the child prompt. At depth 3–4, prompts become very large. Budget accordingly.
+
+---
+
+### Primitive 4: Generative-Adversarial — Claude Code
+
+**Conformance tier:** ✅ Full (achievable with minimal adaptation)
+
+**What works natively:**
+- Generator + critic as separate `Agent` calls in a parent-managed loop
+- No fatigue — each critic subagent is fresh and can apply maximum adversarial pressure
+- Escalation implemented by enriching the critic's prompt each round with prior attack history
+- Loop terminates when critic returns no new issues for K rounds, or `max_rounds` reached
+
+**Canonical implementation:**
+
+```
+round = 0
+critique_history = []
+artifact = spawn_generator(base_prompt)
+
+while round < max_rounds:
+    critique = spawn_critic(
+        artifact=artifact,
+        history=critique_history,
+        mode=escalation_modes[round]  # round 0: syntax, round 1: edge cases, etc.
+    )
+    if critique.is_clean():
+        consecutive_clean += 1
+        if consecutive_clean >= 2: break
+    else:
+        consecutive_clean = 0
+        critique_history.append(critique)
+        artifact = spawn_generator(artifact=artifact, critique=critique)
+    round += 1
+```
+
+**No native escalation ladder:** The escalation mode progression (syntax → edge-cases → concurrency → adversarial-inputs) must be implemented as an explicit list in the parent orchestrator. There is no built-in mechanism for automatic escalation.
+
+---
+
+### Primitive 5: Stigmergic Coordination — Claude Code
+
+**Conformance tier:** 🔧 Emulated
+
+**What works natively:**
+- Shared filesystem as pheromone surface — agents leave markers (status files, TODO comments, metadata files)
+- Other agents can observe markers via `Grep`/`Glob` searches
+- File modification timestamps serve as implicit pheromone decay approximation
+
+**What doesn't work:**
+- No reactive triggering — agents do not automatically activate when a file changes
+- No debounce mechanism — parent must implement polling to avoid triggering storms
+- No structured pheromone metadata (confidence, completeness decay rates)
+
+**Canonical emulation pattern:**
+
+```
+# Marker format: .clawden-marker/<artifact-path>.json
+{
+  "agent": "tester",
+  "marker": "coverage",
+  "value": 0.72,
+  "timestamp": "2026-03-10T00:00:00Z",
+  "artifact": "src/auth.rs"
+}
+
+# Parent polling loop (imperative stigmergy):
+while not_done:
+    check_markers()
+    dispatch_reactive_agents_based_on_markers()
+    sleep(reaction_debounce)  # e.g., 5s
+```
+
+**For true reactive stigmergy:** Use ClawDen's fleet layer (spec 068), which provides the file-watch mechanism that triggers Claude Code agents on artifact changes without parent polling.
+
+---
+
 ### Composability
 
 These primitives compose per the rules defined in spec 072 Part 4. ClawDen enforces composability at config parse time — anti-patterns (swarm-in-swarm, adversarial-in-adversarial, stigmergic without debounce) are rejected with actionable error messages.

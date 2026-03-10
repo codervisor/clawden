@@ -317,6 +317,208 @@ All playbooks interact with the LeanSpec project through its MCP server tools:
 
 The MCP integration means playbooks operate on the same spec substrate that human developers use — there's no separate "AI spec format." Specs created by swarms, hardened by adversarial loops, and maintained by stigmergic agents are standard LeanSpec markdown files, visible on the kanban board, searchable, and human-editable.
 
+## Claude Code Imperative Playbook Examples
+
+The declarative YAML playbooks above describe the *ideal* coordination model. This section provides concrete, runnable equivalents using Claude Code's `Agent` tool system for operators who are not yet using ClawDen fleet orchestration. For conformance tier ratings of each primitive in Claude Code, see spec 092.
+
+### Playbook 1: Spec Exploration — Imperative (Claude Code)
+
+The declarative `speculative-swarm` runs branches in parallel. In Claude Code, branches run sequentially. The diversity-and-fusion benefit is preserved; the latency advantage is not.
+
+```
+# Parent agent orchestration prompt (pseudocode)
+
+Task: "Explore spec strategies for [feature idea]"
+
+Step 1 — Spawn 5 strategy subagents sequentially:
+  Agent("Explore: monolith-comprehensive",
+    prompt="Write a single comprehensive spec for [feature]. Cover all aspects in one document.",
+    output="sdd-exploration/strategy-monolith.md")
+
+  Agent("Explore: fracture-context-economy",
+    prompt="Decompose [feature] into the maximum number of small, independent specs. Each spec must be under 2000 tokens.",
+    output="sdd-exploration/strategy-fracture.md")
+
+  Agent("Explore: user-story-acceptance",
+    prompt="Frame [feature] from the user/operator perspective with concrete acceptance criteria.",
+    output="sdd-exploration/strategy-user-story.md")
+
+  Agent("Explore: architecture-contracts",
+    prompt="Frame [feature] from the system-design perspective. Define interface contracts and invariants.",
+    output="sdd-exploration/strategy-architecture.md")
+
+  Agent("Explore: adversarial-failure-modes",
+    prompt="Frame [feature] centered on failure modes, edge cases, and what could go wrong.",
+    output="sdd-exploration/strategy-adversarial.md")
+
+Step 2 — Fragment fusion in parent context:
+  Read all 5 strategy outputs.
+  Combine: fracture-agent's decomposition boundaries
+         + architecture-agent's interface contracts
+         + user-story-agent's acceptance criteria
+         + adversarial-agent's failure modes
+  Write fused spec to: sdd-exploration/result-spec.md
+
+Note: No mid-execution cross-pollination (sequential constraint).
+      All 5 branches run to completion regardless of similarity.
+```
+
+**Claude Code implementation gap vs. declarative YAML:**
+- `checkpoint_interval` → not applicable (sequential, no mid-run cross-pollination)
+- `convergence_threshold` → not enforced; all branches complete
+- `max_agents: 6` → approximated by limiting strategy count to 5
+
+---
+
+### Playbook 2: Spec Hardening — Imperative (Claude Code)
+
+Generative-adversarial is Claude Code's strongest AI-native primitive (Full conformance tier). The imperative implementation closely matches the declarative spec.
+
+```
+# Parent agent orchestration prompt (pseudocode)
+
+Task: "Harden spec at [spec-path] through adversarial escalation"
+
+escalation_modes = [
+  "clarity-ambiguity",        # Round 1
+  "completeness-edge-cases",  # Round 2
+  "cross-spec-consistency",   # Round 3
+  "implementation-feasibility", # Round 4
+  "scope-appropriateness"     # Round 5
+]
+
+artifact = read_file(spec_path)
+critique_history = []
+consecutive_clean = 0
+round = 0
+
+while round < 8 and consecutive_clean < 2:
+  mode = escalation_modes[min(round, len(escalation_modes)-1)]
+
+  critique = Agent("Critic: " + mode,
+    prompt=f"""
+    You are an adversarial spec reviewer. Your job is to BREAK this spec.
+    Attack mode: {mode}
+    Prior attack history: {critique_history}
+    Spec to attack: {artifact}
+    Return: list of specific issues found, or 'CLEAN' if you found none.
+    """)
+
+  if critique == "CLEAN":
+    consecutive_clean += 1
+  else:
+    consecutive_clean = 0
+    critique_history.append({"round": round, "mode": mode, "issues": critique})
+    artifact = Agent("Generator: fix round " + str(round),
+      prompt=f"Fix all issues in this spec:\n{critique}\n\nSpec:\n{artifact}")
+
+  round += 1
+
+write_file(spec_path, artifact)
+```
+
+**This matches the declarative spec closely** — the only gap is that `quality_threshold: 0.90` is expressed as a prompt instruction to the critic rather than a machine-enforced numeric gate.
+
+---
+
+### Playbook 3: Living Spec Graph — Imperative (Claude Code)
+
+True stigmergic reactivity requires ClawDen fleet's file-watch mechanism. In Claude Code, the parent agent polls on a schedule.
+
+```
+# Parent agent orchestration prompt (pseudocode)
+# Note: This is a long-running background pattern, not a one-shot task.
+
+Task: "Maintain living spec graph — run continuously"
+
+marker_file_pattern = ".clawden-markers/*.json"
+poll_interval = 30  # seconds
+
+while True:
+  # Staleness detection
+  changed_files = git_diff_since_last_check()
+  for file in changed_files:
+    bound_specs = find_specs_bound_to(file)
+    for spec in bound_specs:
+      Agent("Staleness detector",
+        prompt=f"File {file} changed. Review spec {spec} for drift. If stale, draft a revision.",
+        output=f".clawden-markers/staleness-{spec_id}.json")
+
+  # Relationship detection
+  new_specs = find_new_specs_since_last_check()
+  for spec in new_specs:
+    Agent("Relationship updater",
+      prompt=f"New spec created: {spec}. Scan all existing specs and propose depends_on/related links.",
+      output=f".clawden-markers/relationships-{spec_id}.json")
+
+  # Token watchdog
+  for spec in all_specs():
+    if token_count(spec) > 2000:
+      Agent("Token watchdog",
+        prompt=f"Spec {spec} exceeds 2000 tokens. Propose a fractal split into sub-specs.",
+        output=f".clawden-markers/split-proposal-{spec_id}.json")
+
+  sleep(poll_interval)  # reaction_debounce equivalent
+```
+
+**Claude Code gap vs. declarative spec:**
+- `propagation: reactive` → becomes `poll_interval: 30s` (no file-watch triggers)
+- `marker_decay: 86400s` → not natively enforced; stale markers persist until explicitly cleared
+- `reaction_debounce: 30s` → implemented as `sleep(30)` in the polling loop
+
+---
+
+### Playbook 4: Spec Decomposition — Imperative (Claude Code)
+
+Fractal decomposition is Claude Code's second-strongest AI-native primitive. The main gap is context inheritance (children receive textual snapshot, not true state clone).
+
+```
+# Parent agent orchestration prompt (pseudocode)
+
+Task: "Fractal-decompose spec at [spec-path]"
+
+spec_content = read_file(spec_path)
+if token_count(spec_content) <= 2000:
+  return  # No split needed
+
+# Step 1: Parent analyzes and identifies sub-problems
+analysis = Agent("Fractal analyzer",
+  prompt=f"Analyze this spec and identify orthogonal sub-problems suitable for separate specs:\n{spec_content}")
+sub_problems = parse_sub_problems(analysis)
+
+# Step 2: Spawn scoped children with full context
+context_snapshot = f"""
+PARENT SPEC CONTEXT:
+{spec_content}
+
+DECOMPOSITION ANALYSIS:
+{analysis}
+
+YOUR SCOPE (handle ONLY this sub-problem):
+"""
+
+children_outputs = []
+for i, sub_problem in enumerate(sub_problems[:6]):  # max 6 children
+  child_output = Agent(f"Child spec: {sub_problem.name}",
+    prompt=context_snapshot + sub_problem.description,
+    output=f"decomposed/spec-{next_spec_number()}-{sub_problem.slug}/README.md")
+  children_outputs.append(child_output)
+
+# Step 3: Reunification validation in parent
+Agent("Reunification validator",
+  prompt=f"""
+  Parent spec: {spec_content}
+  Child specs: {children_outputs}
+  Validate: Are children collectively exhaustive? Compatible interfaces? Correct depends_on links?
+  """)
+```
+
+**Claude Code gap vs. declarative spec:**
+- `reunification: lossless-merge` → parent validates but cannot guarantee losslessness (snapshot inheritance, not state clone)
+- `scope_isolation: true` → enforced by scoping constraint in child prompt only; no runtime enforcement
+
+---
+
 ## Plan
 
 - [ ] Define `sdd-exploration` playbook template with 5-strategy speculative swarm config.

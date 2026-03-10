@@ -104,6 +104,38 @@
               "description": "Coordination patterns can change mid-execution."
             }
           }
+        },
+        "tool_bindings": {
+          "type": "object",
+          "description": "Optional: maps coordination model operations to native constructs in a specific AI coding tool. Used for tool-layer conformance documentation (see spec 092).",
+          "properties": {
+            "tool_name": {
+              "type": "string",
+              "description": "Name of the AI coding tool being bound (e.g. 'claude-code', 'codex-cli')."
+            },
+            "tool_version": {
+              "type": "string",
+              "description": "Version or release date of the tool assessed."
+            },
+            "operations": {
+              "type": "object",
+              "description": "Per-operation binding declarations.",
+              "properties": {
+                "spawn": { "$ref": "#/$defs/operation_binding" },
+                "fork": { "$ref": "#/$defs/operation_binding" },
+                "merge": { "$ref": "#/$defs/operation_binding" },
+                "observe": { "$ref": "#/$defs/operation_binding" },
+                "convergence": { "$ref": "#/$defs/operation_binding" },
+                "prune": { "$ref": "#/$defs/operation_binding" }
+              }
+            },
+            "primitives": {
+              "type": "object",
+              "description": "Per-primitive binding declarations.",
+              "additionalProperties": { "$ref": "#/$defs/operation_binding" }
+            }
+          },
+          "required": ["tool_name"]
         }
       },
       "required": [
@@ -111,6 +143,32 @@
         "version",
         "must"
       ]
+    }
+  },
+  "$defs": {
+    "operation_binding": {
+      "type": "object",
+      "description": "How a single coordination model operation maps to a tool's native construct.",
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": ["full", "partial", "emulated", "unsupported"],
+          "description": "Conformance tier: full = native spec-compliant; partial = reduced semantics; emulated = documented workaround; unsupported = no viable path."
+        },
+        "native_construct": {
+          "type": "string",
+          "description": "The tool's native API, parameter, or pattern that implements this operation."
+        },
+        "gap": {
+          "type": "string",
+          "description": "Description of the semantic gap between the spec definition and the tool's implementation."
+        },
+        "emulation_pattern": {
+          "type": "string",
+          "description": "For emulated tier: brief description of the canonical workaround. See spec 092 for full patterns."
+        }
+      },
+      "required": ["tier"]
     }
   },
   "required": [
