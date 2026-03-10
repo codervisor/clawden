@@ -1,6 +1,70 @@
 {
   "skill_name": "coordination-model",
-  "description": "Deterministic schema validation tests for the AI-native coordination model. All tests run validate.py against fixture files and assert exit codes / output strings.",
+  "description": "Schema validation tests and behavioral coordination evals for the AI-native coordination model.",
+  "schema_evals_description": "Deterministic tests — run validate.py against fixture files and assert exit codes / output strings.",
+  "behavioral_evals_description": "Agent-driven tests — give an AI coding agent the SKILL.md + a task prompt, collect its trace output, and grade for structural evidence of coordination primitive behavior using evals/grade.py.",
+  "behavioral_evals": [
+    {
+      "id": "b1",
+      "name": "speculative-swarm-ratelimiter",
+      "primitive": "speculative-swarm",
+      "prompt_file": "evals/prompts/speculative-swarm-ratelimiter.md",
+      "setup": "Load coordination-model SKILL.md into agent context",
+      "grading": "python evals/grade.py results/speculative-swarm-ratelimiter/",
+      "markers_required": ["fork_evidence", "observe_evidence", "convergence_evidence", "prune_evidence", "merge_evidence"],
+      "description": "Agent designs a rate limiter using speculative swarm — must demonstrate fork/observe/converge/prune/merge lifecycle."
+    },
+    {
+      "id": "b2",
+      "name": "generative-adversarial-api-review",
+      "primitive": "generative-adversarial",
+      "prompt_file": "evals/prompts/generative-adversarial-api-review.md",
+      "setup": "Load coordination-model SKILL.md into agent context",
+      "grading": "python evals/grade.py results/generative-adversarial-api-review/",
+      "markers_required": ["escalation_evidence", "critic_specificity", "generator_response", "termination_condition", "progressive_difficulty"],
+      "description": "Agent hardens an API endpoint using generative-adversarial rounds — must show escalating critic/generator exchange."
+    },
+    {
+      "id": "b3",
+      "name": "fractal-decomposition-parser",
+      "primitive": "fractal-decomposition",
+      "prompt_file": "evals/prompts/fractal-decomposition-parser.md",
+      "setup": "Load coordination-model SKILL.md into agent context",
+      "grading": "python evals/grade.py results/fractal-decomposition-parser/",
+      "markers_required": ["decomposition_evidence", "scope_isolation", "independent_solutions", "reunification_evidence", "prune_evidence"],
+      "description": "Agent builds a config parser using fractal decomposition — must show problem splitting, isolated solutions, and reunification."
+    },
+    {
+      "id": "b4",
+      "name": "context-mesh-research",
+      "primitive": "context-mesh",
+      "prompt_file": "evals/prompts/context-mesh-research.md",
+      "setup": "Load coordination-model SKILL.md into agent context",
+      "grading": "python evals/grade.py results/context-mesh-research/",
+      "markers_required": ["spawn_evidence", "dag_evidence", "gap_detection", "reactive_spawn", "merge_evidence"],
+      "description": "Agent researches error handling patterns using context mesh — must show knowledge nodes, DAG linking, gap detection, and reactive spawning."
+    },
+    {
+      "id": "b5",
+      "name": "stigmergic-maintenance-drift",
+      "primitive": "stigmergic",
+      "prompt_file": "evals/prompts/stigmergic-maintenance-drift.md",
+      "setup": "Load coordination-model SKILL.md into agent context + provide config schema diff",
+      "grading": "python evals/grade.py results/stigmergic-maintenance-drift/",
+      "markers_required": ["observe_evidence", "reactive_evidence", "proportionality", "debounce_reasoning"],
+      "description": "Agent reacts to config drift using stigmergic maintenance — must show marker detection, proportional reactions, and debounce reasoning."
+    },
+    {
+      "id": "b6",
+      "name": "explore-harden-maintain-e2e",
+      "primitive": "composed-playbook",
+      "prompt_file": "evals/prompts/explore-harden-maintain-e2e.md",
+      "setup": "Load coordination-model SKILL.md into agent context",
+      "grading": "python evals/grade.py results/explore-harden-maintain-e2e/",
+      "markers_required": ["stage_sequence", "stage_handoff", "swarm_evidence", "adversarial_evidence", "stigmergic_evidence", "composition_coherence"],
+      "description": "Agent executes the full explore-harden-maintain playbook — must show all 3 stages in sequence with data handoffs."
+    }
+  ],
   "evals": [
     {
       "id": 1,
