@@ -41,6 +41,7 @@ This umbrella coordinates three child specs across theory, design, and validatio
 | `082-stigmergic-coordination-primitive`          | Deep dive: pheromone markers, debounce requirement, O(artifacts) cost model, emergent workflow for the stigmergic primitive.                          |
 | `083-organizational-coordination-primitives`     | Deep dive: all 6 Category A primitives (hierarchical, pipeline, committee, departmental, marketplace, matrix) — config, failure modes, cross-category composition. |
 | `084-coordination-artifact-model`                | Formal artifact definition: properties, kinds, versioning, fragment model, lifecycle state machine, per-primitive artifact roles, addressing schemes.              |
+| `085-coordination-model-formal-theory`           | Mathematical formalization: set-theoretic foundations, coordination algebra, axioms (costless cloning, lossless observation, fatigue invariance), composability theorems, cost calculus, falsifiable experimental predictions. |
 
 Implementation order is sequential: 073 (theory) → 074 (design) → 075 (validation & distribution).
 
