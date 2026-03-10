@@ -34,6 +34,13 @@ This umbrella coordinates three child specs across theory, design, and validatio
 | `075-coordination-model-validation-distribution` | Test fixtures, schema cross-consistency audit, `.skill` packaging, schema URL repository.                                                             |
 | `076-coordination-primitives-visual-reference`   | Visual diagrams of all 11 primitives — agent flow, operations used, key structural insight per primitive.                                             |
 | `077-coordination-model-roles-limitations`       | Dual roles (knowledge navigation vs action orchestration), out-of-scope boundaries, scaling limits & mitigations.                                     |
+| `078-speculative-swarm-primitive`                | Deep dive: operation lifecycle, config surface, merge strategies, composability, failure modes for the speculative swarm primitive.                    |
+| `079-context-mesh-primitive`                     | Deep dive: knowledge DAG structure, gap detection, conflict resolution, reactive propagation for the context mesh primitive.                          |
+| `080-fractal-decomposition-primitive`            | Deep dive: scope isolation, recursive splitting, reunification strategies, depth management for the fractal decomposition primitive.                  |
+| `081-generative-adversarial-primitive`           | Deep dive: escalation ladder, generator-critic contract, termination conditions for the generative-adversarial primitive.                             |
+| `082-stigmergic-coordination-primitive`          | Deep dive: pheromone markers, debounce requirement, O(artifacts) cost model, emergent workflow for the stigmergic primitive.                          |
+| `083-organizational-coordination-primitives`     | Deep dive: all 6 Category A primitives (hierarchical, pipeline, committee, departmental, marketplace, matrix) — config, failure modes, cross-category composition. |
+| `084-coordination-artifact-model`                | Formal artifact definition: properties, kinds, versioning, fragment model, lifecycle state machine, per-primitive artifact roles, addressing schemes.              |
 
 Implementation order is sequential: 073 (theory) → 074 (design) → 075 (validation & distribution).
 
