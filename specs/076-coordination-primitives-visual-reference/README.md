@@ -8,7 +8,7 @@ tags:
 - model
 - reference
 - visual
-parent: 072-ai-native-coordination-model
+parent: 088-coordination-model-primitive-deep-dives
 created_at: 2026-03-09T14:50:13.395487Z
 updated_at: 2026-03-09T14:50:13.395487Z
 ---

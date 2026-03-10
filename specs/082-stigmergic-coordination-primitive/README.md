@@ -8,7 +8,7 @@ tags:
 - primitive
 - stigmergic
 - model
-parent: 072-ai-native-coordination-model
+parent: 088-coordination-model-primitive-deep-dives
 depends_on:
 - 073-coordination-model-theory
 created_at: 2026-03-10T02:59:48.402685401Z

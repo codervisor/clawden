@@ -7,7 +7,7 @@ tags:
 - ai-native
 - model
 - theory
-parent: 072-ai-native-coordination-model
+parent: 087-coordination-model-core-pipeline
 created_at: 2026-03-09T14:18:34.389296Z
 updated_at: 2026-03-09T14:18:34.389296Z
 ---

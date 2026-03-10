@@ -34,30 +34,29 @@ Layers 1–3 are single-host by design. Distributed execution (cross-host messag
 
 ## Design
 
-This umbrella coordinates seven child specs across the five layers:
+This umbrella coordinates two groups spanning the five layers:
 
-### Layer 1–3: Execution Foundation
+### Group D: Execution Foundation — Layers 1–3 (090)
 
-| Child                                      | Purpose                                                                                                              |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `064-fleet-process-supervisor`             | Spawn agents, attach pipes, health probes, supervised restart, graceful shutdown, fleet config parsing, `clawden up` |
-| `065-agent-message-bus-task-orchestration` | In-process message bus, `AgentEnvelope` protocol, team coordination, task lifecycle engine, result aggregation       |
-| `066-fleet-state-persistence-recovery`     | SQLite backend for agents/teams/tasks/results/messages/audit, crash recovery, `clawden logs`/`clawden audit`         |
+The strictly sequential critical path for single-host fleet execution:
 
-### Layer 4: Coordination Intelligence
+| Child                                      | Layer | Purpose                                                                                                              |
+| ------------------------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------- |
+| `064-fleet-process-supervisor`             | 1     | Spawn agents, attach pipes, health probes, supervised restart, graceful shutdown, fleet config parsing, `clawden up` |
+| `065-agent-message-bus-task-orchestration` | 2     | In-process message bus, `AgentEnvelope` protocol, team coordination, task lifecycle engine, result aggregation       |
+| `066-fleet-state-persistence-recovery`     | 3     | SQLite backend for agents/teams/tasks/results/messages/audit, crash recovery, `clawden logs`/`clawden audit`         |
 
-| Child                                   | Purpose                                                                                                                                                                                                           |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `067-advanced-coordination-patterns`    | Pluggable org-chart patterns: hierarchy, pipeline, committee, marketplace — mapping real-world organizational structures onto agent fleets                                                                        |
-| `068-ai-native-coordination-primitives` | Primitives with no human analogue: speculative swarm, context mesh, fractal decomposition, generative-adversarial, stigmergic — exploiting zero fork cost, lossless context transfer, and speculative parallelism |
-| `069-ai-native-domain-playbooks`        | Applied compositions of AI-native primitives for concrete domains: software engineering, finance, marketing, research, legal, devops                                                                              |
-| `070-sdd-ai-native-playbook`            | AI-native playbooks applied to spec-driven development itself — spec exploration, hardening, living graph maintenance, fractal decomposition                                                                      |
+### Group E: Coordination & Optimization — Layers 4–5 (091)
 
-### Layer 5: Cost Optimization
+ClawDen's implementation binding of the abstract coordination model (spec 072), plus cost optimization via Nemosis:
 
-| Child                                      | Purpose                                                                                                                                                                                                                           |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `071-nemosis-teacher-student-distillation` | Nemosis integration for teacher-student knowledge distillation — captures fleet execution traces, distills them into SKILL.md artifacts, routes subsequent runs to cheaper student models with iterative memory-backed refinement |
+| Child                                      | Layer | Purpose                                                                                                                                                                                                           |
+| ------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `067-advanced-coordination-patterns`       | 4     | Pluggable org-chart patterns: hierarchy, pipeline, committee, marketplace — mapping real-world organizational structures onto agent fleets                                                                        |
+| `068-ai-native-coordination-primitives`    | 4     | Primitives with no human analogue: speculative swarm, context mesh, fractal decomposition, generative-adversarial, stigmergic — exploiting zero fork cost, lossless context transfer, and speculative parallelism |
+| `069-ai-native-domain-playbooks`           | 4     | Applied compositions of AI-native primitives for concrete domains: software engineering, finance, marketing, research, legal, devops                                                                              |
+| `070-sdd-ai-native-playbook`              | 4     | AI-native playbooks applied to spec-driven development itself — spec exploration, hardening, living graph maintenance, fractal decomposition                                                                      |
+| `071-nemosis-teacher-student-distillation` | 5     | Nemosis integration for teacher-student knowledge distillation — captures fleet execution traces, distills them into SKILL.md artifacts, routes subsequent runs to cheaper student models with iterative memory-backed refinement |
 
 Shared architectural rules:
 

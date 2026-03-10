@@ -10,7 +10,7 @@ tags:
 - orchestration
 depends_on:
 - 073-coordination-model-theory
-parent: 072-ai-native-coordination-model
+parent: 089-coordination-model-theory-implementation
 created_at: 2026-03-10T07:55:58.190510865Z
 updated_at: 2026-03-10T07:57:53.330456038Z
 ---

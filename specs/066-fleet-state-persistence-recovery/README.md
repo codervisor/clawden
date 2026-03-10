@@ -9,7 +9,7 @@ tags:
 - reliability
 depends_on:
 - 065-agent-message-bus-task-orchestration
-parent: 054-agent-fleet-execution-layer
+parent: 090-fleet-execution-foundation
 created_at: 2026-03-09T06:02:09.191794098Z
 updated_at: 2026-03-09T06:02:09.191794098Z
 ---

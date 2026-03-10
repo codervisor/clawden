@@ -8,7 +8,7 @@ tags:
 - coordination
 - ai-native
 - innovation
-parent: 054-agent-fleet-execution-layer
+parent: 091-fleet-coordination-optimization
 depends_on:
   - 067-advanced-coordination-patterns
   - 074-coordination-model-design

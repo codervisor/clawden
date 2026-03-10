@@ -13,7 +13,7 @@ depends_on:
 - 068-ai-native-coordination-primitives
 - 069-ai-native-domain-playbooks
 - 074-coordination-model-design
-parent: 054-agent-fleet-execution-layer
+parent: 091-fleet-coordination-optimization
 created_at: 2026-03-09T09:20:25.854864694Z
 updated_at: 2026-03-09T09:20:25.854864694Z
 ---

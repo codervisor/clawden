@@ -25,42 +25,75 @@ The ClawDen implementation of this model lives in specs 067–071 under the 054 
 
 ## Design
 
-This umbrella coordinates three child specs across theory, design, and validation:
+This umbrella coordinates three groups, each containing multiple child specs:
+
+### Group A: Core Specification Pipeline (087)
+
+The critical path — sequential from theory through validation:
 
 | Child                                            | Purpose                                                                                                                                               |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `073-coordination-model-theory`                  | Why AI-native coordination differs from human patterns. Defines 6 abstract operations, 11 primitives, composability rules, anti-patterns, cost model. |
 | `074-coordination-model-design`                  | JSON Schema artifacts: operations, primitives, playbook, conformance schemas. SKILL.md agent guidance. validate.py script.                            |
 | `075-coordination-model-validation-distribution` | Test fixtures, schema cross-consistency audit, `.skill` packaging, schema URL repository.                                                             |
+
+### Group B: Primitive Deep Dives (088)
+
+Per-primitive analysis and reference material — parallelizable once theory (073) is complete:
+
+| Child                                            | Purpose                                                                                                                                               |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `076-coordination-primitives-visual-reference`   | Visual diagrams of all 11 primitives — agent flow, operations used, key structural insight per primitive.                                             |
-| `077-coordination-model-roles-limitations`       | Dual roles (knowledge navigation vs action orchestration), out-of-scope boundaries, scaling limits & mitigations.                                     |
 | `078-speculative-swarm-primitive`                | Deep dive: operation lifecycle, config surface, merge strategies, composability, failure modes for the speculative swarm primitive.                    |
 | `079-context-mesh-primitive`                     | Deep dive: knowledge DAG structure, gap detection, conflict resolution, reactive propagation for the context mesh primitive.                          |
 | `080-fractal-decomposition-primitive`            | Deep dive: scope isolation, recursive splitting, reunification strategies, depth management for the fractal decomposition primitive.                  |
 | `081-generative-adversarial-primitive`           | Deep dive: escalation ladder, generator-critic contract, termination conditions for the generative-adversarial primitive.                             |
 | `082-stigmergic-coordination-primitive`          | Deep dive: pheromone markers, debounce requirement, O(artifacts) cost model, emergent workflow for the stigmergic primitive.                          |
 | `083-organizational-coordination-primitives`     | Deep dive: all 6 Category A primitives (hierarchical, pipeline, committee, departmental, marketplace, matrix) — config, failure modes, cross-category composition. |
+
+### Group C: Formal Theory & Implementation Mapping (089)
+
+Cross-cutting foundations and concrete implementation binding:
+
+| Child                                            | Purpose                                                                                                                                               |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `077-coordination-model-roles-limitations`       | Dual roles (knowledge navigation vs action orchestration), out-of-scope boundaries, scaling limits & mitigations.                                     |
 | `084-coordination-artifact-model`                | Formal artifact definition: properties, kinds, versioning, fragment model, lifecycle state machine, per-primitive artifact roles, addressing schemes.              |
 | `085-coordination-model-formal-theory`           | Mathematical formalization: set-theoretic foundations, coordination algebra, axioms (costless cloning, lossless observation, fatigue invariance), composability theorems, cost calculus, falsifiable experimental predictions. |
 | `086-claude-code-coordination-implementation`    | Mapping spec 073 operations and primitives to Claude Code's agentic runtime — operation fidelity, subagent orchestration patterns, ClawDen integration points, cost model mapping.                                          |
 
-Implementation order is sequential: 073 (theory) → 074 (design) → 075 (validation & distribution).
+Implementation order: Group A is sequential (073 → 074 → 075). Groups B and C can proceed in parallel once 073 is complete.
 
 ```mermaid
 flowchart LR
-    T["073<br>Theory"] --> D["074<br>Design"]
-    D --> V["075<br>Validation &<br>Distribution"]
+    subgraph A["087 — Core Pipeline"]
+        T["073<br>Theory"] --> D["074<br>Design"]
+        D --> V["075<br>Validation"]
+    end
 
-    T -.-|"defines"| ops["6 operations<br>11 primitives<br>composability<br>cost model"]
-    D -.-|"encodes as"| schemas["JSON Schema<br>SKILL.md<br>validate.py"]
-    V -.-|"proves with"| fixtures["test fixtures<br>cross-audit<br>.skill package"]
+    subgraph B["088 — Primitive Deep Dives"]
+        VR["076 Visual Ref"]
+        SS["078 Spec. Swarm"]
+        CM["079 Context Mesh"]
+        FD["080 Fractal Decomp."]
+        GA["081 Gen.-Adversarial"]
+        ST["082 Stigmergic"]
+        OP["083 Org. Primitives"]
+    end
 
-    style T fill:#2d6a4f,color:#fff
-    style D fill:#1b4965,color:#fff
-    style V fill:#354f52,color:#fff
-    style ops fill:#2d6a4f22,stroke:#2d6a4f
-    style schemas fill:#1b496522,stroke:#1b4965
-    style fixtures fill:#354f5222,stroke:#354f52
+    subgraph C["089 — Formal Theory & Impl."]
+        RL["077 Roles & Limits"]
+        AR["084 Artifacts"]
+        FT["085 Formal Theory"]
+        CC["086 Claude Code"]
+    end
+
+    T --> B
+    T --> C
+
+    style A fill:#2d6a4f,color:#fff
+    style B fill:#1b4965,color:#fff
+    style C fill:#354f52,color:#fff
 ```
 
 ## Plan

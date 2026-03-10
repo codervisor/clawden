@@ -9,7 +9,7 @@ tags:
 - formal-theory
 - mathematics
 - algebra
-parent: 072-ai-native-coordination-model
+parent: 089-coordination-model-theory-implementation
 created_at: 2026-03-10T00:00:00.000000Z
 updated_at: 2026-03-10T00:00:00.000000Z
 ---

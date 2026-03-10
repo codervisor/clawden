@@ -8,7 +8,7 @@ tags:
 - artifact
 - lifecycle
 - primitive
-parent: 072-ai-native-coordination-model
+parent: 089-coordination-model-theory-implementation
 depends_on:
 - 073-coordination-model-theory
 created_at: 2026-03-10T03:30:00.643157233Z

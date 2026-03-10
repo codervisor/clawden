@@ -8,7 +8,7 @@ tags:
 - model
 - knowledge-dag
 - scaling
-parent: 072-ai-native-coordination-model
+parent: 089-coordination-model-theory-implementation
 created_at: 2026-03-09T15:00:03.956379Z
 updated_at: 2026-03-09T15:00:03.956379Z
 ---

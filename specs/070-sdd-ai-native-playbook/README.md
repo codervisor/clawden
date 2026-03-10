@@ -9,7 +9,7 @@ tags:
   - playbooks
   - sdd
   - leanspec
-parent: 054-agent-fleet-execution-layer
+parent: 091-fleet-coordination-optimization
 depends_on:
   - 068-ai-native-coordination-primitives
   - 069-ai-native-domain-playbooks

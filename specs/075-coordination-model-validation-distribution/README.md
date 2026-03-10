@@ -8,7 +8,7 @@ tags:
 - model
 - validation
 - distribution
-parent: 072-ai-native-coordination-model
+parent: 087-coordination-model-core-pipeline
 depends_on:
 - 074-coordination-model-design
 created_at: 2026-03-09T14:19:37.774477Z
