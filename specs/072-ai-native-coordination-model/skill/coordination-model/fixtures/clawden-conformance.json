@@ -1,0 +1,27 @@
+{
+  "runtime": {
+    "name": "clawden",
+    "version": "0.1.0",
+    "must": {
+      "abstract_operations": {
+        "spawn": true,
+        "fork": true,
+        "merge": true,
+        "observe": true,
+        "convergence": true,
+        "prune": true
+      },
+      "dynamic_lifecycle": true,
+      "state_observability": true,
+      "budget_enforcement": true,
+      "composable_patterns": true,
+      "trace_capture": true,
+      "declarative_playbooks": true
+    },
+    "may": {
+      "distributed_execution": false,
+      "persistent_state": true,
+      "hot_swap_patterns": false
+    }
+  }
+}

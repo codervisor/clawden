@@ -1,0 +1,13 @@
+playbook:
+  name: unknown-primitive
+  domain: test
+  description: This playbook uses a primitive that does not exist in the model.
+  stages:
+    - name: phase-one
+      primitive: quantum-entanglement
+      config:
+        foo: bar
+      budget:
+        max_agents: 2
+        max_cost: 10
+        max_time: "5m"

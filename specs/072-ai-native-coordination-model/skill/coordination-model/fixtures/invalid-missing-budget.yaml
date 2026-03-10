@@ -1,0 +1,16 @@
+playbook:
+  name: missing-budget
+  domain: test
+  description: This playbook is missing the required budget block on a stage.
+  stages:
+    - name: explore
+      primitive: speculative-swarm
+      config:
+        strategies: ["a", "b"]
+        convergence_threshold: 0.5
+        merge_strategy: fragment-fusion
+        budget:
+          max_agents: 4
+          max_cost: 50
+          max_time: "10m"
+      # budget is intentionally missing at stage level
