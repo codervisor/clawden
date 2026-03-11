@@ -1,5 +1,5 @@
 ---
-status: planned
+status: archived
 created: 2026-03-05
 priority: high
 tags:
@@ -14,7 +14,10 @@ tags:
 - openfang
 - multi-runtime
 created_at: 2026-03-05T01:56:04.595663369Z
-updated_at: 2026-03-05T09:08:00.189715585Z
+updated_at: 2026-03-11T06:10:23.039417Z
+transitions:
+- status: archived
+  at: 2026-03-11T06:10:23.039417Z
 ---
 
 # Runtime Security Defaults Compatibility — Relaxed Limits for ClawDen-Managed Execution

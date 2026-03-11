@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-06
 priority: high
 tags:
@@ -10,13 +10,15 @@ tags:
 - onboarding
 parent: 017-docker-runtime-images
 created_at: 2026-03-06T05:14:56.087137077Z
-updated_at: 2026-03-06T05:44:57.787469995Z
+updated_at: 2026-03-11T09:01:11.627622Z
 completed_at: 2026-03-06T05:44:57.787469995Z
 transitions:
 - status: in-progress
   at: 2026-03-06T05:38:42.068915699Z
 - status: complete
   at: 2026-03-06T05:44:57.787469995Z
+- status: archived
+  at: 2026-03-11T09:01:11.627622Z
 ---
 
 # Docker Runtime Direct-Run UX — Self-Describing Entrypoint & Positional Runtime Selection

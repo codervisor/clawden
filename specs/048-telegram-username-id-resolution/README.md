@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: archived
 created: 2026-03-05
 priority: high
 tags:
@@ -10,11 +10,14 @@ tags:
 - config
 - ux
 created_at: 2026-03-05T14:08:24.530411Z
-updated_at: 2026-03-05T14:27:18.265681Z
+updated_at: 2026-03-11T06:10:23.032162Z
 transitions:
 - status: in-progress
   at: 2026-03-05T14:27:18.265681Z
+- status: archived
+  at: 2026-03-11T06:10:23.032162Z
 ---
+
 # Telegram Username-to-ID Resolution for OpenClaw
 
 ## Overview

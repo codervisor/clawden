@@ -1,5 +1,5 @@
 ---
-status: planned
+status: archived
 created: 2026-03-05
 priority: medium
 tags:
@@ -12,7 +12,10 @@ tags:
 depends_on:
 - 039-zeroclaw-security-defaults-compat
 created_at: 2026-03-05T09:27:16.632450226Z
-updated_at: 2026-03-05T09:27:16.632450226Z
+updated_at: 2026-03-11T06:10:23.046563Z
+transitions:
+- status: archived
+  at: 2026-03-11T06:10:23.046563Z
 ---
 
 # CLI --security-profile Flag for Runtime Security Override

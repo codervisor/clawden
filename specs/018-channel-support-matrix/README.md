@@ -1,7 +1,7 @@
 ---
 status: in-progress
 created: 2026-02-26
-priority: high
+priority: medium
 tags:
 - channels
 - messaging
@@ -11,13 +11,14 @@ tags:
 - whatsapp
 depends_on:
 - 010-claw-runtime-interface
-parent: 009-orchestration-platform
+parent: 060-ai-infra-pivot
 created_at: 2026-02-26T02:50:41.154596674Z
-updated_at: 2026-02-27T14:05:21.105413Z
+updated_at: 2026-03-11T09:01:18.244575Z
 transitions:
 - status: in-progress
   at: 2026-02-27T14:05:21.105413Z
 ---
+
 # Chat Channel Support Matrix & Unified Channel Layer
 
 ## Overview

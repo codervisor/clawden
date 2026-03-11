@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-05
 priority: high
 tags:
@@ -12,8 +12,11 @@ tags:
 depends_on:
 - 031-direct-mode-config-injection
 created_at: 2026-03-05T07:56:16.979863538Z
-updated_at: 2026-03-05T07:56:27.485701421Z
+updated_at: 2026-03-11T09:00:47.241014Z
 completed_at: 2026-03-05T07:56:27.485701421Z
+transitions:
+- status: archived
+  at: 2026-03-11T09:00:47.241014Z
 ---
 
 # OpenClaw Provider-Model Routing — Correct Auth Resolution for Non-Anthropic Providers

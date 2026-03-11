@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: archived
 created: 2026-03-07
 priority: critical
 tags:
@@ -11,8 +11,12 @@ tags:
 - tech-debt
 - cli
 - railway
+parent: 060-ai-infra-pivot
 created_at: 2026-03-07T15:02:39.232914Z
-updated_at: 2026-03-07T15:02:39.232914Z
+updated_at: 2026-03-11T09:01:11.690683Z
+transitions:
+- status: archived
+  at: 2026-03-11T09:01:11.690683Z
 ---
 
 # Container-Safe Runtime Execution — Exec Mode, Pre-Launch Unification & Process Lifecycle Overhaul

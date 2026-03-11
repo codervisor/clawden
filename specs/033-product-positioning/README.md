@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-03
 priority: high
 tags:
@@ -8,11 +8,14 @@ tags:
 - ux
 - strategy
 created_at: 2026-03-03T08:49:22.936640Z
-updated_at: 2026-03-04T01:35:03.298362720Z
+updated_at: 2026-03-11T06:12:53.843942Z
 transitions:
 - status: in-progress
   at: 2026-03-04T01:12:13.164677517Z
+- status: archived
+  at: 2026-03-11T06:12:53.843942Z
 ---
+
 # ClawDen Product Positioning — UX Shell, Runtime Manager, SDK Platform
 
 ## Overview

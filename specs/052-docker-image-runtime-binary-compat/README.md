@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-06
 priority: high
 tags:
@@ -11,11 +11,14 @@ tags:
 - ci
 parent: 017-docker-runtime-images
 created_at: 2026-03-06T05:28:14.483453041Z
-updated_at: 2026-03-07T13:41:03.763223Z
+updated_at: 2026-03-11T09:01:11.670550Z
 transitions:
 - status: in-progress
   at: 2026-03-06T05:41:03.487538427Z
+- status: archived
+  at: 2026-03-11T09:01:11.670550Z
 ---
+
 # Docker Image Runtime Binary Compatibility — GLIBC Mismatch, Architecture Errors & Stale Image
 
 ## Overview

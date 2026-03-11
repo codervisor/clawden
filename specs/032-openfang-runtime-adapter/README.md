@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-03
 priority: medium
 tags:
@@ -10,13 +10,15 @@ tags:
 depends_on:
 - 010-claw-runtime-interface
 created_at: 2026-03-03T06:37:44.122195Z
-updated_at: 2026-03-03T07:42:49.651246Z
+updated_at: 2026-03-11T09:00:47.234242Z
 completed_at: 2026-03-03T07:42:49.651246Z
 transitions:
 - status: in-progress
   at: 2026-03-03T07:37:37.670368Z
 - status: complete
   at: 2026-03-03T07:42:49.651246Z
+- status: archived
+  at: 2026-03-11T09:00:47.234242Z
 ---
 
 # OpenFang Runtime Adapter — Full-Stack Integration

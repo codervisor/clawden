@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-02
 priority: high
 tags:
@@ -10,13 +10,15 @@ depends_on:
 - 023-cli-direct-architecture
 parent: 009-orchestration-platform
 created_at: 2026-03-02T07:28:51.120244947Z
-updated_at: 2026-03-02T08:00:56.641712012Z
+updated_at: 2026-03-11T09:00:47.222080Z
 completed_at: 2026-03-02T08:00:56.641712012Z
 transitions:
 - status: in-progress
   at: 2026-03-02T07:39:53.249540900Z
 - status: complete
   at: 2026-03-02T08:00:56.641712012Z
+- status: archived
+  at: 2026-03-11T09:00:47.222080Z
 ---
 
 # Docker Compose UX — CLI Command Overhaul

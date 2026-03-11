@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: archived
 created: 2026-03-05
 priority: high
 tags:
@@ -9,8 +9,12 @@ tags:
 - direct-install
 - blockers
 - ci
-created_at: 2026-03-05T02:04:00.000000000Z
-updated_at: 2026-03-05T02:56:00.000000000Z
+parent: 060-ai-infra-pivot
+created_at: 2026-03-05T02:04:00Z
+updated_at: 2026-03-11T09:01:11.681409Z
+transitions:
+- status: archived
+  at: 2026-03-11T09:01:11.681409Z
 ---
 
 # Runtime Smoke Test Matrix — End-to-End Validation of All Supported Runtimes

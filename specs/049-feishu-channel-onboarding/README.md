@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-06
 priority: high
 tags:
@@ -12,13 +12,15 @@ tags:
 depends_on:
 - 018-channel-support-matrix
 created_at: 2026-03-06T01:45:36.461489394Z
-updated_at: 2026-03-06T02:00:52.754713056Z
+updated_at: 2026-03-11T09:01:11.615416Z
 completed_at: 2026-03-06T02:00:52.754713056Z
 transitions:
 - status: in-progress
   at: 2026-03-06T01:51:39.395544883Z
 - status: complete
   at: 2026-03-06T02:00:52.754713056Z
+- status: archived
+  at: 2026-03-11T09:01:11.615416Z
 ---
 
 # Feishu Channel Onboarding & Credential Verification

@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-06
 priority: high
 tags:
@@ -13,8 +13,12 @@ depends_on:
 - 052-docker-image-runtime-binary-compat
 parent: 017-docker-runtime-images
 created_at: 2026-03-06T08:17:36.969275199Z
-updated_at: 2026-03-06T08:56:01.682659274Z
+updated_at: 2026-03-11T09:01:11.673964Z
+transitions:
+- status: archived
+  at: 2026-03-11T09:01:11.673964Z
 ---
+
 # Docker Image Hardening — Security, Consistency & Supply-Chain Fixes
 
 ## Overview

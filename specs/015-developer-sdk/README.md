@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-02-26
 priority: medium
 tags:
@@ -11,13 +11,15 @@ depends_on:
 - 010-claw-runtime-interface
 parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.576054643Z
-updated_at: 2026-02-26T05:55:44.435001131Z
+updated_at: 2026-03-11T06:10:38.362272Z
 completed_at: 2026-02-26T05:55:44.435001131Z
 transitions:
 - status: in-progress
   at: 2026-02-26T03:07:30.691255720Z
 - status: complete
   at: 2026-02-26T05:55:44.435001131Z
+- status: archived
+  at: 2026-03-11T06:10:38.362272Z
 ---
 
 # Cross-Claw Developer SDK & CLI

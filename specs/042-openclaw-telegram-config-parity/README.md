@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: archived
 created: 2026-03-05
 priority: medium
 tags:
@@ -9,10 +9,12 @@ tags:
 - config
 - parity
 created_at: 2026-03-05T06:59:07.922540818Z
-updated_at: 2026-03-05T08:15:23.510960122Z
+updated_at: 2026-03-11T06:10:23.028026Z
 transitions:
 - status: in-progress
   at: 2026-03-05T08:15:23.510960122Z
+- status: archived
+  at: 2026-03-11T06:10:23.028026Z
 ---
 
 # OpenClaw Telegram Channel Parity — Full Config Translation for DM Policy, Groups & Access Control

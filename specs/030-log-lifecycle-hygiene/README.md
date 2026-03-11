@@ -9,8 +9,9 @@ tags:
 - process-manager
 depends_on:
 - 027-docker-compose-ux
+parent: 060-ai-infra-pivot
 created_at: 2026-03-02T08:34:22.911298893Z
-updated_at: 2026-03-02T09:04:49.613153208Z
+updated_at: 2026-03-11T06:13:03.624368Z
 transitions:
 - status: in-progress
   at: 2026-03-02T09:04:49.613153208Z

@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-02
 priority: high
 tags:
@@ -12,11 +12,14 @@ depends_on:
 - 017-docker-runtime-images
 - 013-config-management
 created_at: 2026-03-02T08:27:30.088282380Z
-updated_at: 2026-03-03T08:06:21.635947Z
+updated_at: 2026-03-11T09:00:47.225478Z
 transitions:
 - status: in-progress
   at: 2026-03-02T09:04:49.604493321Z
+- status: archived
+  at: 2026-03-11T09:00:47.225478Z
 ---
+
 # Docker Mode Config Injection — Channel & Env Passthrough
 
 ## Overview

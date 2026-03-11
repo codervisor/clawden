@@ -1,7 +1,7 @@
 ---
 status: in-progress
 created: 2026-03-05
-priority: high
+priority: medium
 tags:
 - proxy
 - config
@@ -9,8 +9,9 @@ tags:
 - cli
 - corporate-network
 - developer-experience
+parent: 060-ai-infra-pivot
 created_at: 2026-03-05T01:43:22.476304293Z
-updated_at: 2026-03-05T01:43:29.124393775Z
+updated_at: 2026-03-11T09:01:18.261146Z
 transitions:
 - status: in-progress
   at: 2026-03-05T01:43:29.124393775Z

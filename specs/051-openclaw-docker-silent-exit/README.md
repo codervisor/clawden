@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-06
 priority: high
 tags:
@@ -10,13 +10,15 @@ tags:
 - container
 parent: 017-docker-runtime-images
 created_at: 2026-03-06T05:28:14.473366266Z
-updated_at: 2026-03-06T05:42:21.141348593Z
+updated_at: 2026-03-11T09:01:11.658506Z
 completed_at: 2026-03-06T05:42:21.141348593Z
 transitions:
 - status: in-progress
   at: 2026-03-06T05:37:44.246935761Z
 - status: complete
   at: 2026-03-06T05:42:21.141348593Z
+- status: archived
+  at: 2026-03-11T09:01:11.658506Z
 ---
 
 # OpenClaw Docker Silent Exit — Container Dies After Printing Help, CLI Reports Success

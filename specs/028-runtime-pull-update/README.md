@@ -1,14 +1,15 @@
 ---
 status: in-progress
 created: 2026-03-02
-priority: medium
+priority: low
 tags:
 - cli
 - install
 - ux
 - docker-compose-parity
+parent: 060-ai-infra-pivot
 created_at: 2026-03-02T08:09:01.949191519Z
-updated_at: 2026-03-02T09:07:57.464469438Z
+updated_at: 2026-03-11T09:01:18.256479Z
 transitions:
 - status: in-progress
   at: 2026-03-02T09:04:49.597723610Z

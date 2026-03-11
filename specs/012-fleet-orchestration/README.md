@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-02-26
 priority: high
 tags:
@@ -11,13 +11,15 @@ depends_on:
 - 010-claw-runtime-interface
 parent: 009-orchestration-platform
 created_at: 2026-02-26T02:08:29.575833924Z
-updated_at: 2026-02-26T05:55:07.701143935Z
+updated_at: 2026-03-11T06:10:38.352677Z
 completed_at: 2026-02-26T05:55:07.701143935Z
 transitions:
 - status: in-progress
   at: 2026-02-26T03:26:22.415306720Z
 - status: complete
   at: 2026-02-26T05:55:07.701143935Z
+- status: archived
+  at: 2026-03-11T06:10:38.352677Z
 ---
 
 # Fleet Discovery & Task Routing

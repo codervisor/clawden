@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-04
 priority: high
 tags:
@@ -9,13 +9,15 @@ tags:
 - developer-experience
 - overhaul
 created_at: 2026-03-04T14:08:09.114409Z
-updated_at: 2026-03-04T14:54:52.837114Z
+updated_at: 2026-03-11T09:00:47.237785Z
 completed_at: 2026-03-04T14:54:52.837114Z
 transitions:
 - status: in-progress
   at: 2026-03-04T14:27:09.291498Z
 - status: complete
   at: 2026-03-04T14:54:52.837114Z
+- status: archived
+  at: 2026-03-11T09:00:47.237785Z
 ---
 
 # CLI Docker Subcommand & UX Overhaul — Dedicated Docker Surface, Allowed-Users Shortcut & Arg Declutter

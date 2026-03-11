@@ -1,5 +1,5 @@
 ---
-status: planned
+status: archived
 created: 2026-03-07
 priority: high
 tags:
@@ -12,7 +12,10 @@ tags:
 - config
 - sdk
 created_at: 2026-03-07T15:11:55.678101Z
-updated_at: 2026-03-07T15:11:55.678101Z
+updated_at: 2026-03-11T06:10:23.051033Z
+transitions:
+- status: archived
+  at: 2026-03-11T06:10:23.051033Z
 ---
 
 # Comprehensive Documentation — User Guides, CLI Reference, Config Schema & Channel Onboarding

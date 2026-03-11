@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-02-26
 priority: high
 tags:
@@ -12,11 +12,14 @@ depends_on:
 - 010-claw-runtime-interface
 parent: 009-orchestration-platform
 created_at: 2026-02-26T02:42:25.266699500Z
-updated_at: 2026-03-03T07:47:59.571809Z
+updated_at: 2026-03-11T09:00:47.212145Z
 transitions:
 - status: in-progress
   at: 2026-02-27T14:05:21.098968Z
+- status: archived
+  at: 2026-03-11T09:00:47.212145Z
 ---
+
 # Docker Runtime Images & Deployment
 
 ## Overview

@@ -1,5 +1,5 @@
 ---
-status: complete
+status: archived
 created: 2026-03-05
 priority: medium
 tags:
@@ -9,11 +9,13 @@ tags:
 - direct-mode
 - config
 created_at: 2026-03-05T09:05:32.048231370Z
-updated_at: 2026-03-05T09:05:39.325862306Z
+updated_at: 2026-03-11T09:00:47.243249Z
 completed_at: 2026-03-05T09:05:39.325862306Z
 transitions:
 - status: complete
   at: 2026-03-05T09:05:39.325862306Z
+- status: archived
+  at: 2026-03-11T09:00:47.243249Z
 ---
 
 # Feishu/Lark Channel Not Configured in Direct Mode — Missing TOML Config Emitter
