@@ -8,7 +8,6 @@ tags:
 - runtime
 - config
 - bugfix
-parent: 053-agent-workspace-persistence
 created_at: 2026-03-07T06:40:05.407138Z
 updated_at: 2026-03-07T13:40:30.191443Z
 transitions:
@@ -110,4 +109,4 @@ This avoids per-runtime env var injection entirely — the runtime reads from it
 
 - The runtime-native paths were confirmed via DeepWiki research against `openclaw/openclaw` and `zeroclaw-labs/zeroclaw` repositories
 - PicoClaw, NanoClaw, IronClaw workspace paths are TBD — add to `RuntimeDescriptor` when researched
-- This spec is a child of 053-agent-workspace-persistence (addresses gaps found during real-world usage)
+- This spec was originally a child of 053-agent-workspace-persistence (now migrated to [synodic](https://github.com/codervisor/synodic))
